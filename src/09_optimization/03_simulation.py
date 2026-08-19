@@ -74,8 +74,8 @@ def _score_prob(factor_by_seg: dict) -> pd.Series:
         z = 0.5 - 9.0 * (snap["segment"].map(factor_by_seg).astype(float) - 1.0)
         return pd.Series(1.0 / (1.0 + np.exp(-z)), index=snap.index)
 
-charged = snap["charged_premium"].fillna(0).values
-cost    = snap["technical_cost"].fillna(0).values
+charged = snap["charged_premium"].fillna(0).astype(float).values
+cost    = snap["technical_cost"].fillna(0).astype(float).values
 
 # COMMAND ----------
 
