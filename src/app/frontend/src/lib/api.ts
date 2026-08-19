@@ -22,6 +22,14 @@ export const api = {
   agentLead: (body: { persona: string; question: string; family?: string; context?: any }) =>
     fetchJson<any>('/agent/lead', { method: 'POST', body: JSON.stringify(body) }),
 
+  // Price Optimization module (opt_* tables)
+  optOverview:    () => fetchJson<any>('/optimization/overview'),
+  optScenarios:   () => fetchJson<any>('/optimization/scenarios'),
+  optFactors:     () => fetchJson<any>('/optimization/factors'),
+  optCurves:      () => fetchJson<any>('/optimization/curves'),
+  optMonitoring:  () => fetchJson<any>('/optimization/monitoring'),
+  optConstraints: () => fetchJson<any>('/optimization/constraints'),
+
   // Admin
   resetDemo: () => fetchJson<any>('/admin/reset-demo', { method: 'POST', body: JSON.stringify({}) }),
 

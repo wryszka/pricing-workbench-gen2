@@ -87,8 +87,9 @@ targets:
       warehouse_id:  "f738fde9a1197aeb"
       # gen2 app SP, captured after `databricks apps create pricing-workbench-gen2` (2026-08-19).
       app_service_principal_id: "db717199-6e38-4e14-88f2-5b5ba6d2ba1b"
-      scale_factor:  "1"
+      scale_factor:  "10"            # 10 x 50k = 500k commercial policies (~1.2M quotes)
       deploy_profile: "core"
+      enable_optimization: "true"    # optimization flow is part of the demo E2E
 
   # Eventual home: dev estate, replacing gen1. Distinct schema + pwg2_ assets +
   # app name mean gen2 coexists with gen1 during cutover without collision.
