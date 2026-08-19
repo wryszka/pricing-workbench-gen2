@@ -4,10 +4,15 @@
 # "populate governance" process to run right after any deploy:
 #     databricks bundle run generate_governance_packs --target <t> --profile <p>
 # Idempotent per version (re-running adds a fresh pack for the current champion).
+#
+# Timeouts (robustness): each task self-kills at 20 min and the whole job at
+# 75 min, so a transient serverless stall can never hang the build for hours
+# (it did once — a single pack task ran 95 min before it was cancelled).
 resources:
   jobs:
     generate_governance_packs:
       name: "Build — generate governance packs (all champions) (gen2)"
+      timeout_seconds: 4500
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -15,6 +20,7 @@ resources:
           default: ${var.schema_name}
       tasks:
         - task_key: pack_freq_glm
+          timeout_seconds: 1200
           notebook_task: &nb
             notebook_path: ../src/04_models/production/governance_pack.py
             base_parameters:
@@ -24,6 +30,7 @@ resources:
               requested_by: "full_build"
           environment_key: pack_env
         - task_key: pack_sev_glm
+          timeout_seconds: 1200
           depends_on: [{ task_key: pack_freq_glm }]
           notebook_task:
             <<: *nb
@@ -34,6 +41,7 @@ resources:
               requested_by: "full_build"
           environment_key: pack_env
         - task_key: pack_demand_gbm
+          timeout_seconds: 1200
           depends_on: [{ task_key: pack_sev_glm }]
           notebook_task:
             <<: *nb
@@ -44,6 +52,7 @@ resources:
               requested_by: "full_build"
           environment_key: pack_env
         - task_key: pack_fraud_gbm
+          timeout_seconds: 1200
           depends_on: [{ task_key: pack_demand_gbm }]
           notebook_task:
             <<: *nb
