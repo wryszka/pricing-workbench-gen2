@@ -32,7 +32,7 @@ async def overview():
     scen = await _rows(f"""
         SELECT count(*) AS candidates,
                round(max(expected_profit),0) AS best_profit,
-               round(max_by(scenario_id, expected_profit), 0) AS x
+               max_by(scenario_id, expected_profit) AS best_scenario
         FROM {fqn('opt_scenarios')}""")
     hold = await _rows(f"SELECT round(expected_profit,0) AS p FROM {fqn('opt_scenarios')} WHERE scenario_id='hold'")
     fac = await _rows(f"""
