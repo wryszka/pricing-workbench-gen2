@@ -35,6 +35,12 @@ mlflow.set_registry_uri("databricks-uc")
 # COMMAND ----------
 
 snap = spark.table(f"{fqn}.opt_portfolio_snapshot").toPandas()
+# Coerce Spark decimals -> float (they arrive as decimal.Decimal in pandas and
+# break float arithmetic in the profit math).
+for _c in ["charged_premium", "technical_cost", "sum_insured", "annual_turnover",
+           "incurred_5y", "claims_history_5y"]:
+    if _c in snap.columns:
+        snap[_c] = pd.to_numeric(snap[_c], errors="coerce").fillna(0.0)
 # Segment the book (trade). Each candidate assigns a price factor per segment.
 snap["segment"] = snap["sic_code"].astype(str)
 segments = snap["segment"].value_counts().index.tolist()

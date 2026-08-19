@@ -70,6 +70,10 @@ print(f"constraints source={csource} v={cver}: factor bounds [{lo:.3f},{hi:.3f}]
 # COMMAND ----------
 
 snap = spark.table(f"{fqn}.opt_portfolio_snapshot").toPandas()
+for _c in ["charged_premium", "technical_cost", "sum_insured", "annual_turnover",
+           "incurred_5y", "claims_history_5y"]:
+    if _c in snap.columns:
+        snap[_c] = pd.to_numeric(snap[_c], errors="coerce").fillna(0.0)
 snap["segment"] = snap["sic_code"].astype(str)
 segments = snap["segment"].value_counts().index.tolist()
 cm = mlflow.pyfunc.load_model(f"models:/{fqn}.pwg2_conversion_elasticity@champion")
