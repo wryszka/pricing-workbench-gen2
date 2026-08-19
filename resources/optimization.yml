@@ -1,0 +1,28 @@
+# Price Optimization module jobs (src/09_optimization). Defined but DORMANT —
+# gated by var.enable_optimization: they only join the Full Build orchestrator
+# when it's "true", and are always runnable standalone:
+#   databricks bundle run opt_data --target pricingv2 --profile PRICING_V2
+# opt_* tables; pwg2_ global assets; derives from the existing quote stream so
+# nothing here touches the live demo until run.
+resources:
+  jobs:
+    opt_data:
+      name: "Optimization — 01 data (quote-response / portfolio / renewals) (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+      tasks:
+        - task_key: opt_data
+          notebook_task:
+            notebook_path: ../src/09_optimization/01_optimization_data.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name:  ${var.schema_name}
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: []

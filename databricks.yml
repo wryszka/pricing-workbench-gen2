@@ -49,6 +49,14 @@ variables:
       + QPS tester). The live-serving jobs are always defined in the bundle but
       dormant — they cost nothing until run.
     default: "core"
+  enable_optimization:
+    description: |
+      Orthogonal flag for the Price Optimization module (src/09_optimization).
+      "false" = the opt_* jobs are defined but dormant (nothing runs, the app
+      page shows an empty/awaiting state); "true" = the optimization sub-chain
+      runs as part of Full Build. Same dormant-until-enabled pattern as the
+      live-serving tier. Flip to "true" once the module is validated.
+    default: "false"
   live_online_store_name:
     description: Lakebase online store backing the optional Live Pricing System
     default: "pwg2-pricing-online-store"
