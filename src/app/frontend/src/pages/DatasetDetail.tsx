@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, GitCompare, TrendingUp, ShieldCheck, CheckCircle2, XCircle, Loader2, Download, Upload, History, Bot, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, GitCompare, TrendingUp, ShieldCheck, CheckCircle2, XCircle, Loader2, Download, Upload, History, Bot, ChevronDown, ChevronUp, Sparkles, Send } from 'lucide-react';
 import { api } from '../lib/api';
 
 type Tab = 'diff' | 'impact' | 'quality' | 'upload' | 'approval';
@@ -197,6 +197,84 @@ function DiffTab({ datasetId }: { datasetId: string }) {
 // Tab 2: Impact Analysis
 // ---------------------------------------------------------------------------
 
+// AI overview + ask-anything box — leads the Impact tab. Uses the
+// ingestion-impact explainability agent (Claude on the Databricks FM API).
+function AiImpactLead({ datasetId, pi }: { datasetId: string; pi: any }) {
+  const [overview, setOverview] = useState<any>(null);
+  const [ovLoading, setOvLoading] = useState(true);
+  const [q, setQ] = useState('');
+  const [thread, setThread] = useState<{ q: string; a: string }[]>([]);
+  const [asking, setAsking] = useState(false);
+
+  const label = datasetId.replace(/_/g, ' ');
+  const ctx = pi?.affected_policies
+    ? `${pi.affected_policies} of ${pi.total_policies} policies affected (${pi.affected_pct}%).`
+    : '';
+  const answerText = (r: any) =>
+    r?.explanation?.explanation || r?.transparency?.raw_response ||
+    (r?.success === false ? `Agent error: ${r?.error || r?.transparency?.error || 'unavailable'}` : '');
+
+  useEffect(() => {
+    setOvLoading(true);
+    api.runExplainability(
+      `In 3 short sentences, summarise the pricing impact of the ${label} data update and say what a pricing actuary should look at first. ${ctx}`,
+    ).then(setOverview).catch(() => setOverview(null)).finally(() => setOvLoading(false));
+  }, [datasetId]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ask = async () => {
+    const question = q.trim();
+    if (!question || asking) return;
+    setAsking(true); setQ('');
+    try {
+      const r = await api.runExplainability(`${question} (Context: ${label} data update. ${ctx})`);
+      setThread((t) => [...t, { q: question, a: answerText(r) || 'No answer returned.' }]);
+    } catch (e: any) {
+      setThread((t) => [...t, { q: question, a: `Error: ${e.message || e}` }]);
+    } finally { setAsking(false); }
+  };
+
+  return (
+    <div className="rounded-lg border border-purple-200 bg-purple-50/60 p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Sparkles className="w-4 h-4 text-purple-600" />
+        <span className="text-[10px] font-semibold text-purple-800 uppercase tracking-wide">
+          AI overview — where we are, what to look at
+        </span>
+      </div>
+      <div className="text-sm text-gray-800 leading-relaxed min-h-[2.5rem]">
+        {ovLoading
+          ? <span className="inline-flex items-center gap-1.5 text-purple-700/70"><Loader2 className="w-3.5 h-3.5 animate-spin" /> analysing the impact…</span>
+          : (answerText(overview) || 'AI overview unavailable — see the detail below.')}
+      </div>
+
+      {thread.length > 0 && (
+        <div className="mt-3 space-y-3 border-t border-purple-200 pt-3">
+          {thread.map((m, i) => (
+            <div key={i}>
+              <div className="text-xs font-semibold text-purple-800">Q: {m.q}</div>
+              <div className="text-sm text-gray-700 whitespace-pre-line mt-0.5">{m.a}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-3 flex gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') ask(); }}
+          placeholder="Ask a detailed question about this impact…"
+          className="flex-1 px-3 py-2 rounded-lg border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+        <button onClick={ask} disabled={asking || !q.trim()}
+          className="px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+          {asking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Ask
+        </button>
+      </div>
+      <p className="text-[10px] text-purple-500 mt-1.5">
+        Grounded via the ingestion-impact agent (Claude on the Databricks Foundation Model API).
+      </p>
+    </div>
+  );
+}
+
 function ImpactTab({ datasetId }: { datasetId: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -240,6 +318,9 @@ function ImpactTab({ datasetId }: { datasetId: string }) {
           <Download className="w-4 h-4" /> Download Report
         </a>
       </div>
+
+      {/* Lead with the AI overview + an ask-anything box */}
+      <AiImpactLead datasetId={datasetId} pi={pi} />
 
       {/* ── Section 1: Data Diff Summary ── */}
       <Section title="Data Change Summary">

@@ -13,6 +13,10 @@ export const api = {
   // App config
   getConfig: () => fetchJson<any>('/config'),
 
+  // Control-tower overview (landing page)
+  getOverview: () => fetchJson<any>('/overview'),
+  getOverviewAiSummary: () => fetchJson<any>('/overview/ai-summary'),
+
   // Admin
   resetDemo: () => fetchJson<any>('/admin/reset-demo', { method: 'POST', body: JSON.stringify({}) }),
 

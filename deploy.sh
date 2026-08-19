@@ -28,7 +28,7 @@ echo "==> [$TARGET] swapping src/app/app.yaml to app.${TARGET}.yaml"
 cp "src/app/app.${TARGET}.yaml" "src/app/app.yaml"
 
 echo "==> [$TARGET] building frontend"
-( cd src/app/frontend && npm run build )
+( cd src/app/frontend && npm install --no-audit --no-fund && npm run build )
 
 echo "==> [$TARGET] deploying bundle"
 databricks bundle deploy --target "$TARGET" --profile "$PROFILE"

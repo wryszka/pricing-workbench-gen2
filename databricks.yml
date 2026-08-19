@@ -77,8 +77,8 @@ targets:
       catalog_name:  lr_pricing_v2_aws_us_catalog
       schema_name:   pricing_workbench_gen2
       warehouse_id:  "f738fde9a1197aeb"
-      # Empty until the gen2 app is created + its SP captured (README bootstrap).
-      app_service_principal_id: ""
+      # gen2 app SP, captured after `databricks apps create pricing-workbench-gen2` (2026-08-19).
+      app_service_principal_id: "db717199-6e38-4e14-88f2-5b5ba6d2ba1b"
       scale_factor:  "1"
       deploy_profile: "core"
 
