@@ -36,12 +36,13 @@ export default function Learn() {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="max-w-[1180px] px-8 py-7">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <BookOpen className="w-6 h-6 text-blue-600" /> Learn — Pricing Workbench
+        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-brand">Bricksurance SE · Pricing Workbench</div>
+        <h1 className="text-2xl font-bold text-ink flex items-center gap-2 mt-1">
+          <BookOpen className="w-6 h-6 text-brand" /> Learn — Pricing Workbench
         </h1>
-        <p className="text-gray-500 mt-1 text-sm max-w-3xl">
+        <p className="text-mut mt-1 text-sm max-w-3xl">
           How the accelerator is put together: the end-to-end pricing flow, the
           rolling rate book, the governed AI agents, and the Databricks platform
           it runs on. Every page links back here.

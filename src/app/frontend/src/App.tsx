@@ -42,50 +42,55 @@ function Sidebar() {
   const { pathname } = useLocation();
 
   return (
-    <aside className="w-56 bg-[#1e293b] text-white min-h-screen flex flex-col shrink-0">
+    <aside className="w-[264px] shrink-0 min-h-screen flex flex-col text-[#cbd5e1] border-r border-white/[0.06] bg-[linear-gradient(180deg,#1e293b_0%,#172033_100%)]">
       {/* Brand */}
-      <Link to="/" className="px-4 py-5 flex items-center gap-3 hover:opacity-90 transition-opacity border-b border-white/10">
-        <Database className="w-7 h-7 text-blue-400" />
-        <div>
-          <h1 className="text-sm font-bold tracking-tight leading-tight">Pricing Workbench</h1>
-          <p className="text-[10px] text-gray-400">Bricksurance SE</p>
+      <Link to="/" className="flex items-center gap-3 px-4 py-4 border-b border-white/[0.08] hover:bg-white/[0.03] transition">
+        <div className="w-[34px] h-[34px] rounded-[9px] flex items-center justify-center shrink-0 bg-[linear-gradient(135deg,#2563eb,#60a5fa)] shadow-[0_2px_10px_rgba(37,99,235,.4)]">
+          <Database className="w-[19px] h-[19px] text-white" />
+        </div>
+        <div className="leading-tight">
+          <div className="text-[14.5px] font-bold text-white tracking-tight">Bricksurance SE</div>
+          <div className="text-[10.5px] text-[#94a3b8]">Pricing Workbench</div>
         </div>
       </Link>
 
       {/* Nav items */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5">
-        {NAV_ITEMS.map(({ to, label, icon: Icon, match }) => (
-          <Link key={to} to={to}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-              match(pathname)
-                ? 'bg-blue-600/20 text-white font-medium'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Icon className={`w-4 h-4 shrink-0 ${match(pathname) ? 'text-blue-400' : ''}`} />
-            {label}
-          </Link>
-        ))}
+      <nav className="flex-1 px-2.5 py-2 overflow-y-auto">
+        {NAV_ITEMS.map(({ to, label, icon: Icon, match }) => {
+          const on = match(pathname);
+          return (
+            <Link key={to} to={to}
+              className={`flex items-center gap-3 px-3 py-2 rounded-[9px] text-[13.5px] my-0.5 transition ${
+                on
+                  ? 'text-white font-semibold bg-[linear-gradient(135deg,#2563eb,#3b82f6)] shadow-[0_2px_8px_rgba(37,99,235,.35)]'
+                  : 'text-[#cbd5e1] hover:bg-white/[0.06] hover:text-white'}`}>
+              <Icon className="w-4 h-4 shrink-0" />
+              {label}
+            </Link>
+          );
+        })}
       </nav>
 
-      {/* Utility actions — Learn + Reset live in the left pane */}
-      <div className="px-3 py-2 border-t border-white/10 space-y-1">
+      {/* Learn tile */}
+      <div className="px-3 pb-1">
         <Link to="/learn"
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+          className={`flex items-center gap-2 px-2.5 py-2 rounded-[9px] text-[12.5px] font-semibold border transition ${
             pathname.startsWith('/learn')
-              ? 'bg-blue-600/20 text-white font-medium'
-              : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
-          <GraduationCap className="w-4 h-4 shrink-0" /> Learn
+              ? 'bg-emerald-500/25 border-emerald-400/50 text-emerald-200'
+              : 'bg-emerald-500/[0.12] border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/20'}`}>
+          <GraduationCap className="w-3.5 h-3.5 shrink-0" /> Learn · Pricing 101
         </Link>
-        <SidebarReset />
       </div>
 
       <DemoDocCard />
       <AiModeBadge />
 
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-white/10 text-[10px] text-gray-500">
-        Demo accelerator — not a Databricks product
+      {/* Foot — reset demo + disclaimer */}
+      <div className="p-3 border-t border-white/[0.08]">
+        <SidebarReset />
+        <div className="text-[10.5px] text-[#64748b] mt-2.5 leading-relaxed">
+          <b className="text-[#94a3b8]">About this demo</b> — Bricksurance SE is a synthetic insurer; not a Databricks product. Every panel calls real Unity Catalog functions, models, agents and Genie.
+        </div>
       </div>
     </aside>
   );
@@ -263,7 +268,7 @@ export default function App() {
   }
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-100 font-[system-ui] flex">
+      <div className="min-h-screen bg-page flex">
         <Sidebar />
         <main className="flex-1 overflow-auto">
           <Routes>
