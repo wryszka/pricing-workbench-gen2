@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from typing import Any
 
 from databricks.sdk.service.sql import StatementState
@@ -8,25 +9,53 @@ from server.config import get_workspace_client, get_warehouse_id
 
 logger = logging.getLogger(__name__)
 
+# States the statement can still leave: keep polling. Everything else is
+# terminal (SUCCEEDED, or an error we raise on).
+_PENDING_STATES = (StatementState.PENDING, StatementState.RUNNING)
+# Max total time to wait for a statement, incl. a warehouse resuming from
+# auto-stop (serverless resume is usually <60s but can spike). 50s of that is
+# the initial synchronous wait_timeout; the rest is polling.
+_MAX_WAIT_SECONDS = 180.0
+
 
 def _execute_sync(sql: str) -> list[dict[str, Any]]:
     client = get_workspace_client()
     warehouse_id = get_warehouse_id()
+    if not warehouse_id:
+        raise RuntimeError(
+            "No SQL warehouse available (WAREHOUSE_ID unset and none could be "
+            "resolved) — cannot run queries.")
     logger.debug("SQL: %s", sql[:200])
 
     # INLINE disposition only — Databricks Apps' egress is firewalled away
     # from the cloud-storage hosts that EXTERNAL_LINKS would point to, so
     # large results have to be aggregated server-side before they come back
     # rather than streamed through pre-signed URLs.
+    #
+    # wait_timeout caps at 50s; if the warehouse is resuming from auto-stop the
+    # statement comes back still PENDING/RUNNING (on_wait_timeout defaults to
+    # CONTINUE — it keeps running async). Poll until it reaches a terminal state
+    # so a cold warehouse produces correct results instead of an empty set.
     response = client.statement_execution.execute_statement(
         statement=sql,
         warehouse_id=warehouse_id,
         wait_timeout="50s",
     )
 
-    if response.status and response.status.state == StatementState.FAILED:
-        error_msg = response.status.error.message if response.status.error else "Unknown"
-        raise RuntimeError(f"SQL failed: {error_msg}")
+    deadline = time.monotonic() + _MAX_WAIT_SECONDS
+    while response.status and response.status.state in _PENDING_STATES:
+        if time.monotonic() > deadline:
+            raise RuntimeError(
+                f"SQL timed out after {_MAX_WAIT_SECONDS:.0f}s waiting for the "
+                f"warehouse/statement to finish (warehouse may be resuming).")
+        time.sleep(2)
+        response = client.statement_execution.get_statement(response.statement_id)
+
+    state = response.status.state if response.status else None
+    if state != StatementState.SUCCEEDED:
+        error_msg = (response.status.error.message
+                     if response.status and response.status.error else str(state))
+        raise RuntimeError(f"SQL {state}: {error_msg}")
 
     if not response.manifest or not response.manifest.schema or not response.manifest.schema.columns:
         return []

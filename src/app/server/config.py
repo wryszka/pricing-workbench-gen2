@@ -64,8 +64,45 @@ def get_schema() -> str:
     return os.getenv("SCHEMA_NAME", "pricing_workbench_gen2")
 
 
+_resolved_warehouse_id: str | None = None
+_warehouse_lock = threading.Lock()
+
+
 def get_warehouse_id() -> str:
-    return os.getenv("WAREHOUSE_ID", "")
+    """The SQL warehouse the app queries. Prefers the WAREHOUSE_ID env var; if
+    it's unset (or blank), self-heals by resolving a serverless warehouse from
+    the workspace instead of returning "" — an empty warehouse id makes every
+    query fail with 'warehouse not found', a top cause of the old demo's flaky
+    breakage. Resolution is cached process-wide."""
+    env = os.getenv("WAREHOUSE_ID", "").strip()
+    if env:
+        return env
+    global _resolved_warehouse_id
+    if _resolved_warehouse_id:
+        return _resolved_warehouse_id
+    with _warehouse_lock:                        # double-checked lock
+        if _resolved_warehouse_id:
+            return _resolved_warehouse_id
+        try:
+            whs = list(get_workspace_client().warehouses.list())
+
+            def _running(w) -> bool:
+                return str(getattr(w, "state", "")).endswith("RUNNING")
+
+            def _serverless(w) -> bool:
+                return bool(getattr(w, "enable_serverless_compute", False))
+
+            pick = (next((w for w in whs if _running(w) and _serverless(w)), None)
+                    or next((w for w in whs if _serverless(w)), None)
+                    or next((w for w in whs if _running(w)), None)
+                    or (whs[0] if whs else None))
+            if pick:
+                _resolved_warehouse_id = pick.id
+                logger.warning("WAREHOUSE_ID unset — auto-resolved warehouse %s (%s)",
+                               pick.id, getattr(pick, "name", "?"))
+        except Exception as e:
+            logger.error("warehouse auto-resolution failed: %s", e)
+    return _resolved_warehouse_id or ""
 
 
 def get_bundle_files_base() -> str:
@@ -100,41 +137,64 @@ def get_workspace_host() -> str:
     return host
 
 
-_asset_cache: dict[str, str] = {}
+# Title→id cache with a short TTL. Two robustness rules: (a) only SUCCESSFUL
+# lookups are cached, so a not-yet-created asset keeps being retried instead of
+# a "" sticking forever; (b) entries expire, so a space/dashboard that was
+# deleted+recreated (e.g. by a redeploy while the app runs) is re-resolved to
+# its new id rather than serving a stale one that 403s.
+import time as _time
+
+_asset_cache: dict[str, tuple[str, float]] = {}
+_ASSET_TTL_SECONDS = 300.0
+
+
+def _asset_cache_get(key: str) -> str | None:
+    hit = _asset_cache.get(key)
+    if hit and (_time.monotonic() - hit[1]) < _ASSET_TTL_SECONDS:
+        return hit[0]
+    return None
 
 
 def resolve_genie_space_by_title(title: str) -> str:
-    """Look up a Genie space id by title (cached). Lets the app self-configure on
-    a fresh deploy where GENIE_SPACE_ID isn't wired: the create_ai_assets job
-    makes spaces with known titles and the app finds them. Env var still wins."""
+    """Look up a Genie space id by title (cached, TTL'd). Lets the app
+    self-configure on a fresh deploy where GENIE_SPACE_ID isn't wired: the
+    create_ai_assets job makes spaces with known titles and the app finds them.
+    Env var still wins. Misses aren't cached."""
     if not title:
         return ""
-    if title in _asset_cache:
-        return _asset_cache[title]
+    cached = _asset_cache_get(title)
+    if cached:
+        return cached
     try:
         resp = get_workspace_client().api_client.do("GET", "/api/2.0/genie/spaces")
         for sp in (resp.get("spaces") or []):
             if sp.get("title") == title:
-                _asset_cache[title] = sp.get("space_id") or ""
-                return _asset_cache[title]
+                sid = sp.get("space_id") or ""
+                if sid:
+                    _asset_cache[title] = (sid, _time.monotonic())
+                return sid
     except Exception as e:
         logger.info("genie title resolve failed for %r: %s", title, e)
     return ""
 
 
 def resolve_dashboard_by_title(name: str) -> str:
-    """Look up a Lakeview dashboard id by display_name (cached)."""
+    """Look up a Lakeview dashboard id by display_name (cached, TTL'd). Misses
+    aren't cached."""
     if not name:
         return ""
     key = f"dash::{name}"
-    if key in _asset_cache:
-        return _asset_cache[key]
+    cached = _asset_cache_get(key)
+    if cached:
+        return cached
     try:
         resp = get_workspace_client().api_client.do("GET", "/api/2.0/lakeview/dashboards")
         for d in (resp.get("dashboards") or []):
             if d.get("display_name") == name:
-                _asset_cache[key] = d.get("dashboard_id") or ""
-                return _asset_cache[key]
+                did = d.get("dashboard_id") or ""
+                if did:
+                    _asset_cache[key] = (did, _time.monotonic())
+                return did
     except Exception as e:
         logger.info("dashboard title resolve failed for %r: %s", name, e)
     return ""
