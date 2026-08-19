@@ -1,32 +1,29 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Price Optimization — block 03: simulation
+# MAGIC # Price Optimization — block 03: simulation (scale-independent)
 # MAGIC
-# MAGIC Scores the in-force book (`opt_portfolio_snapshot`) across **N candidate
-# MAGIC price sets** using the conversion elasticity model, and records expected
-# MAGIC profit / volume / loss-ratio per candidate. `N = grid_points` is a job
-# MAGIC parameter — the "N thousand candidate price sets overnight, N is your
-# MAGIC choice, not a licence tier" demo moment. Elastic compute, exhaustive
-# MAGIC exploration.
-# MAGIC
-# MAGIC Each candidate is a vector of per-segment price factors sampled within the
-# MAGIC deviation corridor. Output: `opt_scenarios` (one row per candidate) +
-# MAGIC `opt_scenario_segments` (per candidate × segment). Deps from the job env.
-# MAGIC Idempotent.
+# MAGIC Scores the in-force book across **N candidate price sets** (`grid_points`
+# MAGIC param — the "N is your choice, not a licence tier" beat). Designed to scale
+# MAGIC to any book size: it builds a per-segment elasticity curve ONCE (a handful
+# MAGIC of single-row model calls per segment), reduces the book to per-segment
+# MAGIC aggregates, then evaluates every candidate by interpolation — O(candidates
+# MAGIC × segments), independent of policy count. Output `opt_scenarios` (one row
+# MAGIC per candidate) + `opt_scenario_segments` (the hold baseline, per segment).
+# MAGIC Deps from the job env. Idempotent.
 
 # COMMAND ----------
 
 dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
 dbutils.widgets.text("schema_name",  "pricing_workbench_gen2")
-dbutils.widgets.text("grid_points",  "2000")     # number of candidate price sets
-dbutils.widgets.text("corridor_pct", "15")       # +/- deviation corridor
+dbutils.widgets.text("grid_points",  "2000")
+dbutils.widgets.text("corridor_pct", "15")
 catalog = dbutils.widgets.get("catalog_name")
 schema  = dbutils.widgets.get("schema_name")
 N       = max(1, int(dbutils.widgets.get("grid_points")))
 CORR    = float(dbutils.widgets.get("corridor_pct")) / 100.0
 fqn     = f"{catalog}.{schema}"
 
-import json, uuid
+import json
 import numpy as np
 import pandas as pd
 import mlflow
@@ -35,95 +32,85 @@ mlflow.set_registry_uri("databricks-uc")
 # COMMAND ----------
 
 snap = spark.table(f"{fqn}.opt_portfolio_snapshot").toPandas()
-# Coerce Spark decimals -> float (they arrive as decimal.Decimal in pandas and
-# break float arithmetic in the profit math).
-for _c in ["charged_premium", "technical_cost", "sum_insured", "annual_turnover",
-           "incurred_5y", "claims_history_5y"]:
+for _c in ["charged_premium", "technical_cost", "sum_insured", "annual_turnover", "claims_history_5y"]:
     if _c in snap.columns:
         snap[_c] = pd.to_numeric(snap[_c], errors="coerce").fillna(0.0)
-# Segment the book (trade). Each candidate assigns a price factor per segment.
 snap["segment"] = snap["sic_code"].astype(str)
-segments = snap["segment"].value_counts().index.tolist()
-print(f"portfolio: {len(snap):,} policies across {len(segments)} segments; N={N} candidates, corridor +/-{CORR:.0%}")
 
-# Load the conversion elasticity model — response to price. We approximate each
-# policy's conversion/retention response with the model's price sensitivity via
-# vs_market_rate = factor (factor 1.0 = hold, >1 = increase).
+# Per-segment aggregates — the whole book reduced to O(segments) rows.
+agg = snap.groupby("segment").agg(n=("policy_id", "count"),
+                                  gwp=("charged_premium", "sum"),
+                                  cost=("technical_cost", "sum"))
+segments = agg.index.tolist()
+print(f"portfolio: {len(snap):,} policies -> {len(segments)} segments; N={N} candidates, corridor +/-{CORR:.0%}")
+
+# COMMAND ----------
+
+# Build a per-segment conversion curve ONCE (single representative row per
+# segment scored across the price grid). O(segments x grid) model calls total.
 cm = mlflow.pyfunc.load_model(f"models:/{fqn}.pwg2_conversion_elasticity@champion")
+grid = np.round(np.linspace(1 - CORR, 1 + CORR, 9), 4)
 
-# Build a scoring frame template from the snapshot mapped to the model's features.
-def _score_prob(factor_by_seg: dict) -> pd.Series:
-    df = pd.DataFrame({
-        "sic_code":          snap["segment"].astype("category"),
-        "region":            "UK",
-        "construction_type": "Standard",
-        "channel":           "broker",
-        "buildings_si":      snap["sum_insured"].fillna(0),
-        "contents_si":       0.0,
-        "liability_si":      0.0,
-        "annual_turnover":   snap["annual_turnover"].fillna(0),
-        "claims_last_5y":    snap["claims_history_5y"].fillna(0),
-        "vs_market_rate":    snap["segment"].map(factor_by_seg).astype(float),
-    })
+def _feat_row(seg: str, ratio: float) -> pd.DataFrame:
+    rep = snap[snap["segment"] == seg].iloc[0]
+    df = pd.DataFrame([{
+        "sic_code": seg, "region": "UK", "construction_type": "Standard", "channel": "broker",
+        "buildings_si": float(rep["sum_insured"]), "contents_si": 0.0, "liability_si": 0.0,
+        "annual_turnover": float(rep["annual_turnover"]), "claims_last_5y": float(rep["claims_history_5y"]),
+        "vs_market_rate": float(ratio),
+    }])
     for c in ["sic_code", "region", "construction_type", "channel"]:
         df[c] = df[c].astype("category")
-    try:
-        return pd.Series(cm.predict(df), index=snap.index).clip(0, 1)
-    except Exception:
-        # graceful fallback: simple logit in price if the model can't score
-        z = 0.5 - 9.0 * (snap["segment"].map(factor_by_seg).astype(float) - 1.0)
-        return pd.Series(1.0 / (1.0 + np.exp(-z)), index=snap.index)
+    return df
 
-charged = snap["charged_premium"].fillna(0).astype(float).values
-cost    = snap["technical_cost"].fillna(0).astype(float).values
+curves = {}
+for s in segments:
+    try:
+        curves[s] = np.array([float(cm.predict(_feat_row(s, g))[0]) for g in grid])
+    except Exception:
+        # fallback logit curve if the model can't score this segment
+        curves[s] = 1.0 / (1.0 + np.exp(-(0.5 - 9.0 * (grid - 1.0))))
+print(f"built {len(curves)} per-segment elasticity curves over grid {list(grid)}")
 
 # COMMAND ----------
 
 rng = np.random.default_rng(42)
+gwp_arr = agg["gwp"].values; cost_arr = agg["cost"].values; n_arr = agg["n"].values
 scen_rows, seg_rows = [], []
-# candidate 0 = hold (all factors 1.0), then N-1 sampled within the corridor.
 for i in range(N):
-    if i == 0:
-        fbs = {s: 1.0 for s in segments}
-    else:
-        fbs = {s: float(1.0 + rng.uniform(-CORR, CORR)) for s in segments}
-    p = _score_prob(fbs).values
-    seg_factor = snap["segment"].map(fbs).astype(float).values
-    price = charged * seg_factor
-    exp_profit = float(np.sum(p * (price - cost)))
-    exp_volume = float(np.sum(p))
-    exp_gwp    = float(np.sum(p * price))
-    exp_cost   = float(np.sum(p * cost))
-    scen_id = "hold" if i == 0 else f"cand_{i:05d}"
+    factors = np.ones(len(segments)) if i == 0 else 1.0 + rng.uniform(-CORR, CORR, len(segments))
+    p = np.array([np.interp(factors[j], grid, curves[segments[j]]) for j in range(len(segments))])
+    seg_gwp = gwp_arr * factors
+    profit  = float(np.sum(p * (seg_gwp - cost_arr)))
+    volume  = float(np.sum(p * n_arr))
+    gwp     = float(np.sum(p * seg_gwp))
+    cost_e  = float(np.sum(p * cost_arr))
+    sid = "hold" if i == 0 else f"cand_{i:05d}"
     scen_rows.append({
-        "scenario_id": scen_id, "expected_profit": round(exp_profit, 2),
-        "expected_volume": round(exp_volume, 1), "expected_gwp": round(exp_gwp, 2),
-        "expected_loss_ratio": round(exp_cost / exp_gwp, 4) if exp_gwp else None,
-        "avg_factor": round(float(np.mean(list(fbs.values()))), 4),
-        "factors_json": json.dumps({k: round(v, 4) for k, v in fbs.items()}),
+        "scenario_id": sid, "expected_profit": round(profit, 2),
+        "expected_volume": round(volume, 1), "expected_gwp": round(gwp, 2),
+        "expected_loss_ratio": round(cost_e / gwp, 4) if gwp else None,
+        "avg_factor": round(float(np.mean(factors)), 4),
     })
-    # per-segment detail only for a manageable subset (hold + top candidates later)
     if i == 0:
-        for s in segments:
-            m = snap["segment"] == s
-            seg_rows.append({"scenario_id": scen_id, "segment": s,
-                             "policies": int(m.sum()),
-                             "expected_profit": round(float(np.sum(p[m.values]*(price[m.values]-cost[m.values]))), 2),
-                             "factor": round(fbs[s], 4)})
+        for j, s in enumerate(segments):
+            seg_rows.append({"scenario_id": sid, "segment": s, "policies": int(n_arr[j]),
+                             "expected_profit": round(float(p[j] * (seg_gwp[j] - cost_arr[j])), 2),
+                             "factor": 1.0})
 
 scen_df = pd.DataFrame(scen_rows)
 spark.createDataFrame(scen_df).write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.opt_scenarios")
-if seg_rows:
-    spark.createDataFrame(pd.DataFrame(seg_rows)).write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.opt_scenario_segments")
+spark.createDataFrame(pd.DataFrame(seg_rows)).write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.opt_scenario_segments")
 
 _best = scen_df.sort_values("expected_profit", ascending=False).iloc[0]
 _hold = scen_df[scen_df.scenario_id == "hold"].iloc[0]
-print(f"best candidate {_best.scenario_id}: profit {_best.expected_profit:,.0f} "
-      f"vs hold {_hold.expected_profit:,.0f} (uplift {(_best.expected_profit/_hold.expected_profit-1)*100:.1f}% if hold>0)")
+_up = (_best.expected_profit / _hold.expected_profit - 1) * 100 if _hold.expected_profit else 0
+print(f"{len(scen_df)} candidates; best {_best.scenario_id} profit {_best.expected_profit:,.0f} "
+      f"vs hold {_hold.expected_profit:,.0f} (+{_up:.1f}%)")
 
 # COMMAND ----------
 
 dbutils.notebook.exit(json.dumps({
     "candidates": len(scen_df), "best": _best.scenario_id,
-    "best_profit": float(_best.expected_profit),
+    "best_profit": float(_best.expected_profit), "hold_profit": float(_hold.expected_profit),
 }))

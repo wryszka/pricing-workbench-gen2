@@ -75,52 +75,56 @@ for _c in ["charged_premium", "technical_cost", "sum_insured", "annual_turnover"
     if _c in snap.columns:
         snap[_c] = pd.to_numeric(snap[_c], errors="coerce").fillna(0.0)
 snap["segment"] = snap["sic_code"].astype(str)
-segments = snap["segment"].value_counts().index.tolist()
+agg = snap.groupby("segment").agg(n=("policy_id", "count"),
+                                  gwp=("charged_premium", "sum"),
+                                  cost=("technical_cost", "sum"))
+segments = agg.index.tolist()
 cm = mlflow.pyfunc.load_model(f"models:/{fqn}.pwg2_conversion_elasticity@champion")
 
-def _seg_prob(seg_df: pd.DataFrame, factor: float) -> np.ndarray:
-    df = pd.DataFrame({
-        "sic_code": seg_df["segment"].astype("category"), "region": "UK",
-        "construction_type": "Standard", "channel": "broker",
-        "buildings_si": seg_df["sum_insured"].fillna(0), "contents_si": 0.0, "liability_si": 0.0,
-        "annual_turnover": seg_df["annual_turnover"].fillna(0),
-        "claims_last_5y": seg_df["claims_history_5y"].fillna(0),
-        "vs_market_rate": float(factor),
-    })
+# Per-segment elasticity curve built ONCE over the corridor grid (single-row
+# scores); the objective then evaluates in O(1) by interpolation — scale-free.
+gridf = np.round(np.linspace(lo, hi, 13), 4)
+
+def _feat_row(seg, ratio):
+    rep = snap[snap["segment"] == seg].iloc[0]
+    df = pd.DataFrame([{
+        "sic_code": seg, "region": "UK", "construction_type": "Standard", "channel": "broker",
+        "buildings_si": float(rep["sum_insured"]), "contents_si": 0.0, "liability_si": 0.0,
+        "annual_turnover": float(rep["annual_turnover"]), "claims_last_5y": float(rep["claims_history_5y"]),
+        "vs_market_rate": float(ratio)}])
     for c in ["sic_code", "region", "construction_type", "channel"]:
         df[c] = df[c].astype("category")
-    try:
-        return np.clip(cm.predict(df), 0, 1)
-    except Exception:
-        z = 0.5 - 9.0 * (factor - 1.0)
-        return np.full(len(seg_df), 1.0 / (1.0 + np.exp(-z)))
+    return df
 
-def _neg_profit(factor, seg_df):
-    p = _seg_prob(seg_df, factor)
-    price = np.maximum(seg_df["charged_premium"].fillna(0).values * factor, min_prem)
-    cost  = seg_df["technical_cost"].fillna(0).values
-    return -float(np.sum(p * (price - cost)))
+curves = {}
+for s in segments:
+    try:
+        curves[s] = np.clip(np.array([float(cm.predict(_feat_row(s, g))[0]) for g in gridf]), 0, 1)
+    except Exception:
+        curves[s] = 1.0 / (1.0 + np.exp(-(0.5 - 9.0 * (gridf - 1.0))))
+
+def _neg_profit_seg(factor, s):
+    p = float(np.interp(factor, gridf, curves[s]))
+    return -(p * (agg.loc[s, "gwp"] * factor - agg.loc[s, "cost"]))
 
 # COMMAND ----------
 
 rows = []
 for s in segments:
-    seg_df = snap[snap["segment"] == s]
-    if len(seg_df) < 5:
+    if int(agg.loc[s, "n"]) < 5:
         continue
     if elasticity_on:
-        res = minimize_scalar(_neg_profit, bounds=(lo, hi), args=(seg_df,), method="bounded")
+        res = minimize_scalar(_neg_profit_seg, bounds=(lo, hi), args=(s,), method="bounded")
         factor = float(res.x)
     else:
         factor = 1.0   # cost-based jurisdiction: no elasticity shaping — hold to technical
-    p_hold = _seg_prob(seg_df, 1.0); p_opt = _seg_prob(seg_df, factor)
-    prof_hold = float(np.sum(p_hold * (seg_df["charged_premium"].fillna(0).values - seg_df["technical_cost"].fillna(0).values)))
-    prof_opt  = -_neg_profit(factor, seg_df)
+    prof_hold = -_neg_profit_seg(1.0, s)
+    prof_opt  = -_neg_profit_seg(factor, s)
     rows.append({
-        "constraint_version": cver, "segment": s, "policies": int(len(seg_df)),
+        "constraint_version": cver, "segment": s, "policies": int(agg.loc[s, "n"]),
         "factor": round(factor, 4),
         "factor_pct": round((factor - 1) * 100, 2),
-        "gwp_current": round(float(seg_df["charged_premium"].sum()), 2),
+        "gwp_current": round(float(agg.loc[s, "gwp"]), 2),
         "expected_profit_hold": round(prof_hold, 2),
         "expected_profit_opt":  round(prof_opt, 2),
         "profit_uplift": round(prof_opt - prof_hold, 2),

@@ -95,3 +95,42 @@ resources:
           spec:
             client: "5"
             dependencies: [mlflow, lightgbm, pandas, numpy, scipy, pyyaml]
+
+    opt_monitor:
+      name: "Optimization — 05 monitoring (conversion actuals / drift / breaches) (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+      tasks:
+        - task_key: opt_monitor
+          notebook_task:
+            notebook_path: ../src/09_optimization/05_monitoring.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name:  ${var.schema_name}
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec: { client: "5", dependencies: [] }
+
+    # The optimization flow, end to end — the "run when enable_optimization" chain.
+    # Run after Full Build:  databricks bundle run opt_full --target pricingv2 ...
+    opt_full:
+      name: "Optimization — Full flow (data -> elasticity -> simulate -> solve -> monitor) (gen2)"
+      tasks:
+        - task_key: data
+          run_job_task: { job_id: "${resources.jobs.opt_data.id}" }
+        - task_key: elasticity
+          depends_on: [{ task_key: data }]
+          run_job_task: { job_id: "${resources.jobs.opt_elasticity.id}" }
+        - task_key: simulate
+          depends_on: [{ task_key: elasticity }]
+          run_job_task: { job_id: "${resources.jobs.opt_simulate.id}" }
+        - task_key: solve
+          depends_on: [{ task_key: simulate }]
+          run_job_task: { job_id: "${resources.jobs.opt_solve.id}" }
+        - task_key: monitor
+          depends_on: [{ task_key: solve }]
+          run_job_task: { job_id: "${resources.jobs.opt_monitor.id}" }
