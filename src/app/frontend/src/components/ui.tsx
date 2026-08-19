@@ -54,7 +54,7 @@ export function OnThisPage({ children }: { children: ReactNode }) {
 // Card + CardTitle + Section
 // ---------------------------------------------------------------------------
 export function Card({ children, className = '', onClick, drill }: {
-  children: ReactNode; className?: string; onClick?: () => void; drill?: boolean;
+  children?: ReactNode; className?: string; onClick?: () => void; drill?: boolean;
 }) {
   return (
     <div onClick={onClick}
@@ -63,8 +63,8 @@ export function Card({ children, className = '', onClick, drill }: {
     </div>
   );
 }
-export function CardTitle({ children }: { children: ReactNode }) {
-  return <h3 className="text-[13px] text-mut font-semibold uppercase tracking-[0.04em] mb-2">{children}</h3>;
+export function CardTitle({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <h3 className={`text-[13px] text-mut font-semibold uppercase tracking-[0.04em] mb-2 ${className}`}>{children}</h3>;
 }
 export function Section({ title, subtitle, actions, children, className = '' }: {
   title: string; subtitle?: string; actions?: ReactNode; children: ReactNode; className?: string;
@@ -96,10 +96,11 @@ const tint: Record<string, string> = {
   green: 'bg-[#f0fdf4] border-[#bbf7d0] text-[#15803d]',
   amber: 'bg-[#fffbeb] border-[#fde68a] text-[#b45309]',
   violet: 'bg-[#faf5ff] border-[#ddd6fe] text-[#6d28d9]',
+  red: 'bg-[#fef2f2] border-[#fecaca] text-[#dc2626]',
   plain: 'bg-white border-line text-ink',
 };
 export function Metric({ label, value, sub, tone = 'plain' }: {
-  label: string; value: ReactNode; sub?: string; tone?: 'blue' | 'green' | 'amber' | 'violet' | 'plain';
+  label: string; value: ReactNode; sub?: string; tone?: 'blue' | 'green' | 'amber' | 'violet' | 'red' | 'plain';
 }) {
   const t = tint[tone];
   return (
@@ -119,11 +120,11 @@ const pillTone: Record<string, string> = {
   green: 'bg-emerald-50 text-emerald-600', blue: 'bg-blue-100 text-blue-700',
   slate: 'bg-slate-200 text-slate-700', live: 'bg-emerald-50 text-emerald-600',
 };
-export function Pill({ children, tone = 'slate' }: {
-  children: ReactNode; tone?: 'red' | 'amber' | 'green' | 'blue' | 'slate' | 'live';
+export function Pill({ children, tone = 'slate', className = '' }: {
+  children: ReactNode; tone?: 'red' | 'amber' | 'green' | 'blue' | 'slate' | 'live'; className?: string;
 }) {
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${pillTone[tone]}`}>
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${pillTone[tone]} ${className}`}>
       {tone === 'live' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
       {children}
     </span>
@@ -139,12 +140,12 @@ const btnTone: Record<string, string> = {
   warn: 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100',
   bad: 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100',
 };
-export function Btn({ children, tone = 'primary', onClick, disabled, className = '' }: {
+export function Btn({ children, tone = 'primary', onClick, disabled, className = '', title }: {
   children: ReactNode; tone?: 'primary' | 'ghost' | 'warn' | 'bad';
-  onClick?: () => void; disabled?: boolean; className?: string;
+  onClick?: () => void; disabled?: boolean; className?: string; title?: string;
 }) {
   return (
-    <button onClick={onClick} disabled={disabled}
+    <button onClick={onClick} disabled={disabled} title={title}
       className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${btnTone[tone]} ${className}`}>
       {children}
     </button>
@@ -295,7 +296,7 @@ export function Page({ children, className = '' }: { children: ReactNode; classN
 }
 
 // grid helpers
-export function Grid({ cols = 3, children, className = '' }: { cols?: 2 | 3 | 4; children: ReactNode; className?: string }) {
-  const c = { 2: 'md:grid-cols-2', 3: 'md:grid-cols-3', 4: 'md:grid-cols-4' }[cols];
+export function Grid({ cols = 3, children, className = '' }: { cols?: 1 | 2 | 3 | 4 | 5 | 6; children: ReactNode; className?: string }) {
+  const c = { 1: '', 2: 'md:grid-cols-2', 3: 'md:grid-cols-3', 4: 'md:grid-cols-4', 5: 'md:grid-cols-5', 6: 'md:grid-cols-6' }[cols];
   return <div className={`grid grid-cols-1 ${c} gap-4 ${className}`}>{children}</div>;
 }

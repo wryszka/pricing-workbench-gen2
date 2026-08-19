@@ -62,7 +62,7 @@ export default function PricingEngine() {
         examples={[
           'What changed in the current rate book?',
           'Who wins/loses if we raise rates 3%?',
-          'What's the retention risk?',
+          "What's the retention risk?",
         ]}
       />
 
@@ -159,11 +159,11 @@ function CurrentReleaseCard({ release }: { release: Release }) {
 
 function VersionChip({ label, v, highlight }: { label: string; v: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-md border px-2.5 py-1.5 ${
-      highlight ? 'border-teal-300 bg-teal-100/60' : 'border-gray-200 bg-white'
+    <div className={`rounded-lg border px-2.5 py-1.5 ${
+      highlight ? 'border-[#c7d2fe] bg-[#eef2ff]' : 'border-line bg-white'
     }`}>
-      <div className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</div>
-      <div className="font-mono text-gray-900 text-sm tabular-nums">{v}</div>
+      <div className="text-[10px] text-mut uppercase tracking-[0.05em] font-semibold">{label}</div>
+      <div className="font-mono text-ink text-sm tabular-nums">{v}</div>
     </div>
   );
 }
@@ -290,16 +290,16 @@ function QuoteRunner({ current }: { current: Release | null }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-      <section className="lg:col-span-5 bg-white border border-gray-200 rounded-lg p-5">
-        <h3 className="font-semibold text-gray-900 mb-3">Quote features</h3>
-        <p className="text-xs text-gray-500 mb-3">
+      <Card className="lg:col-span-5">
+        <CardTitle>Quote features</CardTitle>
+        <p className="text-[13px] text-mut mb-3">
           Edit any field. These flow through {current?.display_name || 'the current'} release — the same rate
           book that prices real quotes on {current?.effective_date || 'today'}.
         </p>
         <div className="grid grid-cols-2 gap-3 max-h-[560px] overflow-y-auto pr-1">
           {Object.entries(features).map(([k, v]) => (
             <label key={k} className="block">
-              <span className="text-[11px] text-gray-500">{k}</span>
+              <span className="text-[11px] text-mut font-semibold uppercase tracking-[0.05em]">{k}</span>
               <input
                 value={v ?? ''}
                 onChange={e => {
@@ -307,23 +307,21 @@ function QuoteRunner({ current }: { current: Release | null }) {
                   const num = raw !== '' && !isNaN(Number(raw)) ? Number(raw) : raw;
                   setFeatures(f => ({ ...f, [k]: num }));
                 }}
-                className="w-full mt-0.5 px-2 py-1 rounded border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                className="w-full mt-0.5 px-2 py-1 rounded border border-line text-sm focus:outline-none focus:ring-2 focus:ring-brand/50"
               />
             </label>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="lg:col-span-7 space-y-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-5">
+      <div className="lg:col-span-7 space-y-4">
+        <Card>
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-1">
-                Score on release
-              </div>
+              <CardTitle className="mb-1">Score on release</CardTitle>
               <select value={releaseId}
                       onChange={e => setReleaseId(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded border border-gray-300 text-sm bg-white">
+                      className="w-full px-3 py-1.5 rounded border border-line text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand/50">
                 <option value="">{current?.display_name || 'Current release'} (live)</option>
                 {releases.filter(r => r.release_id !== current?.release_id).map(r => (
                   <option key={r.release_id} value={r.release_id}>
@@ -331,46 +329,45 @@ function QuoteRunner({ current }: { current: Release | null }) {
                   </option>
                 ))}
               </select>
-              <div className="text-[11px] text-gray-500 mt-1.5">
+              <div className="text-[11px] text-mut mt-1.5">
                 {isHistorical
-                  ? <>Historical release — scored via a short batch job that loads the pinned UC model versions on demand. ~1-2 min.</>
-                  : <>Current release — scored live through the <code>pricing_scorer</code> serving endpoint. Sub-second.</>}
+                  ? <>Historical release — scored via batch job. ~1–2 min.</>
+                  : <>Current release — live through <code className="bg-slate-100 px-1 rounded text-[10px]">pricing_scorer</code> endpoint. Sub-second.</>}
               </div>
             </div>
-            <button onClick={run}
-                    disabled={running || (!isHistorical && status && !status.ready)}
-                    title={!isHistorical && status && !status.ready ? 'Endpoint warming up…' : ''}
-                    className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50">
+            <Btn onClick={run}
+                 disabled={running || (!isHistorical && status && !status.ready)}
+                 title={!isHistorical && status && !status.ready ? 'Endpoint warming up…' : ''}>
               {running ? <Loader2 className="w-4 h-4 animate-spin" /> :
                (!isHistorical && status && !status.ready) ? <Loader2 className="w-4 h-4 animate-spin" /> :
                <PlayCircle className="w-4 h-4" />}
               {running ? 'Scoring…' :
-               (!isHistorical && status && !status.ready) ? 'Warming endpoint…' :
+               (!isHistorical && status && !status.ready) ? 'Warming…' :
                'Run quote'}
-            </button>
+            </Btn>
           </div>
 
           {batchState && running && (
-            <div className="mt-3 pt-3 border-t border-gray-200 text-[11px] text-gray-600 flex items-center justify-between">
+            <div className="mt-3 pt-3 border-t border-line text-[11px] text-mut flex items-center justify-between">
               <span>
                 <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
-                Batch job <code>{batchState.runId}</code> — state: <span className="font-medium">{batchState.phase}</span>
+                Batch job <code className="bg-slate-100 px-1 rounded text-[10px]">{batchState.runId}</code> — state: <span className="font-medium">{batchState.phase}</span>
               </span>
               {batchState.url && (
                 <a href={batchState.url} target="_blank" rel="noreferrer"
-                   className="text-teal-600 hover:underline inline-flex items-center gap-1">
+                   className="text-brand hover:underline inline-flex items-center gap-1">
                   open run <ExternalLink className="w-3 h-3" />
                 </a>
               )}
             </div>
           )}
-        </div>
+        </Card>
 
-        {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>}
+        {error && <Card className="border-red-200 bg-red-50"><span className="text-sm text-red-700">{error}</span></Card>}
         {result && <QuoteResult result={result} release={
           releases.find(r => r.release_id === releaseId) || current
         } />}
-      </section>
+      </div>
     </div>
   );
 }
@@ -390,40 +387,40 @@ function QuoteResult({ result, release }: { result: any; release: Release | null
   ];
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-200 bg-teal-50/60 flex items-center justify-between">
+    <Card className="overflow-hidden bg-white">
+      <div className="px-4 py-3 border-b border-line bg-[#eef2ff] flex items-center justify-between">
         <div className="text-sm">
-          <span className="font-semibold text-gray-900">
+          <span className="font-bold text-ink">
             £{p.gross_premium?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </span>
-          <span className="ml-2 text-gray-600">gross premium · {release?.display_name}</span>
+          <span className="ml-2 text-mut">gross premium · {release?.display_name}</span>
         </div>
-        <div className="text-[11px] text-gray-500">
+        <div className="text-[11px] text-mut">
           Scored {new Date(result.scored_at).toLocaleTimeString()} · {result.scoring_engine}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-5 border-b border-gray-200">
-        <Tile label="Freq pred"   value={q.predictions?.freq_pred?.toFixed?.(4) ?? '—'} />
-        <Tile label="Sev pred"    value={q.predictions?.sev_pred != null ? `£${q.predictions.sev_pred.toLocaleString()}` : '—'} />
-        <Tile label="Demand pred" value={q.predictions?.demand_pred?.toFixed?.(3) ?? '—'} />
-        <Tile label="Fraud pred"  value={q.predictions?.fraud_pred?.toFixed?.(3) ?? '—'} />
-      </div>
+      <Grid cols={4} className="p-4 border-b border-line">
+        <Metric label="Freq" value={q.predictions?.freq_pred?.toFixed?.(4) ?? '—'} tone="plain" />
+        <Metric label="Sev" value={q.predictions?.sev_pred != null ? `£${q.predictions.sev_pred.toLocaleString()}` : '—'} tone="plain" />
+        <Metric label="Demand" value={q.predictions?.demand_pred?.toFixed?.(3) ?? '—'} tone="plain" />
+        <Metric label="Fraud" value={q.predictions?.fraud_pred?.toFixed?.(3) ?? '—'} tone="plain" />
+      </Grid>
 
-      <div className="p-5">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-2">Price build-up</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-0.5 text-sm">
+      <div className="p-4">
+        <SectionHead>Price build-up</SectionHead>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-0.5 text-[13px]">
           {rows.map((r, i) => (
-            <div key={i} className={`flex justify-between px-3 py-1 rounded ${r.highlight ? 'bg-teal-100/60 text-teal-900' : ''}`}>
-              <span className={r.bold ? 'font-semibold' : 'text-gray-700'}>{r.label}</span>
-              <span className={`tabular-nums ${r.bold ? 'font-semibold' : ''}`}>
+            <div key={i} className={`flex justify-between px-3 py-1 rounded ${r.highlight ? 'bg-[#eef2ff]' : ''}`}>
+              <span className={r.bold ? 'font-bold text-ink' : 'text-ink'}>{r.label}</span>
+              <span className={`tabular-nums ${r.bold ? 'font-bold text-ink' : 'text-ink'}`}>
                 £{(r.amount ?? 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
               </span>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -507,38 +504,35 @@ function MtaSimulator({ current: _current }: { current: Release | null }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-      <section className="lg:col-span-4 bg-white border border-gray-200 rounded-lg p-5 space-y-3">
-        <h3 className="font-semibold text-gray-900">Mid-term adjustment</h3>
-        <p className="text-xs text-gray-500">
-          Re-prices the policy on the release that was in force at inception (release-of-record)
+      <Card className="lg:col-span-4 space-y-3">
+        <CardTitle>Mid-term adjustment</CardTitle>
+        <p className="text-[13px] text-mut">
+          Re-prices the policy on the release at inception (release-of-record)
           and, for reference, on today's live release.
         </p>
 
         <label className="block text-sm">
-          <span className="text-[11px] text-gray-500">Policy ID</span>
+          <span className="text-[11px] text-mut font-bold uppercase tracking-[0.05em]">Policy ID</span>
           <input value={policyId} onChange={e => setPolicyId(e.target.value.toUpperCase())}
-                 className="w-full mt-0.5 px-3 py-1.5 rounded border border-gray-300 font-mono focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                 className="w-full mt-0.5 px-3 py-1.5 rounded border border-line font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brand/50" />
         </label>
         <div className="flex flex-wrap gap-1.5">
           {demoPolicies.map(d => (
-            <button key={d.id}
-                    onClick={() => setPolicyId(d.id)}
-                    className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
-                      policyId === d.id
-                        ? 'bg-teal-600 text-white border-teal-600'
-                        : 'bg-white text-gray-700 border-gray-300 hover:border-teal-400 hover:bg-teal-50'
-                    }`}>
+            <Btn key={d.id}
+                 tone={policyId === d.id ? 'primary' : 'ghost'}
+                 onClick={() => setPolicyId(d.id)}
+                 className="text-[10px]">
               {d.id} · {d.label}
-            </button>
+            </Btn>
           ))}
         </div>
 
         <PolicyContextCard ctx={ctx} loading={ctxLoading} err={ctxErr} />
 
         <label className="block text-sm">
-          <span className="text-[11px] text-gray-500">Field to change</span>
+          <span className="text-[11px] text-mut font-bold uppercase tracking-[0.05em]">Field to change</span>
           <select value={change.field} onChange={e => setChange(c => ({ ...c, field: e.target.value }))}
-                  className="w-full mt-0.5 px-3 py-1.5 rounded border border-gray-300">
+                  className="w-full mt-0.5 px-3 py-1.5 rounded border border-line text-sm focus:outline-none focus:ring-2 focus:ring-brand/50">
             {['annual_turnover', 'sum_insured', 'current_premium', 'industry_risk_tier',
               'construction_type', 'ccj_count', 'flood_zone_rating', 'employee_count_est'].map(f => (
               <option key={f} value={f}>{f}</option>
@@ -546,107 +540,105 @@ function MtaSimulator({ current: _current }: { current: Release | null }) {
           </select>
         </label>
         <label className="block text-sm">
-          <span className="text-[11px] text-gray-500">New value</span>
+          <span className="text-[11px] text-mut font-bold uppercase tracking-[0.05em]">New value</span>
           <input value={change.value} onChange={e => setChange(c => ({ ...c, value: e.target.value }))}
-                 className="w-full mt-0.5 px-3 py-1.5 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                 className="w-full mt-0.5 px-3 py-1.5 rounded border border-line text-sm focus:outline-none focus:ring-2 focus:ring-brand/50" />
         </label>
         <label className="block text-sm">
-          <span className="text-[11px] text-gray-500">Effective date</span>
+          <span className="text-[11px] text-mut font-bold uppercase tracking-[0.05em]">Effective date</span>
           <input type="date" value={effective} onChange={e => setEffective(e.target.value)}
-                 className="w-full mt-0.5 px-3 py-1.5 rounded border border-gray-300" />
+                 className="w-full mt-0.5 px-3 py-1.5 rounded border border-line text-sm focus:outline-none focus:ring-2 focus:ring-brand/50" />
         </label>
         <label className="block text-sm">
-          <span className="text-[11px] text-gray-500">Change reason</span>
+          <span className="text-[11px] text-mut font-bold uppercase tracking-[0.05em]">Change reason</span>
           <input value={reason} onChange={e => setReason(e.target.value)}
-                 className="w-full mt-0.5 px-3 py-1.5 rounded border border-gray-300" />
+                 className="w-full mt-0.5 px-3 py-1.5 rounded border border-line text-sm focus:outline-none focus:ring-2 focus:ring-brand/50" />
         </label>
-        <button onClick={reprice}
-                disabled={running || !ctx}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50">
+        <Btn tone="primary" onClick={reprice}
+             disabled={running || !ctx}
+             className="w-full justify-center">
           {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           {running ? 'Re-pricing…' : 'Re-price policy'}
-        </button>
-      </section>
+        </Btn>
+      </Card>
 
-      <section className="lg:col-span-8 space-y-3">
-        {error && <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{error}</div>}
+      <div className="lg:col-span-8 space-y-3">
+        {error && <Card className="border-red-200 bg-red-50"><span className="text-sm text-red-700">{error}</span></Card>}
         {!result && !running && (
-          <div className="bg-gray-50 border border-gray-200 rounded p-6 text-sm text-gray-500 italic">
+          <Card className="text-[13px] text-mut italic">
             {ctx
-              ? <>Ready to re-price <code>{ctx.policy_id}</code> on <strong>{ctx.inception_release?.display_name}</strong> (release-of-record).
-                  Today's live release ({ctx.current_release?.display_name}) shown for reference.</>
+              ? <>Ready to re-price <code className="bg-slate-100 px-1 rounded text-[10px]">{ctx.policy_id}</code> on <strong>{ctx.inception_release?.display_name}</strong> (release-of-record).
+                  Today's live release (<strong>{ctx.current_release?.display_name}</strong>) shown for reference.</>
               : <>Pick a policy ID — the system will auto-select the release the policy was bound on.</>}
-          </div>
+          </Card>
         )}
         {result && <MtaResult r={result} />}
-      </section>
+      </div>
     </div>
   );
 }
 
 function PolicyContextCard({ ctx, loading, err }: { ctx: any; loading: boolean; err: string | null }) {
   if (loading) return (
-    <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500 flex items-center gap-1.5">
-      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Looking up policy…
-    </div>
+    <Card className="bg-slate-50 border-line">
+      <Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1.5" /> <span className="text-xs text-mut">Looking up policy…</span>
+    </Card>
   );
   if (err) return (
-    <div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">{err}</div>
+    <Card className="bg-red-50 border-red-200"><span className="text-xs text-red-700">{err}</span></Card>
   );
   if (!ctx) return null;
   const ir = ctx.inception_release;
   const cr = ctx.current_release;
   const isLive = ir && cr && ir.release_id === cr.release_id;
   return (
-    <div className="rounded border border-teal-200 bg-teal-50/50 p-3 space-y-2">
-      <div className="text-[10px] uppercase tracking-wider font-bold text-teal-800 flex items-center gap-1">
-        <FileText className="w-3 h-3" /> Policy context
-      </div>
-      <div className="text-xs text-gray-700 space-y-0.5">
+    <Card className="bg-[#faf5ff] border-[#ddd6fe]">
+      <CardTitle className="flex items-center gap-1 mb-2">
+        <FileText className="w-3 h-3 text-purple-600" /> Policy context
+      </CardTitle>
+      <div className="text-xs text-ink space-y-0.5">
         <div className="flex items-center gap-1.5">
-          <Calendar className="w-3 h-3 text-teal-700" />
+          <Calendar className="w-3 h-3 text-purple-600" />
           Bound <span className="font-semibold">{ctx.inception_date}</span>
           {' '}· renews <span className="font-semibold">{ctx.renewal_date}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Tag className="w-3 h-3 text-teal-700" />
+          <Tag className="w-3 h-3 text-purple-600" />
           Premium <span className="font-semibold">£{Number(ctx.current_premium || 0).toLocaleString()}</span>
           {' '}· {ctx.industry_risk_tier || '—'} tier
           {ctx.region ? ` · ${ctx.region}` : ''}
         </div>
       </div>
       {ir && (
-        <div className="rounded bg-white border border-teal-200 p-2">
-          <div className="text-[10px] uppercase tracking-wider font-semibold text-teal-700 mb-1">
+        <Card className="bg-white border-[#ddd6fe] mt-2 p-3">
+          <div className="text-[10px] uppercase tracking-[0.08em] font-bold text-purple-700 mb-1">
             Auto-selected release-of-record
           </div>
-          <div className="text-sm font-semibold text-gray-900">
+          <div className="text-sm font-semibold text-ink flex items-center gap-2">
             {ir.display_name}
             {isLive && (
-              <span className="ml-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
-                also live
-              </span>
+              <Pill tone="green">also live</Pill>
             )}
           </div>
-          <div className="text-[10px] text-gray-500 mt-0.5">
+          <div className="text-[10px] text-mut mt-0.5">
             effective {ir.effective_date} · {ir.status}
           </div>
           <div className="flex flex-wrap gap-1 mt-1.5">
             {Object.entries(ir.model_versions || {}).filter(([_, v]) => v).map(([k, v]) => (
-              <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-mono">
+              <Pill key={k} tone="slate" className="text-[10px]">
                 {k}: v{String(v)}
-              </span>
+              </Pill>
             ))}
           </div>
-        </div>
+        </Card>
       )}
       {!isLive && cr && (
-        <div className="text-[11px] text-gray-500">
-          Live release <span className="font-semibold text-gray-700">{cr.display_name}</span> ({cr.effective_date})
-          shown alongside for reference.
+        <div className="text-[11px] text-mut mt-2">
+          Live release <span className="font-semibold text-ink">{cr.display_name}</span> ({cr.effective_date})
+          shown for reference.
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -657,7 +649,6 @@ function MtaResult({ r }: { r: any }) {
   const onCur   = r.on_current_release;
   const isLive  = ir && cr && ir.release_id === cr.release_id;
 
-  // Cross-release delta: live engine vs release-of-record
   const incepGross = onIncep?.after?.price_buildup?.gross_premium;
   const curGross   = onCur?.after?.price_buildup?.gross_premium;
   const crossDelta = (typeof incepGross === 'number' && typeof curGross === 'number')
@@ -667,17 +658,17 @@ function MtaResult({ r }: { r: any }) {
 
   return (
     <div className="space-y-3">
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
+      <Card>
         <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
-          <div className="text-sm font-semibold text-gray-900">
+          <div className="text-sm font-bold text-ink">
             {r.policy_id} · effective {r.effective_date}
           </div>
-          <div className="text-[11px] text-gray-500">
+          <div className="text-[11px] text-mut">
             inception {r.inception_date} · {r.remaining_days} / {r.term_days} days remaining · prorating {Math.round(r.remaining_frac * 100)}%
           </div>
         </div>
 
-        <div className={`grid grid-cols-1 ${isLive ? '' : 'md:grid-cols-2'} gap-3`}>
+        <Grid cols={isLive ? 1 : 2} className="gap-3 mb-3">
           <RepricedCard
             heading="Release-of-record"
             sub={ir ? `${ir.display_name} · effective ${ir.effective_date}` : ''}
@@ -693,35 +684,34 @@ function MtaResult({ r }: { r: any }) {
               versions={cr?.model_versions}
             />
           )}
-        </div>
+        </Grid>
 
         {!isLive && crossDelta != null && (
-          <div className="mt-3 rounded border border-gray-200 bg-gray-50 p-3 text-xs text-gray-700">
+          <Card className="bg-slate-50 border-line text-xs text-ink">
             <span className="font-semibold">Cross-release reconciliation:</span>{' '}
             today's live release prices this policy{' '}
             <span className={`font-semibold ${crossDelta < 0 ? 'text-emerald-700' : 'text-red-700'}`}>
               {crossDelta > 0 ? '+' : ''}£{Math.abs(crossDelta).toLocaleString(undefined, {maximumFractionDigits: 0})}
               {crossPct != null && <> ({crossPct > 0 ? '+' : ''}{crossPct.toFixed(1)}%)</>}
             </span>
-            {' '}vs the release-of-record. The MTA invoice uses the release-of-record for consistency
-            with the policyholder's bound contract.
-          </div>
+            {' '}vs release-of-record. MTA invoice uses release-of-record for consistency.
+          </Card>
         )}
         {isLive && (
-          <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+          <Card className="bg-emerald-50 border-emerald-200 text-xs text-emerald-900">
             <span className="font-semibold">Inception falls inside the live release window.</span>{' '}
-            The live release IS the release-of-record for this policy — only one re-price is needed.
-          </div>
+            Live release IS the release-of-record — only one re-price needed.
+          </Card>
         )}
-      </div>
+      </Card>
 
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 mb-2">Audit</div>
-        <div className="text-[11px] text-gray-500">
-          Recorded as an <code>mta_simulated</code> event with the version chain and calibration
-          factor; the priced quote is also written to <code>inference_logs</code> with <code>is_mta=true</code>.
+      <Card>
+        <SectionHead>Audit trail</SectionHead>
+        <div className="text-[11px] text-mut">
+          Recorded as <code className="bg-slate-100 px-1 rounded text-[10px]">mta_simulated</code> event
+          with version chain; priced quote written to <code className="bg-slate-100 px-1 rounded text-[10px]">inference_logs</code> with <code className="bg-slate-100 px-1 rounded text-[10px]">is_mta=true</code>.
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -733,21 +723,19 @@ function RepricedCard({ heading, sub, block, versions, primary }:
   const prorated = block?.prorated_delta;
   const full = block?.full_delta;
   return (
-    <div className={`rounded-lg border p-3 ${primary ? 'border-teal-300 bg-teal-50/40' : 'border-gray-200 bg-gray-50/50'}`}>
+    <Card className={primary ? 'bg-[#eef2ff] border-[#ddd6fe]' : 'bg-slate-50/50 border-line'}>
       <div className="flex items-baseline justify-between mb-2 gap-2">
         <div>
-          <div className={`text-[10px] uppercase tracking-wider font-bold ${primary ? 'text-teal-800' : 'text-gray-600'}`}>
+          <div className={`text-[10px] uppercase tracking-[0.08em] font-bold ${primary ? 'text-purple-700' : 'text-mut'}`}>
             {heading}
           </div>
-          <div className="text-sm font-semibold text-gray-900">{sub}</div>
+          <div className="text-sm font-semibold text-ink">{sub}</div>
         </div>
         {primary && (
-          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-teal-200 text-teal-900 font-bold">
-            primary
-          </span>
+          <Pill tone="blue" className="text-[9px]">primary</Pill>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-2 mb-2">
+      <Grid cols={3} className="gap-2 mb-2">
         <MiniTile label="Before"   value={`£${(before?.gross_premium || 0).toLocaleString()}`} />
         <MiniTile label="After"    value={`£${(after?.gross_premium  || 0).toLocaleString()}`} />
         <MiniTile
@@ -756,31 +744,27 @@ function RepricedCard({ heading, sub, block, versions, primary }:
           tone={(prorated || 0) > 0 ? 'up' : (prorated || 0) < 0 ? 'down' : 'neutral'}
           sub={`Annual ${(full || 0) >= 0 ? '+' : ''}£${(full || 0).toLocaleString()}`}
         />
-      </div>
+      </Grid>
       {versions && (
         <div className="flex flex-wrap gap-1">
           {Object.entries(versions).filter(([_, v]) => v).map(([k, v]) => (
-            <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-700 font-mono">
+            <Pill key={k} tone="slate" className="text-[10px]">
               {k}: v{String(v)}
-            </span>
+            </Pill>
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
 function MiniTile({ label, value, tone, sub }:
   { label: string; value: string; tone?: 'up' | 'down' | 'neutral'; sub?: string }) {
-  const color = tone === 'up'   ? 'bg-red-50 text-red-800 border-red-200'
-              : tone === 'down' ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-gray-50 text-gray-900 border-gray-200';
+  const metricTone = tone === 'up'   ? 'amber' as const
+                   : tone === 'down' ? 'green' as const
+                   : 'plain' as const;
   return (
-    <div className={`rounded border ${color} px-3 py-2`}>
-      <div className="text-[11px] uppercase tracking-wide opacity-70">{label}</div>
-      <div className="text-lg font-semibold tabular-nums">{value}</div>
-      {sub && <div className="text-[11px] opacity-80 mt-0.5">{sub}</div>}
-    </div>
+    <Metric label={label} value={value} sub={sub} tone={metricTone} />
   );
 }
 
@@ -803,76 +787,73 @@ function ReleaseHistory({ releases }: { releases: Release[] }) {
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="px-4 py-2.5 bg-gray-50 border-b flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-800">Releases</h3>
-        <span className="text-xs text-gray-500">{releases.length} total</span>
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between mb-3">
+        <CardTitle className="mb-0">Releases</CardTitle>
+        <span className="text-xs text-mut">{releases.length} total</span>
       </div>
-      <div>
+      <div className="divide-y">
         {releases.map(r => {
           const open = expanded === r.release_id;
           const comp = comparing[r.release_id];
           const isChampion = r.status === 'champion';
           const isPrevious = r.status === 'previous_champion';
           return (
-            <div key={r.release_id} className="border-b last:border-b-0">
+            <div key={r.release_id}>
               <button onClick={() => setExpanded(open ? null : r.release_id)}
-                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 text-left">
-                <div className="flex items-center gap-3">
-                  {open ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
+                      className="w-full flex items-center justify-between px-3 py-3 hover:bg-slate-50 text-left transition">
+                <div className="flex items-center gap-2">
+                  {open ? <ChevronDown className="w-4 h-4 text-mut" /> : <ChevronRight className="w-4 h-4 text-mut" />}
                   <div>
-                    <div className="font-medium text-gray-900">{r.display_name}</div>
-                    <div className="text-[11px] text-gray-500">
+                    <div className="font-medium text-ink">{r.display_name}</div>
+                    <div className="text-[11px] text-mut">
                       Effective {r.effective_date} · approved by {(r.approved_by || '-').split('@')[0]}
                     </div>
                   </div>
                 </div>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                  isChampion ? 'bg-emerald-100 text-emerald-800' :
-                  isPrevious ? 'bg-blue-100 text-blue-700' :
-                  'bg-gray-100 text-gray-600'}`}>
+                <Pill tone={isChampion ? 'green' : isPrevious ? 'blue' : 'slate'} className="text-[10px]">
                   {r.status}
-                </span>
+                </Pill>
               </button>
               {open && (
-                <div className="px-4 pb-4 pt-1 bg-gray-50/40">
+                <div className="px-3 pb-3 pt-2 bg-slate-50/50 space-y-3">
                   {r.narrative && (
-                    <div className="mb-3 text-[13px] text-gray-700 italic leading-relaxed">{r.narrative}</div>
+                    <div className="text-[13px] text-ink italic leading-relaxed">{r.narrative}</div>
                   )}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  <Grid cols={5}>
                     <VersionChip label="Frequency GLM" v={r.freq_glm_version} />
                     <VersionChip label="Severity GLM"  v={r.sev_glm_version} />
                     <VersionChip label="Demand GBM"    v={r.demand_gbm_version} />
                     <VersionChip label="Fraud GBM"     v={r.fraud_gbm_version} />
                     <VersionChip label="Rating engine" v={r.rating_engine_version} highlight />
-                  </div>
+                  </Grid>
 
                   {!isChampion && (
-                    <div className="mt-4">
+                    <div>
                       {comp?.state === 'done' ? (
-                        <div className="flex flex-col gap-1">
-                          <div className="text-xs font-semibold text-gray-700">Batch comparison queued — 4 runs</div>
+                        <div className="flex flex-col gap-2">
+                          <div className="text-xs font-semibold text-ink">Batch comparison queued — 4 runs</div>
                           <div className="flex flex-wrap gap-1">
                             {Object.entries(comp.result.run_page_urls || {}).map(([fam, url]: [string, any]) => (
                               <a key={fam} href={url as string} target="_blank" rel="noreferrer"
-                                 className="text-[11px] px-2 py-0.5 rounded border border-teal-300 bg-teal-50 text-teal-800 hover:bg-teal-100 inline-flex items-center gap-1">
+                                 className="text-[11px] px-2 py-0.5 rounded border border-brand bg-[#eef2ff] text-brand hover:bg-[#dbeafe] inline-flex items-center gap-1">
                                 {fam} <ExternalLink className="w-2.5 h-2.5" />
                               </a>
                             ))}
                           </div>
-                          <div className="text-[11px] text-gray-500 mt-1">
-                            Each run scores 2,000 policies. ~2 min per family. Results land in Compare & Test history.
+                          <div className="text-[11px] text-mut">
+                            Each run scores 2,000 policies. ~2 min per family. Results land in history.
                           </div>
                         </div>
                       ) : comp?.state === 'error' ? (
                         <div className="text-xs text-red-700">Failed: {comp.error}</div>
                       ) : (
-                        <button onClick={() => triggerCompare(r)}
-                                disabled={comp?.state === 'queuing'}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-teal-300 bg-white text-teal-700 text-xs font-medium hover:bg-teal-50 disabled:opacity-50">
+                        <Btn tone="ghost" onClick={() => triggerCompare(r)}
+                             disabled={comp?.state === 'queuing'}
+                             className="text-xs">
                           {comp?.state === 'queuing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitCompareArrows className="w-3.5 h-3.5" />}
-                          {comp?.state === 'queuing' ? 'Queuing…' : `Compare ${r.display_name} vs current`}
-                        </button>
+                          {comp?.state === 'queuing' ? 'Queuing…' : `Compare ${r.display_name}`}
+                        </Btn>
                       )}
                     </div>
                   )}
@@ -882,6 +863,6 @@ function ReleaseHistory({ releases }: { releases: Release[] }) {
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }

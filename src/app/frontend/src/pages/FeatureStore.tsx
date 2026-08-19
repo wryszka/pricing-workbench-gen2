@@ -666,7 +666,7 @@ function FeatureCatalogPanel({ catalog }: {
       </div>
 
       {selected && <FeatureDetailDrawer feature={selected} onClose={() => setSelected(null)} />}
-    </div>
+    </Card>
   );
 }
 
