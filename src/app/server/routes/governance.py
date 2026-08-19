@@ -540,16 +540,12 @@ def _query_agent_endpoint(pack_id: str, question: str, policy_id: str | None) ->
 
         host  = w.config.host.rstrip("/")
         token = w.config._header_factory()
-        # The deployed agent's input signature only declares the pack_id field
-        # in custom_inputs — additional fields are rejected. We squeeze the
-        # policy_id context into the question text when present.
-        q = question if not policy_id else f"[policy_id={policy_id}] {question}"
-        body = {
-            "dataframe_records": [{
-                "messages": [{"role": "user", "content": q}],
-                "custom_inputs": {"pack_id": pack_id},
-            }],
-        }
+        # ChatAgent serving contract: a native chat request. custom_inputs is a
+        # free dict, so pass pack_id + policy_id directly (the agent reads both).
+        ci: dict = {"pack_id": pack_id}
+        if policy_id:
+            ci["policy_id"] = policy_id
+        body = {"messages": [{"role": "user", "content": question}], "custom_inputs": ci}
         # Long timeout — the agent may make several tool calls (SQL + volume
         # reads) before returning. First invocation after cold start is the
         # slowest.
@@ -564,25 +560,31 @@ def _query_agent_endpoint(pack_id: str, question: str, policy_id: str | None) ->
         logger.warning("Agent endpoint call failed: %s", e)
         return {"ok": False, "error": str(e)[:300]}
 
-    # MLflow serving wraps pyfunc output — usually under "predictions"
-    preds = data.get("predictions") or data.get("outputs") or data
-    if isinstance(preds, list):
-        preds = preds[0] if preds else {}
-    if not isinstance(preds, dict):
-        return {"ok": False, "error": f"unexpected response shape: {type(preds).__name__}"}
+    # ChatAgent returns {messages:[...], custom_outputs:{...}}; keep a pyfunc
+    # ({predictions:[...]}) fallback for safety.
+    if isinstance(data, dict) and "messages" in data:
+        pred = data
+    else:
+        pred = data.get("predictions") or data.get("outputs") or data
+        if isinstance(pred, list):
+            pred = pred[0] if pred else {}
+    if not isinstance(pred, dict):
+        return {"ok": False, "error": f"unexpected response shape: {type(pred).__name__}"}
 
-    messages = preds.get("messages") or []
+    messages = pred.get("messages") or []
     answer = ""
     if messages:
-        msg = messages[0] if isinstance(messages[0], dict) else {}
-        answer = msg.get("content") or ""
+        assistants = [m for m in messages if isinstance(m, dict) and m.get("role") == "assistant"]
+        chosen = assistants[-1] if assistants else (messages[-1] if isinstance(messages[-1], dict) else {})
+        answer = chosen.get("content") or ""
 
+    custom = pred.get("custom_outputs") or {}
     return {
         "ok":     True,
         "answer": answer,
-        "trace":  preds.get("trace", []),
-        "model":  preds.get("model", AGENT_ENDPOINT),
-        "usage":  preds.get("usage", {}),
+        "trace":  custom.get("trace", pred.get("trace", [])),
+        "model":  custom.get("model", pred.get("model", AGENT_ENDPOINT)),
+        "usage":  custom.get("usage", pred.get("usage", {})),
     }
 
 

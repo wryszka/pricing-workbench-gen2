@@ -19,8 +19,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",  "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",   "pricing_upt")
+dbutils.widgets.text("catalog_name",  "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",   "pricing_workbench_gen2")
 dbutils.widgets.text("endpoint_name", "pwg2_chat_agent")
 dbutils.widgets.text("fm_endpoint",   "databricks-claude-sonnet-4-6")
 dbutils.widgets.text("warehouse_id",  "")  # SQL warehouse the agent tools query; defaults to first running serverless warehouse
@@ -48,11 +48,10 @@ if not warehouse_id:
     warehouse_id = (_running or _all)[0].id
     print(f"warehouse_id auto-selected: {warehouse_id}")
 
-import json, os, tempfile
+import json, os, tempfile, uuid
 import mlflow
-from mlflow.pyfunc import PythonModel
-from mlflow.models import ModelSignature
-from mlflow.types.schema import Schema, ColSpec
+from mlflow.pyfunc import ChatAgent
+from mlflow.types.agent import ChatAgentMessage, ChatAgentResponse, ChatContext
 
 mlflow.set_registry_uri("databricks-uc")
 
@@ -298,22 +297,28 @@ BIAS_TOOLS = [
 
 # COMMAND ----------
 
-class PricingChatAgent(PythonModel):
-    """Two-persona agent: `factory` (reviews a factory run) and `explain`
-    (produces actuarial explainability narratives)."""
+class PricingChatAgent(ChatAgent):
+    """Multi-persona agent (factory / explain / bias_investigator) on the Mosaic
+    AI Agent Framework. Tools query governed UC tables via a SQL warehouse; auth
+    is Model Serving automatic authentication passthrough (the warehouse + tables
+    are declared as model resources at log time), so there is NO personal access
+    token to expire."""
 
     def load_context(self, context):
-        cfg_path = context.artifacts.get("config")
+        cfg = {}
+        cfg_path = (context.artifacts or {}).get("config") if context else None
         if cfg_path:
             with open(cfg_path) as fh:
                 cfg = json.load(fh)
-            self.catalog     = cfg["catalog"]
-            self.schema      = cfg["schema"]
-            self.fm_endpoint = cfg["fm_endpoint"]
-        else:
-            self.catalog     = os.environ.get("AGENT_CATALOG", "lr_serverless_aws_us_catalog")
-            self.schema      = os.environ.get("AGENT_SCHEMA", "pricing_upt")
-            self.fm_endpoint = os.environ.get("AGENT_FM_ENDPOINT", "databricks-claude-sonnet-4-6")
+        self.catalog      = cfg.get("catalog")      or os.environ.get("AGENT_CATALOG", "lr_pricing_v2_aws_us_catalog")
+        self.schema       = cfg.get("schema")       or os.environ.get("AGENT_SCHEMA", "pricing_workbench_gen2")
+        self.fm_endpoint  = cfg.get("fm_endpoint")  or os.environ.get("AGENT_FM_ENDPOINT", "databricks-claude-sonnet-4-6")
+        # Warehouse id baked into the artifact so tokenless SQL works even if a
+        # redeploy drops environment_vars. Bridge it to the env that the
+        # module-level _run_sql reads.
+        self.warehouse_id = cfg.get("warehouse_id") or os.environ.get("AGENT_WAREHOUSE_ID", "")
+        if self.warehouse_id:
+            os.environ["AGENT_WAREHOUSE_ID"] = self.warehouse_id
 
     # ------------------------- Factory tools --------------------------------
 
@@ -607,29 +612,8 @@ class PricingChatAgent(PythonModel):
 
     # ------------------------- Predict loop ---------------------------------
 
-    def predict(self, context, model_input, params=None):
-        if hasattr(model_input, "to_dict"):
-            if len(model_input) == 0:
-                return {"messages": [{"role": "assistant", "content": ""}], "trace": []}
-            rec = model_input.iloc[0].to_dict()
-        elif isinstance(model_input, list):
-            rec = model_input[0] if model_input else {}
-        else:
-            rec = dict(model_input) if model_input else {}
-
-        messages = rec.get("messages", [])
-        if isinstance(messages, str):
-            try:
-                messages = json.loads(messages)
-            except Exception:
-                messages = [{"role": "user", "content": messages}]
-
-        custom_inputs = rec.get("custom_inputs") or {}
-        if isinstance(custom_inputs, str):
-            try:
-                custom_inputs = json.loads(custom_inputs)
-            except Exception:
-                custom_inputs = {}
+    def predict(self, messages, context=None, custom_inputs=None):
+        custom_inputs = custom_inputs or {}
 
         persona = (custom_inputs.get("persona") or "factory").lower()
         if persona not in ("factory", "explain", "bias_investigator"):
@@ -657,10 +641,14 @@ class PricingChatAgent(PythonModel):
             system_prompt = EXPLAIN_SYSTEM
             tools = EXPLAIN_TOOLS
 
+        # Incoming messages are ChatAgentMessage objects (or dicts); flatten to
+        # OpenAI-style role/content dicts for the FM tool-use loop.
         full_messages = [{"role": "system", "content": system_prompt}]
-        for m in messages:
-            if isinstance(m, dict):
-                full_messages.append(m)
+        for m in (messages or []):
+            role = getattr(m, "role", None) or (m.get("role") if isinstance(m, dict) else None)
+            content = getattr(m, "content", None) or (m.get("content") if isinstance(m, dict) else "")
+            if role:
+                full_messages.append({"role": role, "content": content or ""})
 
         trace = []
         final_text = ""
@@ -709,14 +697,17 @@ class PricingChatAgent(PythonModel):
             final_text = content
             break
 
-        return {
-            "messages": [{"role": "assistant", "content": final_text}],
-            "trace":    trace,
-            "persona":  persona,
-            "model":    self.fm_endpoint,
-            "usage":    {"prompt_tokens": total_in, "completion_tokens": total_out,
-                         "total_tokens":  total_in + total_out},
-        }
+        return ChatAgentResponse(
+            messages=[ChatAgentMessage(
+                role="assistant", content=final_text or "", id=str(uuid.uuid4()))],
+            custom_outputs={
+                "trace":   trace,
+                "persona": persona,
+                "model":   self.fm_endpoint,
+                "usage":   {"prompt_tokens": total_in, "completion_tokens": total_out,
+                            "total_tokens": total_in + total_out},
+            },
+        )
 
 
 def _summarise_result(result) -> str:
@@ -740,20 +731,29 @@ def _summarise_result(result) -> str:
 
 
 def _run_sql(sql: str):
+    import time as _t
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.service.sql import StatementState
-    # AGENT_TOKEN (+ AGENT_HOST) is injected on the endpoint to bypass the
-    # model-serving System SP, which UC silently ignores for table grants.
-    tok  = os.environ.get("AGENT_TOKEN")
-    host = os.environ.get("AGENT_HOST") or os.environ.get("DATABRICKS_HOST")
-    w = WorkspaceClient(host=host, token=tok) if tok and host else WorkspaceClient()
+    # Auth = Model Serving automatic authentication passthrough: the warehouse +
+    # tables are declared as model resources, so the serving runtime provides
+    # short-lived, auto-refreshed credentials. Default WorkspaceClient() picks
+    # them up — no personal access token, nothing to expire.
+    w = WorkspaceClient()
     warehouse_id = os.environ.get("AGENT_WAREHOUSE_ID", "")
     resp = w.statement_execution.execute_statement(
-        statement=sql, warehouse_id=warehouse_id, wait_timeout="30s",
+        statement=sql, warehouse_id=warehouse_id, wait_timeout="50s",
     )
-    if resp.status and resp.status.state == StatementState.FAILED:
-        err = resp.status.error.message if resp.status.error else "unknown"
-        raise RuntimeError(f"SQL failed: {err}")
+    # Poll through warehouse cold-start (auto-stop resume can exceed 50s).
+    _deadline = _t.monotonic() + 150
+    while resp.status and resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
+        if _t.monotonic() > _deadline:
+            raise RuntimeError("SQL timed out waiting for the warehouse to resume")
+        _t.sleep(2)
+        resp = w.statement_execution.get_statement(resp.statement_id)
+    if resp.status and resp.status.state != StatementState.SUCCEEDED:
+        _st = resp.status.state if resp.status else "?"
+        err = resp.status.error.message if resp.status and resp.status.error else str(_st)
+        raise RuntimeError(f"SQL {_st}: {err}")
     if not resp.manifest or not resp.manifest.schema or not resp.manifest.schema.columns:
         return []
     cols = [c.name for c in resp.manifest.schema.columns]
@@ -803,31 +803,27 @@ def _call_fm(endpoint: str, messages: list, tools: list):
 
 cfg_path = f"{tempfile.mkdtemp()}/agent_config.json"
 with open(cfg_path, "w") as fh:
-    json.dump({"catalog": catalog, "schema": schema, "fm_endpoint": fm_endpoint}, fh)
+    json.dump({"catalog": catalog, "schema": schema, "fm_endpoint": fm_endpoint,
+               "warehouse_id": warehouse_id}, fh)
 
-from mlflow.models.resources import DatabricksServingEndpoint, DatabricksTable
-
-input_example = {
-    "messages":      json.dumps([{"role": "user", "content": "Which shortlisted variant has the best gini?"}]),
-    "custom_inputs": json.dumps({"persona": "factory", "run_id": "REAL-FACTORY-20260422000000-freq_glm"}),
-}
-
-signature = ModelSignature(
-    inputs=Schema([
-        ColSpec("string", "messages"),
-        ColSpec("string", "custom_inputs"),
-    ]),
-    outputs=Schema([
-        ColSpec("string", "messages"),
-        ColSpec("string", "trace"),
-        ColSpec("string", "persona"),
-        ColSpec("string", "model"),
-        ColSpec("string", "usage"),
-    ]),
+from mlflow.models.resources import (
+    DatabricksServingEndpoint, DatabricksSQLWarehouse, DatabricksTable,
 )
 
+# Native ChatAgent input example (no json.dumps / string columns — MLflow infers
+# the ChatAgent signature automatically from the class).
+input_example = {
+    "messages": [{"role": "user", "content": "Which shortlisted variant has the best gini?"}],
+    "custom_inputs": {"persona": "factory", "run_id": "REAL-FACTORY-20260422000000-freq_glm"},
+}
+
+# Resources for Model Serving automatic authentication passthrough. Declaring
+# the warehouse + every table the tools read (+ the FM endpoint) makes the
+# deployed endpoint auto-provision and auto-refresh short-lived credentials for
+# exactly those objects — no PAT, nothing to expire.
 resources_list = [
     DatabricksServingEndpoint(endpoint_name=fm_endpoint),
+    DatabricksSQLWarehouse(warehouse_id=warehouse_id),
     DatabricksTable(table_name=f"{fqn}.factory_runs"),
     DatabricksTable(table_name=f"{fqn}.factory_variants"),
     DatabricksTable(table_name=f"{fqn}.unified_pricing_table_live"),
@@ -847,10 +843,9 @@ with mlflow.start_run(run_name="pwg2_chat_agent_deploy"):
         artifacts={"config": cfg_path},
         resources=resources_list,
         input_example=input_example,
-        signature=signature,
         registered_model_name=agent_uc_name,
         pip_requirements=[
-            "mlflow>=2.12",
+            "mlflow>=2.16",
             "databricks-sdk>=0.30.0",
             "requests",
         ],
@@ -872,60 +867,51 @@ latest = max(
 )
 print(f"Deploying {agent_uc_name} v{latest} → endpoint '{endpoint_name}'")
 
-env_vars = {"AGENT_WAREHOUSE_ID": warehouse_id}
-
-# `agents.deploy()` wipes any env_vars set out-of-band (e.g. AGENT_TOKEN /
-# AGENT_HOST for SQL OBO). Snapshot them so we can re-apply after deploy.
-from databricks.sdk import WorkspaceClient as _W
-_w_pre = _W()
+# Promote the freshly-logged version to @Production (dev convention — the
+# deployed version is then unambiguous in the UI and to downstream tooling).
 try:
-    _existing = (_w_pre.serving_endpoints.get(endpoint_name)
-                 .config.served_entities[0].environment_vars or {})
-    for k, v in _existing.items():
-        env_vars.setdefault(k, v)
-    print(f"Preserving existing env vars: {sorted(_existing.keys())}")
-except Exception as _e:
-    print(f"No existing endpoint to inherit env_vars from: {_e}")
+    client.set_registered_model_alias(agent_uc_name, "Production", latest)
+    print(f"Set alias @Production → v{latest}")
+except Exception as _ae:
+    print(f"⚠ could not set @Production alias: {_ae}")
 
-# Self-provision the SQL OBO token if none is inherited/injected. The agent's
-# tools query UC via a warehouse; the model-serving System SP can't be granted
-# UC table perms, so a token is required. This notebook runs as the deploying
-# identity, so mint a PAT for it — makes a fresh-workspace deploy fully
-# hands-off (no manual token step). If PATs are disabled in the workspace, the
-# agent still deploys; inject AGENT_TOKEN/AGENT_HOST out-of-band instead.
-if not env_vars.get("AGENT_TOKEN"):
-    try:
-        _tok = _w_pre.tokens.create(
-            comment="pricing-workbench agent SQL OBO (auto)",
-            lifetime_seconds=7776000,  # 90 days
-        )
-        env_vars["AGENT_TOKEN"] = _tok.token_value
-        env_vars["AGENT_HOST"] = _w_pre.config.host
-        print("Minted AGENT_TOKEN for SQL OBO (value not shown).")
-    except Exception as _te:
-        print(f"⚠ Could not mint AGENT_TOKEN ({str(_te)[:100]}). "
-              f"Agent SQL tools will fail until AGENT_TOKEN/AGENT_HOST are set.")
+# Non-secret runtime config only. SQL auth is passthrough (declared resources),
+# so there is NO token to inject; warehouse_id is also baked into the model
+# artifact, so the tools work even if a later agents.deploy update drops env.
+env_vars = {
+    "AGENT_CATALOG":      catalog,
+    "AGENT_SCHEMA":       schema,
+    "AGENT_FM_ENDPOINT":  fm_endpoint,
+    "AGENT_WAREHOUSE_ID": warehouse_id,
+}
 
+# Preferred path: register a real Agent Framework endpoint via agents.deploy,
+# passing endpoint_name so it lands on the name the app expects. If the
+# installed agents API doesn't accept these kwargs (version drift), the except
+# falls back to a plain scale-to-zero serving endpoint of the SAME ChatAgent
+# model version — passthrough auth still applies (it's on the model, not the
+# deploy method) and the endpoint name is guaranteed correct.
 try:
     from databricks import agents
     deployment = agents.deploy(
         model_name=agent_uc_name,
         model_version=latest,
-        scale_to_zero=True,  # keep warm for demo cadence
+        scale_to_zero=True,
+        endpoint_name=endpoint_name,
         environment_vars=env_vars,
-        tags={"project": "pricing_workbench", "purpose": "chat_agent",
-              "personas": "factory+explain"},
+        tags={"project": "pricing_workbench_gen2", "purpose": "chat_agent",
+              "personas": "factory+explain+bias"},
     )
-    print(f"databricks-agents deploy kicked off: {deployment}")
+    print(f"databricks-agents deploy kicked off: {getattr(deployment, 'endpoint_name', deployment)}")
 except Exception as e:
-    print(f"databricks-agents.deploy failed, falling back to serving_endpoints: {e}")
+    print(f"agents.deploy unavailable/failed ({e}); falling back to serving_endpoints")
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.service.serving import EndpointCoreConfigInput, ServedEntityInput
     w = WorkspaceClient()
     served = [ServedEntityInput(
         entity_name=agent_uc_name,
         entity_version=str(latest),
-        scale_to_zero_enabled = True,  # keep warm for demo cadence
+        scale_to_zero_enabled=True,
         workload_size="Small",
         environment_vars=env_vars,
     )]
@@ -937,37 +923,6 @@ except Exception as e:
     except Exception:
         w.serving_endpoints.create(name=endpoint_name, config=cfg)
         print("Created new endpoint.")
-
-# COMMAND ----------
-
-# `agents.deploy()` ignores environment_vars on subsequent updates. Wait for
-# the new version to land, then re-assert env_vars via the serving-endpoints
-# API so AGENT_TOKEN/AGENT_HOST survive across deploys.
-import time as _t
-from databricks.sdk import WorkspaceClient as _W2
-from databricks.sdk.service.serving import ServedEntityInput as _SEI
-_w2 = _W2()
-for _attempt in range(60):
-    _ep = _w2.serving_endpoints.get(endpoint_name)
-    _cur_v = _ep.config.served_entities[0].entity_version if _ep.config else None
-    _upd = str(_ep.state.config_update) if _ep.state else ""
-    if _cur_v == str(latest) and "NOT_UPDATING" in _upd:
-        break
-    _t.sleep(15)
-_existing_env = (_ep.config.served_entities[0].environment_vars or {}) if _ep.config else {}
-_merged = {**env_vars, **_existing_env, "AGENT_WAREHOUSE_ID": warehouse_id}
-if set(_merged.keys()) != set(_existing_env.keys()) or any(_merged[k] != _existing_env.get(k) for k in _merged):
-    print(f"Re-asserting env_vars: {sorted(_merged.keys())}")
-    _w2.serving_endpoints.update_config(
-        name=endpoint_name,
-        served_entities=[_SEI(
-            entity_name=agent_uc_name,
-            entity_version=str(latest),
-            scale_to_zero_enabled = True,
-            workload_size="Small",
-            environment_vars=_merged,
-        )],
-    )
 
 # COMMAND ----------
 
