@@ -1,0 +1,47 @@
+# Gold UPT Build Job — merges all sources into the Unified Pricing Table
+
+resources:
+  jobs:
+    build_upt:
+      name: "Build Unified Pricing Table (Gold)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+
+      tasks:
+        # Derived factors (urban_score, neighbourhood_claim_frequency) at postcode level.
+        # Must run before build_upt so the UPT picks them up via the left join.
+        - task_key: derive_factors
+          notebook_task:
+            notebook_path: ../src/03_gold/derive_factors.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          environment_key: default
+
+        - task_key: build_upt
+          depends_on:
+            - task_key: derive_factors
+          notebook_task:
+            notebook_path: ../src/03_gold/build_upt.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          environment_key: default
+
+        # Feature catalog — lineage + audit metadata for every UPT feature.
+        # Independent of build_upt (static metadata), runs in parallel.
+        - task_key: build_feature_catalog
+          notebook_task:
+            notebook_path: ../src/03_gold/build_feature_catalog.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            client: "5"

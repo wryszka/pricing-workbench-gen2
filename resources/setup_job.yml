@@ -1,0 +1,57 @@
+# One-time setup job — creates schema, volume, internal tables, and generates CSVs
+
+resources:
+  jobs:
+    setup_demo:
+      name: "Setup — Pricing UPT Demo"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: volume_name
+          default: ${var.volume_name}
+        - name: scale_factor
+          default: ${var.scale_factor}
+
+      tasks:
+        - task_key: setup
+          notebook_task:
+            notebook_path: ../src/00_setup/setup.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name:  ${var.schema_name}
+              volume_name:  ${var.volume_name}
+              scale_factor: "{{job.parameters.scale_factor}}"
+          environment_key: default
+
+        # Commercial quote stream — 3 raw JSON tables + silver + saved_payloads volume
+        - task_key: setup_quote_stream
+          depends_on:
+            - task_key: setup
+          notebook_task:
+            notebook_path: ../src/00_setup/setup_quote_stream.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name:  ${var.schema_name}
+              scale_factor: "{{job.parameters.scale_factor}}"
+          environment_key: default
+
+        # Apply descriptions to every table / column / volume / model so the
+        # Catalog Explorer story lands (and feature-lineage bolt-ons have data).
+        # Idempotent — safe to re-run.
+        - task_key: apply_metadata
+          depends_on:
+            - task_key: setup
+            - task_key: setup_quote_stream
+          notebook_task:
+            notebook_path: ../src/00_setup/apply_metadata.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            client: "5"

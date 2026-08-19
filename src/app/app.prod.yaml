@@ -1,0 +1,21 @@
+# Pricing Workbench — PROD env values.
+# This file is a template; deploy.sh copies it over app.yaml before
+# `databricks bundle deploy --target prod`.
+command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+env:
+  - name: CATALOG_NAME
+    value: "lr_serverless_aws_us_catalog"
+  - name: SCHEMA_NAME
+    value: "pricing_upt"
+  - name: WAREHOUSE_ID
+    value: "ab79eced8207d29b"
+  - name: GENIE_SPACE_ID
+    # Recreated on the 2026-06-01 clean redeploy.
+    value: "01f15d9ed6a61ca18f578f91ad1c76b7"
+  - name: GENIE_QUOTE_SPACE_ID
+    value: "01f15d9ed72c1a44aa4e4fe208de54c2"
+  - name: MART_DASHBOARD_ID
+    # Lakeview dashboard powering the Modelling Mart "Dashboard" tab on prod.
+    value: "01f15d9ef1bb19d19e9e9ba9fa44d50a"
+  - name: BUNDLE_NOTEBOOKS_BASE
+    value: "/Workspace/Shared/.bundle/pricing-upt-demo/prod/files/src/04_models"
