@@ -102,6 +102,8 @@ R_CAT = ["sic_code", "postcode_sector"]
 R_NUM = ["tenure_years", "prior_premium", "rate_change"]
 for c in R_CAT:
     rr[c] = rr[c].astype("category")
+for c in R_NUM:
+    rr[c] = pd.to_numeric(rr[c], errors="coerce").fillna(0.0)
 r_cols = R_CAT + R_NUM
 Xr = rr[r_cols]; yr = rr["retained"].astype(int)
 r_mono = [(-1 if c == "rate_change" else 0) for c in r_cols]
