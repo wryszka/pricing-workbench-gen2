@@ -8,7 +8,7 @@ Status: ready to build. Written against `wryszka/pricing-workbench-gen2` @ main.
 
 - [x] **Remove the client name from `databricks.yml`** → "frozen v2 client deployment" (done 2026-08-19; also scrubbed app.pricingv2.yaml, docs/v2_plan.md; removed the AXA hand-off machinery scripts/make_handoff.sh + handoff/).
 - [x] Remove/lock the internal Google Doc runbook link in README (public repo) — done. (App sidebar DemoDocCard still links it; make env-driven if the app repo is shared publicly.)
-- [ ] Confirm what the existing **Demand GBM** predicts today. It is either promoted into this module as the conversion/elasticity model, or renamed — the demo must not contain two demand-model concepts.
+- [x] **Demand GBM resolved (2026-08-19):** it already IS the conversion model — a LightGBM binary classifier on `quotes.converted` (bound vs not), and the quote stream already carries the elasticity DGP (`vs_market_rate` → logit `bind_prob` → `converted`, plus `market_premium`). So there is NO two-demand-concept problem: the optimizer **promotes demand_gbm as its conversion model** (no rename). Block 02 only needs to (a) make **price an explicit lever with `monotone_constraints`** — today it uses `vs_market_rate` as a plain feature with no monotonicity — and (b) add a **retention model** once block 01 generates renewal events.
 
 ## 1. Purpose and positioning
 
