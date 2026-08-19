@@ -1,9 +1,11 @@
 # Price Optimization module jobs (src/09_optimization). Defined but DORMANT —
 # gated by var.enable_optimization: they only join the Full Build orchestrator
-# when it's "true", and are always runnable standalone:
-#   databricks bundle run opt_data --target pricingv2 --profile PRICING_V2
-# opt_* tables; pwg2_ global assets; derives from the existing quote stream so
-# nothing here touches the live demo until run.
+# when it's "true", and are always runnable standalone, in dependency order:
+#   opt_data -> opt_elasticity -> opt_simulate -> opt_solve
+#     databricks bundle run opt_data     --target pricingv2 --profile PRICING_V2
+#     databricks bundle run opt_elasticity ...
+# opt_* tables; pwg2_ elasticity models; derives from the existing quote stream
+# so nothing here touches the live demo until run.
 resources:
   jobs:
     opt_data:
@@ -23,6 +25,73 @@ resources:
           environment_key: env
       environments:
         - environment_key: env
+          spec: { client: "5", dependencies: [] }
+
+    opt_elasticity:
+      name: "Optimization — 02 elasticity models (conversion + retention, monotone) (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+      tasks:
+        - task_key: opt_elasticity
+          notebook_task:
+            notebook_path: ../src/09_optimization/02_elasticity.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name:  ${var.schema_name}
+          environment_key: env
+      environments:
+        - environment_key: env
           spec:
             client: "5"
-            dependencies: []
+            dependencies: [mlflow, lightgbm, scikit-learn, pandas, numpy]
+
+    opt_simulate:
+      name: "Optimization — 03 simulation (N candidate price sets) (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: grid_points
+          default: "2000"
+      tasks:
+        - task_key: opt_simulate
+          notebook_task:
+            notebook_path: ../src/09_optimization/03_simulation.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name:  ${var.schema_name}
+              grid_points:  "{{job.parameters.grid_points}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [mlflow, lightgbm, pandas, numpy]
+
+    opt_solve:
+      name: "Optimization — 04 constrained solver (versioned YAML -> factor table) (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: constraint_version
+          default: "v1"
+      tasks:
+        - task_key: opt_solve
+          notebook_task:
+            notebook_path: ../src/09_optimization/04_solver.py
+            base_parameters:
+              catalog_name:       ${var.catalog_name}
+              schema_name:        ${var.schema_name}
+              constraint_version: "{{job.parameters.constraint_version}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [mlflow, lightgbm, pandas, numpy, scipy, pyyaml]
