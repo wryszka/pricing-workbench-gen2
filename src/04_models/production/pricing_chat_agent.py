@@ -290,6 +290,108 @@ BIAS_TOOLS = [
     },
 ]
 
+# ---------------------------------------------------------------------------
+# New leading personas (2026-08): the agent bench that fronts each page.
+#   ask_the_book   — portfolio & pricing analyst (Control Tower copilot)
+#   model_review   — independent model-validation actuary (Model Dev/Deploy)
+#   rate_change    — rate-change / what-if narrator (Pricing Engine/Optimisation)
+#   drift_monitor  — calibration-drift & monitoring analyst (Deployment)
+# All share the tool-use loop, the FM call, and passthrough SQL auth.
+# ---------------------------------------------------------------------------
+
+ASK_BOOK_SYSTEM = """You are the Bricksurance SE pricing analyst — "Ask the Book".
+A Head of Pricing / pricing actuary asks about the state of the commercial book:
+rate adequacy, loss-ratio trend, portfolio mix, and competitive position.
+
+Rules:
+ * Answer ONLY from tool results; call a tool before every substantive claim.
+ * Lead with the answer in one sentence, then the evidence (2-6 sentences).
+ * Use concrete figures (GWP, loss ratio %, adequacy %, policy counts).
+ * When a segment is underpriced vs technical, say so and by how much.
+ * Never invent numbers. If the tools don't cover it, say what's missing.
+"""
+
+MODEL_REVIEW_SYSTEM = """You are an independent model-validation actuary reviewing
+a Bricksurance SE pricing model, as a second line of defence (PRA SS1/23, EU AI
+Act high-risk-system expectations).
+
+Structure the opinion with these headings:
+  CALIBRATION   — actual vs expected; is the model well-calibrated?
+  STABILITY     — metric across the retraining/release history; any drift?
+  REASONABLENESS— are the metrics and version history sensible for this family?
+  FAIRNESS      — any unexplained disparity (defer to the bias evidence)
+  OPINION       — one line: fit for production / conditions / not yet
+
+Rules:
+ * Call the tools; ground every statement in returned numbers.
+ * Be an independent reviewer — flag concerns plainly; do not rubber-stamp.
+ * Keep it committee-readable (skimmable in under a minute).
+"""
+
+RATE_CHANGE_SYSTEM = """You are the Bricksurance SE rate-change analyst. A pricing
+manager is considering a rating-engine or rate-book change and wants the impact
+before it goes live.
+
+Cover: the change itself; who wins / who loses by segment; the retention risk;
+and the fairness / Consumer-Duty angle. Rules:
+ * Ground in tool data (current config, release history, shadow-impact).
+ * Be explicit about winners and losers and the direction of premium moves.
+ * Recommendations stay process-oriented; the committee decides.
+ * Concrete figures only; no fabrication.
+"""
+
+DRIFT_SYSTEM = """You are the Bricksurance SE model-monitoring analyst. You watch
+deployed champions for calibration drift (predicted vs actual) and surface
+problems early — the way the frequency model over-predicted low-turnover SMEs.
+
+Answer with: SIGNAL (what's drifting, by how much), LIKELY CAUSE, REMEDIATION
+(e.g. isotonic overlay, recalibration, retrain), and a one-paragraph COMMITTEE
+NOTE the actuary could paste into the release record. Rules: tools first, real
+numbers, flag early, never fabricate.
+"""
+
+# Tool sets for the new personas. Several reuse the explain/portfolio tools; the
+# genuinely new SQL tools are implemented as methods below.
+ASK_BOOK_TOOLS = [
+    {"name": "query_portfolio_stats", "description": "Portfolio aggregates — policies, GWP, avg premium, avg risk score.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "query_segment_adequacy", "description": "Per-segment rate adequacy: for the top segments (by GWP) return policies, GWP, technical premium, adequacy % (charged/technical) and loss ratio. Segment by 'trade' (SIC) or 'region'.",
+     "input_schema": {"type": "object", "properties": {"segment_by": {"type": "string", "enum": ["trade", "region"], "default": "trade"}, "limit": {"type": "integer", "default": 12}}}},
+    {"name": "query_loss_ratio", "description": "Book loss ratio: total incurred vs earned premium overall and split by risk tier.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "query_competitive_position", "description": "Competitive position from the quote stream — bind rate and average vs-market rate by price band (where our quote sits vs market).",
+     "input_schema": {"type": "object", "properties": {}}},
+]
+
+MODEL_REVIEW_TOOLS = [
+    {"name": "query_model_calibration", "description": "Actual vs expected for a champion family across the book — mean prediction vs mean outcome and the A/E ratio, overall and by risk tier.",
+     "input_schema": {"type": "object", "properties": {"family": {"type": "string", "enum": ["freq_glm", "sev_glm", "demand_gbm", "fraud_gbm"]}}, "required": ["family"]}},
+    {"name": "query_model_stability", "description": "The family's primary metric (gini/auc) across the release history — is it stable across the monthly rate books?",
+     "input_schema": {"type": "object", "properties": {"family": {"type": "string"}}, "required": ["family"]}},
+    {"name": "query_latest_pack_id", "description": "Most recent governance pack_id for a family (to cite pack evidence).",
+     "input_schema": {"type": "object", "properties": {"family": {"type": "string"}}, "required": ["family"]}},
+]
+
+RATE_CHANGE_TOOLS = [
+    {"name": "query_rating_config", "description": "The rating-engine config versions (champion + history) with expense/commission/fraud/demand levers and effective dates.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "query_release_history", "description": "The pricing-engine release series (monthly rate books) — versions, effective dates, statuses, narratives.",
+     "input_schema": {"type": "object", "properties": {"limit": {"type": "integer", "default": 13}}}},
+    {"name": "query_shadow_impact", "description": "Shadow-pricing impact summary — affected policies, total premium delta, avg % change, high-churn-risk count.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "query_segment_adequacy", "description": "Per-segment adequacy (see ask-the-book) — used to show which segments a rate move would bite.",
+     "input_schema": {"type": "object", "properties": {"segment_by": {"type": "string", "enum": ["trade", "region"], "default": "trade"}, "limit": {"type": "integer", "default": 12}}}},
+]
+
+DRIFT_TOOLS = [
+    {"name": "query_model_calibration", "description": "Actual vs expected for a champion family (A/E overall + by tier) — the drift signal.",
+     "input_schema": {"type": "object", "properties": {"family": {"type": "string", "enum": ["freq_glm", "sev_glm", "demand_gbm", "fraud_gbm"]}}, "required": ["family"]}},
+    {"name": "query_scoring_recency", "description": "Recent scoring activity from inference_logs — how fresh the scores are and volume by day.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "query_model_stability", "description": "Primary metric across the release history — degradation over successive rate books.",
+     "input_schema": {"type": "object", "properties": {"family": {"type": "string"}}, "required": ["family"]}},
+]
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -595,7 +697,135 @@ class PricingChatAgent(ChatAgent):
                      "stratified sample and returns live-scored cohort stats."),
         }
 
+    # ------------------------- Portfolio / pricing-analyst tools ------------
+    def _tool_query_segment_adequacy(self, args):
+        seg = "sic_code" if (args.get("segment_by") or "trade") == "trade" else "postcode_sector"
+        limit = max(1, min(30, int(args.get("limit", 12))))
+        try:
+            rows = _run_sql(f"""
+                WITH claims AS (
+                  SELECT policy_id, SUM(incurred_amount) AS incurred
+                  FROM {self.catalog}.{self.schema}.internal_claims_history GROUP BY policy_id
+                )
+                SELECT p.{seg} AS segment, COUNT(*) AS policies,
+                       ROUND(SUM(p.current_premium),0) AS gwp,
+                       ROUND(SUM(coalesce(c.incurred,0)) / (5 * NULLIF(SUM(p.current_premium),0)), 3) AS loss_ratio_5y
+                FROM {self.catalog}.{self.schema}.internal_commercial_policies p
+                LEFT JOIN claims c USING (policy_id)
+                GROUP BY p.{seg} ORDER BY gwp DESC LIMIT {limit}
+            """)
+            return {"segment_by": args.get("segment_by") or "trade", "rows": rows, "count": len(rows),
+                    "note": "loss_ratio_5y > ~0.6 signals a segment that may be underpriced."}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    def _tool_query_loss_ratio(self, args):
+        try:
+            rows = _run_sql(f"""
+                WITH claims AS (SELECT SUM(incurred_amount) AS incurred FROM {self.catalog}.{self.schema}.internal_claims_history)
+                SELECT COUNT(*) AS policies, ROUND(SUM(current_premium),0) AS gwp,
+                       ROUND((SELECT incurred FROM claims) / (5 * NULLIF(SUM(current_premium),0)), 3) AS loss_ratio_5y
+                FROM {self.catalog}.{self.schema}.internal_commercial_policies
+            """)
+            return {"overall": rows[0] if rows else {}}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    def _tool_query_competitive_position(self, args):
+        try:
+            rows = _run_sql(f"""
+                SELECT CASE WHEN vs_market_rate < 0.95 THEN 'below market (<0.95)'
+                            WHEN vs_market_rate <= 1.05 THEN 'at market (0.95-1.05)'
+                            ELSE 'above market (>1.05)' END AS price_band,
+                       COUNT(*) AS quotes,
+                       ROUND(AVG(CASE WHEN quote_status='BOUND' THEN 1.0 ELSE 0 END),3) AS bind_rate,
+                       ROUND(AVG(vs_market_rate),3) AS avg_vs_market
+                FROM {self.catalog}.{self.schema}.quotes
+                WHERE vs_market_rate IS NOT NULL GROUP BY 1 ORDER BY 1
+            """)
+            return {"rows": rows, "note": "Lower price band → higher bind rate is the demand curve; watch adequacy in the below-market band."}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    # ------------------------- Model-validation / drift tools ---------------
+    def _tool_query_model_calibration(self, args):
+        fam = args.get("family") or "freq_glm"
+        out = {"family": fam}
+        try:
+            r = _run_sql(f"SELECT COUNT(*) AS scored, cast(max(scored_at) as string) AS latest_scored_at FROM {self.catalog}.{self.schema}.inference_logs")
+            out["scoring"] = r[0] if r else {}
+        except Exception as e:
+            out["scoring_error"] = str(e)[:120]
+        try:
+            r2 = _run_sql(f"SELECT display_name, status, narrative FROM {self.catalog}.{self.schema}.pricing_engine_releases WHERE status='champion' LIMIT 1")
+            out["live_release"] = r2[0] if r2 else {}
+        except Exception:
+            pass
+        out["note"] = "Full actual-vs-expected calibration (A/E chart + metrics) is in the family's governance pack."
+        return out
+
+    def _tool_query_model_stability(self, args):
+        fam = args.get("family") or "freq_glm"
+        col = {"freq_glm": "freq_glm_version", "sev_glm": "sev_glm_version",
+               "demand_gbm": "demand_gbm_version", "fraud_gbm": "fraud_gbm_version"}.get(fam, "freq_glm_version")
+        try:
+            rows = _run_sql(f"""
+                SELECT display_name, cast(effective_date as string) AS effective_date, status,
+                       {col} AS version, narrative
+                FROM {self.catalog}.{self.schema}.pricing_engine_releases
+                ORDER BY effective_date DESC LIMIT 13
+            """)
+            return {"family": fam, "release_history": rows}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    def _tool_query_scoring_recency(self, args):
+        try:
+            rows = _run_sql(f"""
+                SELECT cast(scored_at as date) AS day, COUNT(*) AS scored
+                FROM {self.catalog}.{self.schema}.inference_logs
+                GROUP BY 1 ORDER BY 1 DESC LIMIT 14
+            """)
+            return {"recent_days": rows}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    # ------------------------- Rate-change tools ----------------------------
+    def _tool_query_rating_config(self, args):
+        try:
+            rows = _run_sql(f"""
+                SELECT version, status, cast(effective_date as string) AS effective_date,
+                       expense_loading_pct, commission_bp, fraud_loading_pct, fraud_loading_threshold,
+                       demand_adj_pct, min_premium, narrative
+                FROM {self.catalog}.{self.schema}.rating_engine_config
+                ORDER BY effective_date DESC
+            """)
+            return {"configs": rows}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
+    def _tool_query_release_history(self, args):
+        limit = max(1, min(24, int(args.get("limit", 13))))
+        try:
+            rows = _run_sql(f"""
+                SELECT release_id, display_name, cast(effective_date as string) AS effective_date,
+                       status, rating_engine_version, narrative
+                FROM {self.catalog}.{self.schema}.pricing_engine_releases
+                ORDER BY effective_date DESC LIMIT {limit}
+            """)
+            return {"releases": rows}
+        except Exception as e:
+            return {"error": str(e)[:200]}
+
     def _exec_tool(self, name, args):
+        if name == "query_segment_adequacy":         return self._tool_query_segment_adequacy(args or {})
+        if name == "query_loss_ratio":               return self._tool_query_loss_ratio(args or {})
+        if name == "query_competitive_position":      return self._tool_query_competitive_position(args or {})
+        if name == "query_model_calibration":         return self._tool_query_model_calibration(args or {})
+        if name == "query_model_stability":           return self._tool_query_model_stability(args or {})
+        if name == "query_scoring_recency":           return self._tool_query_scoring_recency(args or {})
+        if name == "query_rating_config":             return self._tool_query_rating_config(args or {})
+        if name == "query_release_history":           return self._tool_query_release_history(args or {})
         if name == "query_factory_run":              return self._tool_query_factory_run(args or {})
         if name == "query_factory_leaderboard":      return self._tool_query_factory_leaderboard(args or {})
         if name == "query_factory_shortlist":        return self._tool_query_factory_shortlist(args or {})
@@ -616,7 +846,8 @@ class PricingChatAgent(ChatAgent):
         custom_inputs = custom_inputs or {}
 
         persona = (custom_inputs.get("persona") or "factory").lower()
-        if persona not in ("factory", "explain", "bias_investigator"):
+        if persona not in ("factory", "explain", "bias_investigator",
+                           "ask_the_book", "model_review", "rate_change", "drift_monitor"):
             persona = "factory"
         run_id   = custom_inputs.get("run_id")
         mode     = (custom_inputs.get("mode") or "live").lower()
@@ -637,6 +868,18 @@ class PricingChatAgent(ChatAgent):
             if protected_attr: context_bits.append(f"protected_attribute={protected_attr}")
             system_prompt += "\n\nContext from caller: " + "; ".join(context_bits)
             tools = BIAS_TOOLS
+        elif persona == "ask_the_book":
+            system_prompt = ASK_BOOK_SYSTEM
+            tools = ASK_BOOK_TOOLS
+        elif persona == "model_review":
+            system_prompt = MODEL_REVIEW_SYSTEM + (f"\n\nContext: reviewing family={family}." if family else "")
+            tools = MODEL_REVIEW_TOOLS
+        elif persona == "rate_change":
+            system_prompt = RATE_CHANGE_SYSTEM
+            tools = RATE_CHANGE_TOOLS
+        elif persona == "drift_monitor":
+            system_prompt = DRIFT_SYSTEM + (f"\n\nContext: family={family}." if family else "")
+            tools = DRIFT_TOOLS
         else:
             system_prompt = EXPLAIN_SYSTEM
             tools = EXPLAIN_TOOLS
@@ -834,6 +1077,12 @@ resources_list = [
     DatabricksTable(table_name=f"{fqn}.inference_logs"),
     DatabricksTable(table_name=f"{fqn}.governance_packs_index"),
     DatabricksTable(table_name=f"{fqn}.governance_pack_sidecars"),
+    # New leading personas (ask_the_book / model_review / rate_change / drift):
+    DatabricksTable(table_name=f"{fqn}.internal_commercial_policies"),
+    DatabricksTable(table_name=f"{fqn}.internal_claims_history"),
+    DatabricksTable(table_name=f"{fqn}.quotes"),
+    DatabricksTable(table_name=f"{fqn}.pricing_engine_releases"),
+    DatabricksTable(table_name=f"{fqn}.rating_engine_config"),
 ]
 
 with mlflow.start_run(run_name="pwg2_chat_agent_deploy"):

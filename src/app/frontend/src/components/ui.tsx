@@ -8,9 +8,10 @@
 // Import from '../components/ui'. Use these instead of bespoke markup so pages
 // stay consistent with the rest of the workbench family.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ReactNode, ComponentType } from 'react';
 import { ChevronRight, Sparkles, Send, Loader2 } from 'lucide-react';
+import { api } from '../lib/api';
 
 // ---------------------------------------------------------------------------
 // Page header — eyebrow (brand, uppercase) + title + subtitle + optional actions
@@ -171,9 +172,10 @@ export function DemoDisclaimer({ children }: { children: ReactNode }) {
 // AskBox — the purple-gradient AI ask box (question + examples + answer).
 // Pass onAsk(question) returning the answer text. Reusable across pages.
 // ---------------------------------------------------------------------------
-export function AskBox({ title, subtitle, examples = [], onAsk, placeholder = 'Ask a question…' }: {
+export function AskBox({ title, subtitle, examples = [], onAsk, placeholder = 'Ask a question…', seedQuestion }: {
   title: string; subtitle?: string; examples?: string[];
   onAsk: (q: string) => Promise<string>; placeholder?: string;
+  seedQuestion?: string;   // auto-run on mount to populate the initial "lead" read
 }) {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
@@ -187,6 +189,19 @@ export function AskBox({ title, subtitle, examples = [], onAsk, placeholder = 'A
     catch (e: any) { setAnswer(`Error: ${e?.message || e}`); }
     finally { setBusy(false); }
   };
+
+  // Lead-with-agent: auto-run the seed question once so the description appears
+  // before the user types anything (without echoing the seed into the input).
+  useEffect(() => {
+    if (!seedQuestion) return;
+    let alive = true;
+    setBusy(true); setAnswer(null);
+    onAsk(seedQuestion)
+      .then((a) => { if (alive) setAnswer(a); })
+      .catch((e: any) => { if (alive) setAnswer(`Error: ${e?.message || e}`); })
+      .finally(() => { if (alive) setBusy(false); });
+    return () => { alive = false; };
+  }, [seedQuestion]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="bg-[linear-gradient(135deg,#312e81_0%,#6d28d9_55%,#7c3aed_100%)] rounded-2xl px-6 py-5 text-white shadow-[0_10px_30px_rgba(109,40,217,.28)]">
@@ -215,6 +230,25 @@ export function AskBox({ title, subtitle, examples = [], onAsk, placeholder = 'A
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AgentLead — the lead-with-agent block: a persona's read of the page appears
+// first (auto-seeded), then an ask box for follow-ups. Wired to /api/agent/lead.
+//   persona: ask_the_book | model_review | rate_change | drift_monitor | explain
+// ---------------------------------------------------------------------------
+export function AgentLead({ persona, seed, title, subtitle, examples = [], family, context }: {
+  persona: string; seed: string; title: string; subtitle?: string;
+  examples?: string[]; family?: string; context?: any;
+}) {
+  const onAsk = async (q: string) => {
+    const r = await api.agentLead({ persona, question: q, family, context });
+    return r?.answer || (r?.error ? `Agent unavailable — ${r.error}` : 'No answer returned.');
+  };
+  return (
+    <AskBox title={title} subtitle={subtitle} examples={examples}
+      onAsk={onAsk} seedQuestion={seed} placeholder="Ask a follow-up…" />
   );
 }
 

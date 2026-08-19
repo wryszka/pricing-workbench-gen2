@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Sparkles, ArrowRight, Calculator, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 import {
-  Page, OnThisPage, Card, CardTitle, Metric, Pill, Prov, DemoDisclaimer, SectionHead, Grid,
+  Page, OnThisPage, Card, CardTitle, Metric, Pill, Prov, DemoDisclaimer, SectionHead, Grid, AgentLead,
 } from '../components/ui';
 
 export default function Home() {
@@ -46,11 +46,9 @@ export default function Home() {
 function ControlTower() {
   const [ov, setOv] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [ai, setAi] = useState<string | null>(null);
 
   useEffect(() => {
     api.getOverview().then(setOv).catch((e) => setErr(e.message || String(e)));
-    api.getOverviewAiSummary().then((d) => setAi(d?.summary || null)).catch(() => setAi(null));
   }, []);
 
   if (err) return <Card className="border-red-200"><span className="text-sm text-red-700">Couldn't load current state: {err.slice(0, 160)}</span></Card>;
@@ -66,14 +64,18 @@ function ControlTower() {
 
   return (
     <div className="space-y-4">
-      {/* AI overview strip */}
-      <div className="flex gap-2.5 items-start bg-[linear-gradient(90deg,#eef2ff,#faf5ff)] border border-[#ddd6fe] rounded-[10px] px-4 py-3 text-[13px] text-[#4338ca] leading-relaxed">
-        <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[#6d28d9]" />
-        <div>
-          <span className="font-bold uppercase tracking-wide text-[10px] text-[#6d28d9] mr-1">Where we are</span>
-          {ai || <span className="inline-flex items-center gap-1.5 opacity-70"><Loader2 className="w-3 h-3 animate-spin" /> summarising current state…</span>}
-        </div>
-      </div>
+      {/* Lead with the agent — Ask the Book reads the current state, then answers follow-ups */}
+      <AgentLead
+        persona="ask_the_book"
+        title="Ask the Book"
+        subtitle="Your pricing analyst on the governed marts — rate adequacy, loss-ratio trend, mix and competitive position. It reads the book below, then answers follow-ups."
+        seed="In 3 short sentences, give me the state of the book right now: overall loss ratio, which segments look underpriced, and what I should look at first."
+        examples={[
+          'Which trade segments are underpriced?',
+          'Where is our loss ratio worst?',
+          'How competitive are our quotes vs market?',
+        ]}
+      />
 
       <Grid cols={3}>
         {/* Live rate book */}

@@ -17,6 +17,11 @@ export const api = {
   getOverview: () => fetchJson<any>('/overview'),
   getOverviewAiSummary: () => fetchJson<any>('/overview/ai-summary'),
 
+  // Lead-with-agent: invoke a persona (ask_the_book | model_review | rate_change
+  // | drift_monitor | explain | …) with a question. Backs <AgentLead>.
+  agentLead: (body: { persona: string; question: string; family?: string; context?: any }) =>
+    fetchJson<any>('/agent/lead', { method: 'POST', body: JSON.stringify(body) }),
+
   // Admin
   resetDemo: () => fetchJson<any>('/admin/reset-demo', { method: 'POST', body: JSON.stringify({}) }),
 

@@ -21,6 +21,44 @@ class ExplainRequest(BaseModel):
     question: str = "Why did premiums change in the latest data update?"
 
 
+class LeadRequest(BaseModel):
+    persona: str                       # ask_the_book | model_review | rate_change | drift_monitor | explain | ...
+    question: str
+    family: str | None = None
+    context: dict | None = None
+
+
+@router.post("/lead")
+async def agent_lead(req: LeadRequest):
+    """Generic lead-with-agent invocation: the app forwards a persona + question
+    to the pwg2_chat_agent endpoint and returns the assistant text + trace. Backs
+    the page-level 'AgentLead' component (description first + ask-box follow-ups)."""
+    ci: dict = {"persona": req.persona}
+    if req.family:
+        ci["family"] = req.family
+    if req.context:
+        ci.update(req.context)
+    result = await invoke_agent(
+        endpoint_name=CHAT_AGENT_ENDPOINT, question=req.question, custom_inputs=ci,
+    )
+    await log_audit_event(
+        event_type="agent_recommendation", entity_type="model",
+        entity_id=f"lead:{req.persona}",
+        details={"question": req.question, "persona": req.persona,
+                 "agent_ok": result.get("ok"), "trace": result.get("trace", []),
+                 "error": result.get("error")},
+    )
+    return {
+        "ok":     result.get("ok"),
+        "answer": result.get("answer", ""),
+        "persona": req.persona,
+        "cached": bool(result.get("cached")),
+        "stale":  bool(result.get("stale")),
+        "trace":  result.get("trace", []),
+        "error":  result.get("error"),
+    }
+
+
 @router.post("/explain")
 async def run_explainability(req: ExplainRequest):
     """Explain pricing shifts in plain English for actuarial use. Forwards
