@@ -80,7 +80,9 @@ with mlflow.start_run(run_name="pwg2_conversion_elasticity") as run:
     monotone_ok = all(probs[i] >= probs[i+1] - 1e-6 for i in range(len(probs)-1))
     mlflow.log_metric("monotone_ok", 1 if monotone_ok else 0)
     print(f"conversion model: {len(qr):,} rows, monotone_ok={monotone_ok}, curve={[round(p,3) for p in probs]}")
-    mlflow.lightgbm.log_model(model, artifact_path="model",
+    from mlflow.models.signature import infer_signature
+    _sig = infer_signature(X, model.predict(X))
+    mlflow.lightgbm.log_model(model, artifact_path="model", signature=_sig,
                               registered_model_name=f"{fqn}.pwg2_conversion_elasticity")
 
 # alias @champion → latest
@@ -109,7 +111,9 @@ with mlflow.start_run(run_name="pwg2_retention_elasticity"):
     rparams = dict(objective="binary", metric="auc", learning_rate=0.05,
                    num_leaves=31, min_data_in_leaf=200, monotone_constraints=r_mono, verbose=-1)
     rmodel = lgb.train(rparams, dsr, num_boost_round=300)
-    mlflow.lightgbm.log_model(rmodel, artifact_path="model",
+    from mlflow.models.signature import infer_signature as _infer_r
+    _sigr = _infer_r(Xr, rmodel.predict(Xr))
+    mlflow.lightgbm.log_model(rmodel, artifact_path="model", signature=_sigr,
                               registered_model_name=f"{fqn}.pwg2_retention_elasticity")
 _rv = max(int(v.version) for v in mc.search_model_versions(f"name='{fqn}.pwg2_retention_elasticity'"))
 mc.set_registered_model_alias(f"{fqn}.pwg2_retention_elasticity", "champion", _rv)
