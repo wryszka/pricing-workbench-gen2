@@ -80,7 +80,7 @@ def _seg_prob(seg_df: pd.DataFrame, factor: float) -> np.ndarray:
         "construction_type": "Standard", "channel": "broker",
         "buildings_si": seg_df["sum_insured"].fillna(0), "contents_si": 0.0, "liability_si": 0.0,
         "annual_turnover": seg_df["annual_turnover"].fillna(0),
-        "claims_last_5y": seg_df["claims_history_5y"].fillna(0), "flood_zone": 3,
+        "claims_last_5y": seg_df["claims_history_5y"].fillna(0),
         "vs_market_rate": float(factor),
     })
     for c in ["sic_code", "region", "construction_type", "channel"]:

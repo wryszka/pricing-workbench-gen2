@@ -36,7 +36,38 @@ export default function Home() {
         <Link to="/learn" className="text-[11px] text-brand hover:underline">New here? Start with Learn →</Link>
       </div>
       <FlowRibbon />
+
+      <SectionHead>The three things this platform makes possible</SectionHead>
+      <ThreePillars />
     </Page>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Three pillars — the standard Bricksurance landing section
+// ---------------------------------------------------------------------------
+function ThreePillars() {
+  const pillars = [
+    { e: '🏛️', t: 'One platform — one source of truth', to: '/pricing-table', c: '#2563eb',
+      b: 'Ingestion, the modelling mart, models, champions, the rating engine and governance all read the same governed Delta tables — one platform instead of six systems and a swivel chair.' },
+    { e: '🛡️', t: 'Governance & control', to: '/governance', c: '#6d28d9',
+      b: 'Real Unity Catalog lineage, versioned constraints in git, an immutable audit log, a bias monitor — every pricing decision reproducible exactly as it was made.' },
+    { e: '🤖', t: 'AI agents that assist', to: '/pricing-ai', c: '#16a34a',
+      b: 'A bench of specialists — Ask-the-Book, model validation, drift watch, rate-change — advising a named human who decides. Agents never set prices; a deterministic engine does, under versioned policy.' },
+  ];
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {pillars.map((p) => (
+        <Link key={p.to} to={p.to}
+          className="flex flex-col rounded-2xl border border-line bg-white p-5 hover:shadow-[0_8px_22px_rgba(15,23,42,.1)] transition"
+          style={{ borderTop: `3px solid ${p.c}` }}>
+          <div className="text-[26px]">{p.e}</div>
+          <h3 className="text-[15px] font-bold text-ink mt-2">{p.t}</h3>
+          <p className="text-[13px] text-mut leading-relaxed mt-1.5 flex-1">{p.b}</p>
+          <div className="text-[13px] font-bold mt-2.5" style={{ color: p.c }}>open →</div>
+        </Link>
+      ))}
+    </div>
   );
 }
 

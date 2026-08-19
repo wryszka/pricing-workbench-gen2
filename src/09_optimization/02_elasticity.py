@@ -49,9 +49,11 @@ qr = spark.table(f"{fqn}.opt_quote_response").toPandas()
 PRICE_FEAT = "vs_market_rate"
 CAT_FEATS  = ["sic_code", "region", "construction_type", "channel"]
 NUM_FEATS  = ["buildings_si", "contents_si", "liability_si", "annual_turnover",
-              "claims_last_5y", "flood_zone", PRICE_FEAT]
+              "claims_last_5y", PRICE_FEAT]
 for c in CAT_FEATS:
     qr[c] = qr[c].astype("category")
+for c in NUM_FEATS:
+    qr[c] = pd.to_numeric(qr[c], errors="coerce").fillna(0.0)
 feat_cols = CAT_FEATS + NUM_FEATS
 X = qr[feat_cols]
 y = qr["converted"].astype(int)

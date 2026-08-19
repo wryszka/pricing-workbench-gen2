@@ -57,7 +57,6 @@ def _score_prob(factor_by_seg: dict) -> pd.Series:
         "liability_si":      0.0,
         "annual_turnover":   snap["annual_turnover"].fillna(0),
         "claims_last_5y":    snap["claims_history_5y"].fillna(0),
-        "flood_zone":        3,
         "vs_market_rate":    snap["segment"].map(factor_by_seg).astype(float),
     })
     for c in ["sic_code", "region", "construction_type", "channel"]:
