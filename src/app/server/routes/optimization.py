@@ -91,11 +91,19 @@ async def constraints():
     """Return the versioned constraint YAML (policy-as-code) as text so the app
     can show it + its intent. Reads the deployed bundle file."""
     path = os.path.join(get_bundle_files_base(), "09_optimization", "constraints", "default.yaml")
+    text = None
+    # Local filesystem first (dev); then the Databricks Workspace API (the app
+    # container only has the src/app subtree, so the sibling bundle file must be
+    # read from the workspace, not opened locally).
     try:
         with open(path) as fh:
             text = fh.read()
-        version = next((ln.split(":", 1)[1].strip().strip('"') for ln in text.splitlines()
-                        if ln.startswith("version:")), "v1")
-        return {"ok": True, "path": path, "version": version, "yaml": text}
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:200], "path": path}
+    except Exception:
+        try:
+            from server.config import get_workspace_client
+            text = get_workspace_client().workspace.download(path).read().decode("utf-8")
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:200], "path": path}
+    version = next((ln.split(":", 1)[1].strip().strip('"') for ln in text.splitlines()
+                    if ln.startswith("version:")), "v1")
+    return {"ok": True, "path": path, "version": version, "yaml": text}
