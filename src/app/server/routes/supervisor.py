@@ -2,10 +2,10 @@
 the workbench under one address.
 
 Dispatches to:
- * `pricing_governance_agent`               — packs, audit log, regulator defence
- * `pricing_chat_agent` (bias_investigator) — fairness investigations
- * `pricing_chat_agent` (explain)           — ingestion / portfolio impact
- * `pricing_chat_agent` (factory)           — model-factory plan review
+ * `pwg2_governance_agent`               — packs, audit log, regulator defence
+ * `pwg2_chat_agent` (bias_investigator) — fairness investigations
+ * `pwg2_chat_agent` (explain)           — ingestion / portfolio impact
+ * `pwg2_chat_agent` (factory)           — model-factory plan review
  * AI/BI Genie (Modelling Mart)             — natural-language SQL on the live mart
  * AI/BI Genie (Quote Stream)               — quote-stream analytics
 
@@ -30,8 +30,8 @@ from server.config import get_workspace_client, get_workspace_host
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/supervisor", tags=["supervisor"])
 
-GOVERNANCE_AGENT_ENDPOINT = "pricing_governance_agent"
-CHAT_AGENT_ENDPOINT       = "pricing_chat_agent"
+GOVERNANCE_AGENT_ENDPOINT = "pwg2_governance_agent"
+CHAT_AGENT_ENDPOINT       = "pwg2_chat_agent"
 FM_CLASSIFIER_ENDPOINT    = "databricks-claude-sonnet-4-6"
 
 

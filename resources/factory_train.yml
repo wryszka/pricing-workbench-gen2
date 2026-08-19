@@ -3,7 +3,7 @@
 resources:
   jobs:
     factory_train_real:
-      name: "v1 — Factory training (real)"
+      name: "v1 — Factory training (real) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

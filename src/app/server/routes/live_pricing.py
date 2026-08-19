@@ -4,7 +4,7 @@ Bring the live pricing demo up and down on demand. The live demo is a
 small ON/OFF stack:
 
   Lakebase online store + CONTINUOUS publish from UPT
-    → pricing_scorer Model Serving endpoint (route_optimised, no scale-zero)
+    → pwg2_pricing_scorer Model Serving endpoint (route_optimised, no scale-zero)
       → live_pricing_metrics for the load-test chart
 
 The route exposes:
@@ -50,8 +50,8 @@ from server.sql import execute_query
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/live-pricing", tags=["live-pricing"])
 
-ENDPOINT_NAME       = "motor_pricing_scorer"
-DIRECT_ENDPOINT     = "motor_pricing_scorer_direct"   # plain pyfunc — what-if form
+ENDPOINT_NAME       = "pwg2_motor_scorer"
+DIRECT_ENDPOINT     = "pwg2_motor_scorer_direct"   # plain pyfunc — what-if form
 ONLINE_STORE_NAME   = "motor-pricing-online-store"
 UPT_TABLE_NAME      = "unified_motor_table_live"
 TELEMATICS_TABLE    = "motor_telematics_aggregate"
@@ -106,7 +106,7 @@ def _find_job_by_name(name: str) -> int | None:
 # ---------------------------------------------------------------------------
 # Route-optimized invocation (data plane)
 # ---------------------------------------------------------------------------
-# `motor_pricing_scorer` is route-optimized: it is queried through a dedicated
+# `pwg2_motor_scorer` is route-optimized: it is queried through a dedicated
 # data-plane host (`*.serving.cloud.databricks.com`), NOT the workspace
 # `/serving-endpoints/{name}/invocations` path. It also rejects a generic OAuth
 # token with 401 — the token must carry per-endpoint `authorization_details`

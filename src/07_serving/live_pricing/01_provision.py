@@ -5,7 +5,7 @@
 # MAGIC One-shot bring-up of the live pricing demo:
 # MAGIC  1. Lakebase online store (CU_2 — smallest performant tier)
 # MAGIC  2. Continuous publish of `unified_pricing_table_live` → online store
-# MAGIC  3. `pricing_scorer` champion logged + deployed to a route-optimised
+# MAGIC  3. `pwg2_pricing_scorer` champion logged + deployed to a route-optimised
 # MAGIC     Model Serving endpoint with `scale_to_zero=True`
 # MAGIC  4. 5-request warm-up so the first demo quote is sub-second
 # MAGIC  5. `live_pricing_metrics` table for the load-test chart
@@ -17,10 +17,10 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",      "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",       "pricing_upt")
+dbutils.widgets.text("catalog_name",      "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",       "pricing_workbench_gen2")
 dbutils.widgets.text("online_store_name", "pricing-upt-online-store-live")
-dbutils.widgets.text("endpoint_name",     "pricing_scorer")
+dbutils.widgets.text("endpoint_name",     "pwg2_pricing_scorer")
 dbutils.widgets.text("online_store_capacity", "CU_2")
 dbutils.widgets.text("app_service_principal_id", "")
 
@@ -41,7 +41,7 @@ capacity       = dbutils.widgets.get("online_store_capacity")
 app_sp_id      = dbutils.widgets.get("app_service_principal_id")
 fqn            = f"{catalog}.{schema}"
 upt_table      = f"{fqn}.unified_pricing_table_live"
-scorer_uc_name = f"{fqn}.pricing_scorer"
+scorer_uc_name = f"{fqn}.pwg2_pricing_scorer"
 metrics_table  = f"{fqn}.live_pricing_metrics"
 
 user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get()
@@ -188,9 +188,9 @@ if publish_pipeline_id and app_sp_id:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 3. pricing_scorer champion → endpoint
+# MAGIC ## 3. pwg2_pricing_scorer champion → endpoint
 # MAGIC
-# MAGIC If no `pricing_scorer` model exists yet (first-run on this catalog),
+# MAGIC If no `pwg2_pricing_scorer` model exists yet (first-run on this catalog),
 # MAGIC trigger the production scorer notebook to log + register one. Then
 # MAGIC deploy the latest version to a route-optimised endpoint.
 
@@ -231,7 +231,7 @@ served = [ServedEntityInput(
 #  - If endpoint absent → create
 #  - If endpoint already serving the target version → skip
 #  - If a pending config update is already targeting that version (e.g.
-#    from a parallel pricing_scorer_deploy run) → skip and let it land
+#    from a parallel pwg2_pricing_scorer_deploy run) → skip and let it land
 #  - Otherwise → update_config
 existing = None
 try:

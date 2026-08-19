@@ -5,7 +5,7 @@
 resources:
   jobs:
     train_supplementary_models:
-      name: "Train Supplementary Models (Fraud + Retention)"
+      name: "Train Supplementary Models (Fraud + Retention) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

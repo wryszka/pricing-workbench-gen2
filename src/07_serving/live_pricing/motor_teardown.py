@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # Motor live serving — teardown (soft stop)
 # MAGIC
-# MAGIC Deletes the `motor_pricing_scorer` Model Serving endpoint AND stops the
+# MAGIC Deletes the `pwg2_motor_scorer` Model Serving endpoint AND stops the
 # MAGIC Lakebase instance backing the online store, so deactivate brings the
 # MAGIC whole stack down (no idle compute spend). The published online table is
 # MAGIC left in place so the next `motor_provision` run skips the ~3 min publish
@@ -17,9 +17,9 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",      "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",       "pricing_upt")
-dbutils.widgets.text("endpoint_name",     "motor_pricing_scorer")
+dbutils.widgets.text("catalog_name",      "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",       "pricing_workbench_gen2")
+dbutils.widgets.text("endpoint_name",     "pwg2_motor_scorer")
 dbutils.widgets.text("online_store_name", "motor-pricing-online-store")
 
 catalog       = dbutils.widgets.get("catalog_name")

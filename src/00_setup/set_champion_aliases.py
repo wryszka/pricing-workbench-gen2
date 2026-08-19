@@ -10,7 +10,7 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
-dbutils.widgets.text("schema_name", "pricing_workbench")
+dbutils.widgets.text("schema_name", "pricing_workbench_gen2")
 # Comma-separated model families to alias. Commercial champions by default;
 # pass the *_motor families for the motor/agentic core.
 dbutils.widgets.text("families", "freq_glm,sev_glm,demand_gbm,fraud_gbm")

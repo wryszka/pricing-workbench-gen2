@@ -19,8 +19,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",   "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",    "pricing_upt")
+dbutils.widgets.text("catalog_name",   "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",    "pricing_workbench_gen2")
 dbutils.widgets.text("factory_run_id", "")
 dbutils.widgets.text("max_variants",   "15")
 

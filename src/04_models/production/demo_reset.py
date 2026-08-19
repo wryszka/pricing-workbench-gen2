@@ -20,8 +20,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name", "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",  "pricing_upt")
+dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",  "pricing_workbench_gen2")
 # App service principal + warehouse — passed by the bundle so the reset can
 # self-heal the CAN_USE grant that external ACL rewrites keep wiping (the
 # recurring "app shows 500 on SQL-backed pages" failure). Blank = skip.

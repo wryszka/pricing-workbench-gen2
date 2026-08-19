@@ -23,7 +23,7 @@
 
 dbutils.widgets.text("catalog_name", "lr_serverless_aws_us_catalog")
 dbutils.widgets.text("schema_name",  "pricing_upt")
-dbutils.widgets.text("endpoint_name","pricing_governance_agent")
+dbutils.widgets.text("endpoint_name","pwg2_governance_agent")
 dbutils.widgets.text("fm_endpoint",  "databricks-claude-sonnet-4-6")
 dbutils.widgets.text("warehouse_id", "")  # SQL warehouse the agent tools query; defaults to first running serverless warehouse
 

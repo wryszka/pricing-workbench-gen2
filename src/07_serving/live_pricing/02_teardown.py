@@ -12,10 +12,10 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",      "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",       "pricing_upt")
+dbutils.widgets.text("catalog_name",      "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",       "pricing_workbench_gen2")
 dbutils.widgets.text("online_store_name", "pricing-upt-online-store-live")
-dbutils.widgets.text("endpoint_name",     "pricing_scorer")
+dbutils.widgets.text("endpoint_name",     "pwg2_pricing_scorer")
 
 # COMMAND ----------
 

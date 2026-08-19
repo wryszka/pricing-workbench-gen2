@@ -8,7 +8,7 @@
 resources:
   jobs:
     build_postcode_enrichment:
-      name: "Build Postcode Enrichment (real UK public data)"
+      name: "Build Postcode Enrichment (real UK public data) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

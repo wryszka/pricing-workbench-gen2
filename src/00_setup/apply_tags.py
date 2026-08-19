@@ -10,7 +10,7 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
-dbutils.widgets.text("schema_name", "pricing_workbench")
+dbutils.widgets.text("schema_name", "pricing_workbench_gen2")
 dbutils.widgets.text("tier", "core")
 
 catalog = dbutils.widgets.get("catalog_name")

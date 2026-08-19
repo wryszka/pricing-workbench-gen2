@@ -187,38 +187,38 @@ async def clear_ai_cache() -> dict:
 # demo. New entries: add (endpoint, question, custom_inputs).
 _WARMUP_PROMPTS: list[dict] = [
     # Bias investigator — every protected attribute the UI exposes
-    {"endpoint": "pricing_chat_agent",
+    {"endpoint": "pwg2_chat_agent",
      "question": "Brief: is there a director_gender bias signal in the live champions? Headline finding only.",
      "custom_inputs": {"persona": "bias_investigator", "mode": "live", "protected_attribute": "director_gender"}},
-    {"endpoint": "pricing_chat_agent",
+    {"endpoint": "pwg2_chat_agent",
      "question": "Brief: is there a postcode_demographic bias signal in the live champions?",
      "custom_inputs": {"persona": "bias_investigator", "mode": "live", "protected_attribute": "postcode_demographic"}},
-    {"endpoint": "pricing_chat_agent",
+    {"endpoint": "pwg2_chat_agent",
      "question": "Brief: is there an ethnicity_proxy bias signal in the live champions?",
      "custom_inputs": {"persona": "bias_investigator", "mode": "live", "protected_attribute": "ethnicity_proxy"}},
-    {"endpoint": "pricing_chat_agent",
+    {"endpoint": "pwg2_chat_agent",
      "question": "Brief: is there a director_age_band bias signal in the live champions?",
      "custom_inputs": {"persona": "bias_investigator", "mode": "live", "protected_attribute": "director_age_band"}},
     # Governance agent — one canonical lookup per family
-    *[{"endpoint": "pricing_governance_agent",
+    *[{"endpoint": "pwg2_governance_agent",
        "question": f"Brief: which pack governs the latest {fam} champion?",
        "custom_inputs": {"pack_id": ""}}
       for fam in ("freq_glm", "sev_glm", "demand_gbm", "fraud_gbm",
                   "freq_glm_motor", "sev_glm_motor",
                   "demand_gbm_motor", "fraud_gbm_motor")],
     # Impact explainer — one rolling summary
-    {"endpoint": "pricing_chat_agent",
+    {"endpoint": "pwg2_chat_agent",
      "question": "Why did premiums change in the latest data update?",
      "custom_inputs": {"persona": "explain"}},
     # Multi-agent fan-out — warming each leg individually so the supervisor's
     # parallel fan-out also lands instantly from cache.
-    {"endpoint": "pricing_governance_agent",
+    {"endpoint": "pwg2_governance_agent",
      "question": "For freq_glm_motor v4: which pack defends it, is there a director_gender disparity in its predictions, and why did premiums move on the last data refresh?",
      "custom_inputs": {"pack_id": ""}},
-    {"endpoint": "pricing_chat_agent",
+    {"endpoint": "pwg2_chat_agent",
      "question": "For freq_glm_motor v4: which pack defends it, is there a director_gender disparity in its predictions, and why did premiums move on the last data refresh?",
      "custom_inputs": {"persona": "bias_investigator", "mode": "live"}},
-    {"endpoint": "pricing_chat_agent",
+    {"endpoint": "pwg2_chat_agent",
      "question": "For freq_glm_motor v4: which pack defends it, is there a director_gender disparity in its predictions, and why did premiums move on the last data refresh?",
      "custom_inputs": {"persona": "explain"}},
 ]
@@ -293,7 +293,7 @@ async def warm_ai_cache(clear_first: bool = False, keep_cached: bool = True) -> 
 # ---------------------------------------------------------------------------
 
 _LAKEBASE_INSTANCES = ["motor-pricing-online-store"]
-_SERVING_ENDPOINTS  = ["motor_pricing_scorer", "pricing_chat_agent", "pricing_governance_agent"]
+_SERVING_ENDPOINTS  = ["pwg2_motor_scorer", "pwg2_chat_agent", "pwg2_governance_agent"]
 
 
 def _set_lakebase_stopped(name: str, stopped: bool) -> dict:
@@ -323,7 +323,7 @@ async def sleep_all() -> dict:
     import asyncio
     w = get_workspace_client()
     deleted = []
-    for ep in ["motor_pricing_scorer"]:
+    for ep in ["pwg2_motor_scorer"]:
         try:
             await asyncio.to_thread(w.serving_endpoints.delete, ep)
             deleted.append(ep)

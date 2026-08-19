@@ -615,7 +615,7 @@ async def portfolio_whatif(run_id: str) -> dict:
 
 # ---------------------------------------------------------------------------
 # Agent chat — delegated to the Databricks Agent Framework endpoint
-# `pricing_chat_agent` (persona=factory). The agent's own tools query
+# `pwg2_chat_agent` (persona=factory). The agent's own tools query
 # factory_runs / factory_variants directly, so the app no longer pre-bakes
 # context — it just forwards the question + run_id.
 # ---------------------------------------------------------------------------
@@ -625,13 +625,13 @@ class ChatRequest(BaseModel):
     question: str
 
 
-CHAT_AGENT_ENDPOINT = "pricing_chat_agent"
+CHAT_AGENT_ENDPOINT = "pwg2_chat_agent"
 
 
 @router.post("/chat")
 async def factory_chat(req: ChatRequest) -> dict:
     """Forward the actuary's question to the Databricks Agent Framework
-    `pricing_chat_agent` endpoint with persona=factory. The agent calls
+    `pwg2_chat_agent` endpoint with persona=factory. The agent calls
     its own SQL tools (factory_runs, factory_variants) so the app no longer
     has to pre-bake context — it just passes run_id + question."""
     if not req.question.strip():

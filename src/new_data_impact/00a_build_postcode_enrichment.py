@@ -36,8 +36,8 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name", "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name", "pricing_upt")
+dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name", "pricing_workbench_gen2")
 dbutils.widgets.text("volume_name", "raw_data")
 CATALOG = dbutils.widgets.get("catalog_name")
 SCHEMA  = dbutils.widgets.get("schema_name")

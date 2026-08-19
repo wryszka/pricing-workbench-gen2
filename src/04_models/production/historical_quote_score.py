@@ -7,7 +7,7 @@
 # MAGIC flavor, no serving endpoint), applies the rating-engine config that
 # MAGIC was in force, and returns a full price build-up.
 # MAGIC
-# MAGIC This is the counterpart to the `pricing_scorer` serving endpoint —
+# MAGIC This is the counterpart to the `pwg2_pricing_scorer` serving endpoint —
 # MAGIC that one only serves the CURRENT champion release. Historical
 # MAGIC releases are scored here, on demand, via a short batch run.
 # MAGIC
@@ -16,8 +16,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",  "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",   "pricing_upt")
+dbutils.widgets.text("catalog_name",  "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",   "pricing_workbench_gen2")
 dbutils.widgets.text("release_id",    "apr_2026")
 dbutils.widgets.text("features_json", "{}")
 dbutils.widgets.text("run_label",     "adhoc")
@@ -144,7 +144,7 @@ for c in row.columns:
 
 # Pad the GLM input so get_dummies in the wrapper sees every training
 # category value; we keep only the original first-row prediction. (See
-# pricing_scorer.py for the same pattern + rationale.)
+# pwg2_pricing_scorer.py for the same pattern + rationale.)
 GLM_CATS = {
     "industry_risk_tier": ["High", "Low", "Medium"],
     "construction_type":  ["Fire Resistive", "Frame", "Heavy Timber",

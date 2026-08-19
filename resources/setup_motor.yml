@@ -3,7 +3,7 @@
 resources:
   jobs:
     setup_motor:
-      name: "Setup — Motor Insurance dataset (1M policies)"
+      name: "Setup — Motor Insurance dataset (1M policies) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

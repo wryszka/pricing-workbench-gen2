@@ -4,8 +4,7 @@
 resources:
   jobs:
     compare_scoring:
-      name: "v1 — Compare & test models"
-
+      name: "v1 — Compare & test models (gen2)"
       permissions:
         - service_principal_name: ${var.app_service_principal_id}
           level: CAN_MANAGE_RUN

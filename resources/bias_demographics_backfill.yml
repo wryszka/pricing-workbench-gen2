@@ -4,7 +4,7 @@
 resources:
   jobs:
     bias_demographics_backfill:
-      name: "v1 — Bias demographics backfill (director_gender + postcode_demographic)"
+      name: "v1 — Bias demographics backfill (director_gender + postcode_demographic) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

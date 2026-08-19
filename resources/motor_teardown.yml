@@ -1,7 +1,7 @@
 resources:
   jobs:
     motor_teardown:
-      name: "Motor live serving: teardown (delete endpoint)"
+      name: "Motor live serving: teardown (delete endpoint) (gen2)"
       # One run at a time — repeated Deactivate clicks must not spawn parallel
       # teardowns.
       max_concurrent_runs: 1
@@ -11,7 +11,7 @@ resources:
         - name: schema_name
           default: ${var.schema_name}
         - name: endpoint_name
-          default: "motor_pricing_scorer"
+          default: "pwg2_motor_scorer"
         - name: online_store_name
           default: "motor-pricing-online-store"
 

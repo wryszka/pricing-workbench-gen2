@@ -3,7 +3,7 @@
 resources:
   jobs:
     build_upt:
-      name: "Build Unified Pricing Table (Gold)"
+      name: "Build Unified Pricing Table (Gold) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

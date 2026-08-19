@@ -5,7 +5,7 @@ resources:
   jobs:
 
     set_champion_aliases:
-      name: "Build — set champion aliases"
+      name: "Build — set champion aliases (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -30,7 +30,7 @@ resources:
               - databricks-sdk
 
     ensure_supporting_tables:
-      name: "Build — ensure supporting tables (agent resources)"
+      name: "Build — ensure supporting tables (agent resources) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -52,7 +52,7 @@ resources:
               - databricks-sdk
 
     apply_tags:
-      name: "Build — apply uniform UC tags"
+      name: "Build — apply uniform UC tags (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -73,7 +73,7 @@ resources:
             dependencies: []
 
     grant_app_sp:
-      name: "Build — grant app service principal (UC + endpoints)"
+      name: "Build — grant app service principal (UC + endpoints) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -82,7 +82,7 @@ resources:
         - name: app_service_principal_id
           default: ${var.app_service_principal_id}
         - name: endpoint_names
-          default: "pricing_scorer,pricing_chat_agent,pricing_governance_agent,motor_pricing_scorer_direct"
+          default: "pwg2_pricing_scorer,pwg2_chat_agent,pwg2_governance_agent,pwg2_motor_scorer_direct"
       tasks:
         - task_key: grant
           notebook_task:

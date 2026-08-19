@@ -4,14 +4,14 @@
 resources:
   jobs:
     pricing_chat_agent_deploy:
-      name: "v1 — Deploy pricing chat agent"
+      name: "v1 — Deploy pricing chat agent (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
         - name: schema_name
           default: ${var.schema_name}
         - name: endpoint_name
-          default: "pricing_chat_agent"
+          default: "pwg2_chat_agent"
         - name: fm_endpoint
           default: "databricks-claude-sonnet-4-6"
 

@@ -1,7 +1,7 @@
 resources:
   jobs:
     set_motor_model_descriptions:
-      name: "Apply UC descriptions to motor production models"
+      name: "Apply UC descriptions to motor production models (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

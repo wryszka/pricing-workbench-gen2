@@ -19,7 +19,7 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
-dbutils.widgets.text("schema_name", "pricing_workbench")
+dbutils.widgets.text("schema_name", "pricing_workbench_gen2")
 dbutils.widgets.text("rate_change_cap", "0.15")     # ±15% vs current book
 dbutils.widgets.text("target_loss_ratio", "0.62")   # cost line = LR × market (illustrative)
 dbutils.widgets.text("margin_floor", "0.05")        # min (p−c)/p

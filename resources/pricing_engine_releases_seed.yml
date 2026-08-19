@@ -2,7 +2,7 @@
 resources:
   jobs:
     pricing_engine_releases_seed:
-      name: "v1 — Pricing engine releases seed (monthly rate book)"
+      name: "v1 — Pricing engine releases seed (monthly rate book) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

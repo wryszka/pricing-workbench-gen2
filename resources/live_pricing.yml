@@ -5,7 +5,7 @@ resources:
   jobs:
 
     live_pricing_provision:
-      name: "v1 — Live pricing: provision (Lakebase SNAPSHOT + endpoint + warm-up)"
+      name: "v1 — Live pricing: provision (Lakebase SNAPSHOT + endpoint + warm-up) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -50,7 +50,7 @@ resources:
               - lightgbm
 
     live_pricing_teardown:
-      name: "v1 — Live pricing: teardown (delete endpoint + online store)"
+      name: "v1 — Live pricing: teardown (delete endpoint + online store) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -85,7 +85,7 @@ resources:
               - databricks-feature-engineering
 
     live_pricing_load_test:
-      name: "v1 — Live pricing: load test (sustained QPS against scorer)"
+      name: "v1 — Live pricing: load test (sustained QPS against scorer) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -130,7 +130,7 @@ resources:
               - databricks-sdk
 
     live_pricing_realtime_feature_refresh:
-      name: "v1 — Live pricing: file claim + refresh UPT"
+      name: "v1 — Live pricing: file claim + refresh UPT (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

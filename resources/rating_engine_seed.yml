@@ -3,7 +3,7 @@
 resources:
   jobs:
     rating_engine_seed:
-      name: "v1 — Rating engine config seed (3 versions)"
+      name: "v1 — Rating engine config seed (3 versions) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

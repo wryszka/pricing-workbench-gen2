@@ -1,6 +1,6 @@
 """Pricing Engine routes.
 
-Live scoring goes through the `pricing_scorer` Model Serving endpoint —
+Live scoring goes through the `pwg2_pricing_scorer` Model Serving endpoint —
 one unified endpoint that bakes in the 4 current champions and returns
 all predictions in a single round-trip. The app holds no model code; it
 only applies rating-engine arithmetic on top of the endpoint's output.
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/pricing", tags=["pricing"])
 
 FAMILIES = ("freq_glm", "sev_glm", "demand_gbm", "fraud_gbm")
-SCORER_ENDPOINT = "pricing_scorer"
+SCORER_ENDPOINT = "pwg2_pricing_scorer"
 COMPARE_JOB_NAME = "v1 — Compare & test models"
 HISTORICAL_JOB_NAME = "v1 — Historical quote score (any release)"
 
@@ -318,7 +318,7 @@ def _num(v, default=0.0):
 # ---------------------------------------------------------------------------
 
 async def _score_via_inference_logs(policy_id: str) -> dict | None:
-    """Fallback when the live `pricing_scorer` endpoint isn't deployed on
+    """Fallback when the live `pwg2_pricing_scorer` endpoint isn't deployed on
     this workspace (e.g. dev). Returns the most recent batch-scored row
     from `inference_logs` so the MTA / Quote Runner still has model
     predictions to drive the rating engine."""
@@ -357,7 +357,7 @@ async def _score_via_inference_logs(policy_id: str) -> dict | None:
 
 
 async def _score_via_endpoint(policy_id: str) -> dict | None:
-    """Call the unified `pricing_scorer` Model Serving endpoint with a
+    """Call the unified `pwg2_pricing_scorer` Model Serving endpoint with a
     policy_id. The endpoint resolves features against UPT (online store at
     serving time), runs the 4 champions and applies the baked rating-engine
     business rules — returning final_premium plus every intermediate value.
@@ -380,7 +380,7 @@ async def _score_via_endpoint(policy_id: str) -> dict | None:
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            logger.warning("pricing_scorer endpoint call failed: %s", str(e)[:200])
+            logger.warning("pwg2_pricing_scorer endpoint call failed: %s", str(e)[:200])
             return None
         preds = data.get("predictions") or data.get("outputs") or data
         # serving wraps result as list of dicts (records) or dict of lists
@@ -513,7 +513,7 @@ def _bust_alias_cache() -> None:
 
 @router.get("/status")
 async def pricing_status() -> dict:
-    """Reports champion aliases AND the pricing_scorer endpoint state. UI
+    """Reports champion aliases AND the pwg2_pricing_scorer endpoint state. UI
     gates the Run button on `ready`, which is True only when the endpoint
     is READY (not provisioning, not down)."""
     # Resolve all 4 champion aliases in parallel against the thread pool —
@@ -531,7 +531,7 @@ async def pricing_status() -> dict:
         endpoint_state = str(ep.state.ready).split(".")[-1] if ep.state and ep.state.ready else "UNKNOWN"
         endpoint_ready = "READY" in str(endpoint_state)
     except Exception as e:
-        logger.info("pricing_scorer endpoint lookup failed: %s", e)
+        logger.info("pwg2_pricing_scorer endpoint lookup failed: %s", e)
     return {
         "champions":       champions,
         "endpoint":        SCORER_ENDPOINT,
@@ -629,7 +629,7 @@ class QuoteRunRequest(BaseModel):
 
 async def _run_quote(features: dict, policy_id: str | None,
                      versions: dict[str, list[str]], cfg: dict) -> list[dict]:
-    """Champion combos go through the live `pricing_scorer` endpoint, which
+    """Champion combos go through the live `pwg2_pricing_scorer` endpoint, which
     needs a policy_id to look up features against UPT. Non-champion combos
     return a `needs_batch` marker — those cost a batch job to score."""
     import itertools
@@ -942,7 +942,7 @@ async def simulate_mta(req: MtaRequest) -> dict:
             503,
             "Could not price this policy — no live scorer endpoint and no "
             "prior inference_logs row to fall back on. Run a batch scoring "
-            "job first, or deploy the pricing_scorer endpoint.",
+            "job first, or deploy the pwg2_pricing_scorer endpoint.",
         )
 
     si_before = _num(before.get("sum_insured"))

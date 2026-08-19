@@ -3,7 +3,7 @@
 resources:
   jobs:
     demo_reset:
-      name: "v1 — Demo reset (landing page button)"
+      name: "v1 — Demo reset (landing page button) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

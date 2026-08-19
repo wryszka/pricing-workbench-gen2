@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # Pricing Scorer — unified live pricing endpoint
 # MAGIC
-# MAGIC One Model Serving endpoint (`pricing_scorer`) that takes a `policy_id`
+# MAGIC One Model Serving endpoint (`pwg2_pricing_scorer`) that takes a `policy_id`
 # MAGIC and returns the final premium plus all intermediate predictions and
 # MAGIC rating-engine components in a single round-trip.
 # MAGIC
@@ -24,9 +24,9 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",  "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",   "pricing_upt")
-dbutils.widgets.text("endpoint_name", "pricing_scorer")
+dbutils.widgets.text("catalog_name",  "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",   "pricing_workbench_gen2")
+dbutils.widgets.text("endpoint_name", "pwg2_pricing_scorer")
 dbutils.widgets.text("warehouse_id",  "a3b61648ea4809e3")
 
 # COMMAND ----------
@@ -41,7 +41,7 @@ schema         = dbutils.widgets.get("schema_name")
 endpoint_name  = dbutils.widgets.get("endpoint_name")
 warehouse_id   = dbutils.widgets.get("warehouse_id")
 fqn            = f"{catalog}.{schema}"
-scorer_uc_name = f"{fqn}.pricing_scorer"
+scorer_uc_name = f"{fqn}.pwg2_pricing_scorer"
 
 import json, os, tempfile, shutil
 import pandas as pd
@@ -464,7 +464,7 @@ resources = [
     DatabricksTable(table_name=f"{fqn}.unified_pricing_table_live"),
 ]
 
-with mlflow.start_run(run_name="pricing_scorer_deploy") as run:
+with mlflow.start_run(run_name="pwg2_pricing_scorer_deploy") as run:
     mlflow.pyfunc.log_model(
         artifact_path         = "scorer",
         python_model          = PricingScorer(),

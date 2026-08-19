@@ -1,13 +1,21 @@
 bundle:
-  name: pricing-workbench
+  name: pricing-workbench-gen2
 
+# ---------------------------------------------------------------------------
+# gen2 line. Seeded from pricing-workbench v2 but renamed end to end so it can
+# coexist with (a) the frozen AXA v2 deployment on the pricingv2 FEVM and
+# (b) gen1 on dev: UC schema `pricing_workbench_gen2`, workspace-global assets
+# prefixed `pwg2_`, app `pricing-workbench-gen2`, Genie/dashboard titles
+# suffixed " (gen2)". Dev-loops on pricingv2 for now; ultimately moves to dev
+# and replaces gen1. Everything serverless / scale-to-zero.
+# ---------------------------------------------------------------------------
 variables:
   catalog_name:
     description: Unity Catalog name for all demo tables
     default: lr_pricing_v2_aws_us_catalog
   schema_name:
     description: Schema name for all demo tables (everything lives in one schema)
-    default: pricing_workbench
+    default: pricing_workbench_gen2
   volume_name:
     description: Volume for landing external data files
     default: external_landing
@@ -19,9 +27,9 @@ variables:
     default: ""
   app_service_principal_id:
     description: |
-      The Databricks App's service principal (appId). Granted CAN_MANAGE_RUN on
-      app-triggered jobs and CAN_USE on the warehouse. Empty on a first deploy —
-      see README two-phase bootstrap: create the app, capture its SP, set this
+      The gen2 Databricks App's service principal (appId). Granted CAN_MANAGE_RUN
+      on app-triggered jobs and CAN_USE on the warehouse. Empty on a first deploy
+      — see README two-phase bootstrap: create the app, capture its SP, set this
       var, then redeploy so the grants attach.
     default: ""
   genie_space_id:
@@ -38,16 +46,15 @@ variables:
       core = commercial rating engine + models + governance + agents + MCP/
       agentic buyer (scale-to-zero, no live feature table). full = also arms the
       optional live-serving tier (Lakebase online store + route-optimized scorer
-      + QPS tester). NOTE: the live-serving jobs are always defined in the bundle
-      but dormant — they cost nothing until run. This flag drives which tasks the
-      "Full Build" orchestrator runs, not which resources exist.
+      + QPS tester). The live-serving jobs are always defined in the bundle but
+      dormant — they cost nothing until run.
     default: "core"
   live_online_store_name:
     description: Lakebase online store backing the optional Live Pricing System
-    default: "pw-pricing-online-store"
+    default: "pwg2-pricing-online-store"
   live_endpoint_name:
-    description: Model Serving endpoint for the commercial rating engine
-    default: "pw_pricing_scorer"
+    description: Model Serving endpoint for the commercial rating engine (live tier)
+    default: "pwg2_pricing_scorer"
   scale_factor:
     description: |
       Multiplier on the synthetic dataset size (1 = 50k policies, 20 = 1M).
@@ -55,11 +62,11 @@ variables:
       demo in the live-serving tier.
     default: "1"
 
-# v2 is the default target on this branch — a bare `bundle deploy` goes to the
-# fresh v2 workspace, never to the legacy dev/prod estates. Pass --target
-# explicitly to reach those.
+# `pricingv2` is the default target (dev-loop workspace for now). `dev` is the
+# eventual home where gen2 replaces gen1 — a bare `bundle deploy` goes to
+# pricingv2; pass --target dev to reach the dev estate.
 targets:
-  v2:
+  pricingv2:
     mode: production
     default: true
     workspace:
@@ -68,40 +75,28 @@ targets:
       root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
     variables:
       catalog_name:  lr_pricing_v2_aws_us_catalog
-      schema_name:   pricing_workbench
+      schema_name:   pricing_workbench_gen2
       warehouse_id:  "f738fde9a1197aeb"
-      # App SP minted when the app was (re)created on the v2 workspace (2026-08-17).
-      app_service_principal_id: "8f20568f-50cc-4ed4-b119-8a532f9b2e6c"
+      # Empty until the gen2 app is created + its SP captured (README bootstrap).
+      app_service_principal_id: ""
       scale_factor:  "1"
       deploy_profile: "core"
 
-  # --- legacy estates (not deployed from the v2 branch; kept for reference) ---
+  # Eventual home: dev estate, replacing gen1. Distinct schema + pwg2_ assets +
+  # app name mean gen2 coexists with gen1 during cutover without collision.
   dev:
-    mode: development
+    mode: production
     workspace:
       host: https://fevm-lr-dev-aws-us.cloud.databricks.com
       profile: DEV
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
     variables:
-      catalog_name:        lr_dev_aws_us_catalog
-      schema_name:         pricing_upt
-      warehouse_id:        "a3b61648ea4809e3"
-      app_service_principal_id: "63890164-4191-4196-9682-5248098a59c5"
-      scale_factor:        "1"
-
-  prod:
-    mode: production
-    workspace:
-      host: https://fevm-lr-serverless-aws-us.cloud.databricks.com
-      profile: DEFAULT
-      root_path: /Workspace/Shared/.bundle/pricing-upt-demo/prod
-    variables:
-      catalog_name:        lr_serverless_aws_us_catalog
-      schema_name:         pricing_upt
-      warehouse_id:        "ab79eced8207d29b"
-      app_service_principal_id: "3da451a3-ebd3-46be-a5fa-13132401d01a"
-      genie_space_id:        "01f15d9ed6a61ca18f578f91ad1c76b7"
-      genie_quote_space_id:  "01f15d9ed72c1a44aa4e4fe208de54c2"
-      scale_factor:          "20"
+      catalog_name:  lr_dev_aws_us_catalog
+      schema_name:   pricing_workbench_gen2
+      warehouse_id:  "a3b61648ea4809e3"
+      app_service_principal_id: ""
+      scale_factor:  "1"
+      deploy_profile: "core"
 
 sync:
   # app.yaml is generated by deploy.sh from app.<target>.yaml and is

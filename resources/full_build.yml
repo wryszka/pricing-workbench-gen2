@@ -12,7 +12,7 @@
 resources:
   jobs:
     full_build:
-      name: "Pricing Workbench — Full Build (populate everything)"
+      name: "Pricing Workbench — Full Build (populate everything) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

@@ -4,7 +4,7 @@
 resources:
   jobs:
     price_optimiser:
-      name: "Price optimisation — worked example (new-business profit)"
+      name: "Price optimisation — worked example (new-business profit) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

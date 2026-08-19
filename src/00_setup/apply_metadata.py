@@ -18,8 +18,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name", "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",  "pricing_upt")
+dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",  "pricing_workbench_gen2")
 dbutils.widgets.text("app_sp_id",    "452a9d33-f698-4124-b573-912c6fe6e929")
 
 catalog   = dbutils.widgets.get("catalog_name")

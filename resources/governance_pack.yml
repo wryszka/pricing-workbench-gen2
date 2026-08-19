@@ -5,7 +5,7 @@
 resources:
   jobs:
     governance_pack_generation:
-      name: "v1 — Generate governance pack"
+      name: "v1 — Generate governance pack (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

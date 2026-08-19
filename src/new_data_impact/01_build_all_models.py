@@ -58,7 +58,7 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 CATALOG = "lr_serverless_aws_us_catalog"
-SCHEMA = "pricing_upt"
+SCHEMA = "pricing_workbench_gen2"
 
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SCHEMA}")
 spark.sql(f"USE {CATALOG}.{SCHEMA}")

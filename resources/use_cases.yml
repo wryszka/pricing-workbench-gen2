@@ -3,7 +3,7 @@
 resources:
   jobs:
     uc1_shadow_pricing:
-      name: "UC1 — Shadow Pricing Impact Analysis"
+      name: "UC1 — Shadow Pricing Impact Analysis (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -25,7 +25,7 @@ resources:
             client: "5"
 
     uc2_point_in_time:
-      name: "UC2 — Point-in-Time Backtesting"
+      name: "UC2 — Point-in-Time Backtesting (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -50,7 +50,7 @@ resources:
             client: "5"
 
     uc3_new_dataset:
-      name: "UC3 — New Dataset Addition (Subsidence)"
+      name: "UC3 — New Dataset Addition (Subsidence) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -72,7 +72,7 @@ resources:
             client: "5"
 
     uc4_lineage_governance:
-      name: "UC4 — Lineage & Governance Demo"
+      name: "UC4 — Lineage & Governance Demo (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

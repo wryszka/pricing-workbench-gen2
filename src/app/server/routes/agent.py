@@ -1,4 +1,4 @@
-"""`/agent/explain` route — delegates to the `pricing_chat_agent` Agent
+"""`/agent/explain` route — delegates to the `pwg2_chat_agent` Agent
 Framework endpoint (persona=explain). The agent calls its own portfolio /
 shadow-impact tools, so the app just forwards the actuary's question."""
 
@@ -14,7 +14,7 @@ from server.audit import log_audit_event
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
-CHAT_AGENT_ENDPOINT = "pricing_chat_agent"
+CHAT_AGENT_ENDPOINT = "pwg2_chat_agent"
 
 
 class ExplainRequest(BaseModel):

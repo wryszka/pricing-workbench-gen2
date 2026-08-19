@@ -6,7 +6,7 @@
 # MAGIC   1. Lakebase online store
 # MAGIC   2. UPT (unified_motor_table_live) registered as FE table + SNAPSHOT
 # MAGIC      published to the online store
-# MAGIC   3. Endpoint `motor_pricing_scorer` re-deployed to pick up online
+# MAGIC   3. Endpoint `pwg2_motor_scorer` re-deployed to pick up online
 # MAGIC      feature metadata (auto-resolves now that publish exists)
 # MAGIC   4. App SP granted CAN_MANAGE on the publish pipeline so the FastAPI
 # MAGIC      claim/event endpoint can fire SNAPSHOT refreshes
@@ -17,11 +17,11 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",            "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",             "pricing_upt")
+dbutils.widgets.text("catalog_name",            "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",             "pricing_workbench_gen2")
 dbutils.widgets.text("online_store_name",       "motor-pricing-online-store")
 dbutils.widgets.text("online_store_capacity",   "CU_4")
-dbutils.widgets.text("endpoint_name",           "motor_pricing_scorer")
+dbutils.widgets.text("endpoint_name",           "pwg2_motor_scorer")
 dbutils.widgets.text("app_service_principal_id","")
 
 # COMMAND ----------
@@ -41,7 +41,7 @@ app_sp_id     = dbutils.widgets.get("app_service_principal_id")
 fqn           = f"{catalog}.{schema}"
 upt_table     = f"{fqn}.unified_motor_table_live"
 online_table  = f"{upt_table}_online"      # MUST differ from source name
-scorer_uc     = f"{fqn}.motor_pricing_scorer"
+scorer_uc     = f"{fqn}.pwg2_motor_scorer"
 metrics_table = f"{fqn}.live_motor_metrics"
 state_table   = f"{fqn}.live_motor_runtime_state"
 
@@ -187,7 +187,7 @@ if publish_pipeline_id and app_sp_id:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4. Reconcile motor_pricing_scorer endpoint
+# MAGIC ## 4. Reconcile pwg2_motor_scorer endpoint
 # MAGIC
 # MAGIC With the Lakebase publish in place, the FE wrapper can now resolve
 # MAGIC online metadata. Trigger a config update so the endpoint moves out of

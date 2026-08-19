@@ -1,7 +1,7 @@
 resources:
   jobs:
     build_motor_upt:
-      name: "Build Motor UPT (unified_motor_table_live)"
+      name: "Build Motor UPT (unified_motor_table_live) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

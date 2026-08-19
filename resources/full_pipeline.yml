@@ -3,7 +3,7 @@
 resources:
   jobs:
     run_full_demo:
-      name: "Run Full Demo Pipeline"
+      name: "Run Full Demo Pipeline (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

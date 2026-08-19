@@ -4,7 +4,7 @@
 resources:
   jobs:
     inference_backfill:
-      name: "v1 — Inference log backfill (score all UPT policies)"
+      name: "v1 — Inference log backfill (score all UPT policies) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

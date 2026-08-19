@@ -3,7 +3,7 @@
 resources:
   jobs:
     pricing_scorer_deploy:
-      name: "v1 — Deploy unified pricing scorer endpoint"
+      name: "v1 — Deploy unified pricing scorer endpoint (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
@@ -12,7 +12,7 @@ resources:
         - name: warehouse_id
           default: ${var.warehouse_id}
         - name: endpoint_name
-          default: "pricing_scorer"
+          default: "pwg2_pricing_scorer"
 
       permissions:
         - service_principal_name: ${var.app_service_principal_id}

@@ -1,14 +1,14 @@
 resources:
   jobs:
     motor_pricing_scorer_deploy:
-      name: "Deploy motor pricing scorer (Large endpoint)"
+      name: "Deploy motor pricing scorer (Large endpoint) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
         - name: schema_name
           default: ${var.schema_name}
         - name: endpoint_name
-          default: "motor_pricing_scorer"
+          default: "pwg2_motor_scorer"
         - name: deploy_mode
           # "full" also deploys the route-optimized online endpoint (live tier);
           # "direct_only" deploys just the scale-to-zero direct endpoint (Core).

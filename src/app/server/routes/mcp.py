@@ -291,7 +291,7 @@ async def _tool_explain_price(args: dict, session_id: str, agent_id: str) -> dic
         "Do not quote a different premium than the one in the breakdown."
     )
     try:
-        result = await invoke_agent(endpoint_name="pricing_chat_agent",
+        result = await invoke_agent(endpoint_name="pwg2_chat_agent",
                                     question=prompt,
                                     custom_inputs={"persona": "explain"})
         answer = _plain_text(result.get("answer") or "")

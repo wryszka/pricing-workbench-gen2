@@ -21,7 +21,7 @@
 
 dbutils.widgets.text("catalog_name",  "lr_serverless_aws_us_catalog")
 dbutils.widgets.text("schema_name",   "pricing_upt")
-dbutils.widgets.text("endpoint_name", "pricing_chat_agent")
+dbutils.widgets.text("endpoint_name", "pwg2_chat_agent")
 dbutils.widgets.text("fm_endpoint",   "databricks-claude-sonnet-4-6")
 dbutils.widgets.text("warehouse_id",  "")  # SQL warehouse the agent tools query; defaults to first running serverless warehouse
 
@@ -38,7 +38,7 @@ endpoint_name = dbutils.widgets.get("endpoint_name")
 fm_endpoint   = dbutils.widgets.get("fm_endpoint")
 warehouse_id  = dbutils.widgets.get("warehouse_id")
 fqn           = f"{catalog}.{schema}"
-agent_uc_name = f"{fqn}.pricing_chat_agent"
+agent_uc_name = f"{fqn}.pwg2_chat_agent"
 
 if not warehouse_id:
     from databricks.sdk import WorkspaceClient as _W
@@ -840,7 +840,7 @@ resources_list = [
     DatabricksTable(table_name=f"{fqn}.governance_pack_sidecars"),
 ]
 
-with mlflow.start_run(run_name="pricing_chat_agent_deploy"):
+with mlflow.start_run(run_name="pwg2_chat_agent_deploy"):
     mi = mlflow.pyfunc.log_model(
         artifact_path="agent",
         python_model=PricingChatAgent(),

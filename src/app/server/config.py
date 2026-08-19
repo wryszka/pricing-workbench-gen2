@@ -61,7 +61,7 @@ def get_catalog() -> str:
 
 
 def get_schema() -> str:
-    return os.getenv("SCHEMA_NAME", "pricing_upt")
+    return os.getenv("SCHEMA_NAME", "pricing_workbench_gen2")
 
 
 def get_warehouse_id() -> str:

@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # Live Pricing System — load test
 # MAGIC
-# MAGIC Async httpx + asyncio load against `pricing_scorer`. Targets a fixed
+# MAGIC Async httpx + asyncio load against `pwg2_pricing_scorer`. Targets a fixed
 # MAGIC QPS (default 100) for a fixed duration (default 300s). Per-request
 # MAGIC outcome is summarised into per-second rows and written to
 # MAGIC `live_pricing_metrics` so the live chart in the app can plot p50/p95/p99
@@ -12,9 +12,9 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",     "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",      "pricing_upt")
-dbutils.widgets.text("endpoint_name",    "pricing_scorer")
+dbutils.widgets.text("catalog_name",     "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",      "pricing_workbench_gen2")
+dbutils.widgets.text("endpoint_name",    "pwg2_pricing_scorer")
 dbutils.widgets.text("target_qps",       "100")
 dbutils.widgets.text("duration_seconds", "60")
 dbutils.widgets.text("concurrency",      "50")

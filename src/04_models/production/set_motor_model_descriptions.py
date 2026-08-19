@@ -10,8 +10,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name", "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",  "pricing_upt")
+dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",  "pricing_workbench_gen2")
 
 catalog = dbutils.widgets.get("catalog_name")
 schema  = dbutils.widgets.get("schema_name")
@@ -43,14 +43,14 @@ DESCRIPTIONS = {
         "and telematics behaviour (behaviour_score, recent_speeding_events, "
         "recent_curfew_breaches, recent_harsh_braking_30d). Sourced from "
         f"{fqn}.unified_motor_table_live via FeatureLookup. Used inside the "
-        "motor_pricing_scorer pyfunc for technical-premium derivation."
+        "pwg2_motor_scorer pyfunc for technical-premium derivation."
     ),
     "sev_glm_motor": (
         "Motor Severity model. Gamma GLM that predicts the mean claim "
         "severity (£/claim) for policies with at least one observed claim. "
         "Features: driver demographics, vehicle attributes, telematics "
         "behaviour, and at-fault claim history. Trained only on claimants "
-        "(claim_count_5y > 0). Used inside motor_pricing_scorer to combine "
+        "(claim_count_5y > 0). Used inside pwg2_motor_scorer to combine "
         "with frequency into the technical premium."
     ),
     "demand_gbm_motor": (
@@ -67,7 +67,7 @@ DESCRIPTIONS = {
         "Features: driver demographics, prior_convictions, prior_accidents, "
         "telematics behaviour (behaviour_score, recent_speeding_events, "
         "recent_curfew_breaches, night_driving_pct), and claim history. "
-        "Used inside motor_pricing_scorer to trigger a fraud loading on the "
+        "Used inside pwg2_motor_scorer to trigger a fraud loading on the "
         "quote when probability exceeds 0.20."
     ),
 }
@@ -94,12 +94,12 @@ SCORER_DESC = (
     "intermediate value the audit log needs. Backs the live-serving demo."
 )
 try:
-    mc.update_registered_model(name=f"{fqn}.motor_pricing_scorer", description=SCORER_DESC)
-    print(f"✓ {fqn}.motor_pricing_scorer")
+    mc.update_registered_model(name=f"{fqn}.pwg2_motor_scorer", description=SCORER_DESC)
+    print(f"✓ {fqn}.pwg2_motor_scorer")
 except Exception as e:
     print(f"✗ scorer: {e}")
 
 # COMMAND ----------
 
 import json
-dbutils.notebook.exit(json.dumps({"models_described": list(DESCRIPTIONS.keys()) + ["motor_pricing_scorer"]}))
+dbutils.notebook.exit(json.dumps({"models_described": list(DESCRIPTIONS.keys()) + ["pwg2_motor_scorer"]}))

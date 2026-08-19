@@ -17,8 +17,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",   "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",    "pricing_upt")
+dbutils.widgets.text("catalog_name",   "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",    "pricing_workbench_gen2")
 dbutils.widgets.text("model_family",   "freq_glm")
 dbutils.widgets.text("versions",       "")              # csv e.g. "30,31"
 dbutils.widgets.text("portfolio_size", "5000")

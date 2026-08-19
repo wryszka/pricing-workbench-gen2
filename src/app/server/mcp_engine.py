@@ -1,10 +1,10 @@
 """Engine bridge + telemetry for the agentic-distribution tools.
 
-Prices come from `motor_pricing_scorer_direct` — the plain pyfunc endpoint that
+Prices come from `pwg2_motor_scorer_direct` — the plain pyfunc endpoint that
 takes a full 28-feature vector and returns the rating breakdown. It is the same
 engine the consumer quote journey (`/quote`) prices against.
 
-Why not the route-optimized `motor_pricing_scorer`? That endpoint is a
+Why not the route-optimized `pwg2_motor_scorer`? That endpoint is a
 FeatureLookup model: you pass a `policy_id` and it hydrates the features from
 the Lakebase online store. Perfect for repricing the existing book at high QPS
 (the Live Pricing System and load tester use it for exactly that) — but an

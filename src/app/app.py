@@ -87,9 +87,9 @@ async def config():
     host = get_workspace_host()
     # Env var wins; if blank (fresh deploy where ids aren't wired), resolve by
     # the titles the create_ai_assets job uses — so the app self-configures.
-    genie_id = os.getenv("GENIE_SPACE_ID", "") or resolve_genie_space_by_title("Modelling Mart — Pricing Q&A")
-    genie_quote_id = os.getenv("GENIE_QUOTE_SPACE_ID", "") or resolve_genie_space_by_title("Commercial Quote Review")
-    mart_dashboard_id = os.getenv("MART_DASHBOARD_ID", "") or resolve_dashboard_by_title("Modelling Mart — Overview")
+    genie_id = os.getenv("GENIE_SPACE_ID", "") or resolve_genie_space_by_title("Modelling Mart — Pricing Q&A (gen2)")
+    genie_quote_id = os.getenv("GENIE_QUOTE_SPACE_ID", "") or resolve_genie_space_by_title("Commercial Quote Review (gen2)")
+    mart_dashboard_id = os.getenv("MART_DASHBOARD_ID", "") or resolve_dashboard_by_title("Modelling Mart — Overview (gen2)")
     files_base = get_bundle_files_base()
     return {
         "bundle_files_base":     files_base,

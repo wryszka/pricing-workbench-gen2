@@ -1,0 +1,34 @@
+# Pricing Workbench gen2 — pricingv2 env values (FEVM: fevm-lr-pricing-v2-aws-us).
+# Dev-loop workspace for now; runs ALONGSIDE the frozen AXA v2 deployment, so
+# everything here is gen2-namespaced (schema pricing_workbench_gen2).
+# deploy.sh copies this over app.yaml before `bundle deploy --target pricingv2`.
+command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+env:
+  - name: CATALOG_NAME
+    value: "lr_pricing_v2_aws_us_catalog"
+  - name: SCHEMA_NAME
+    value: "pricing_workbench_gen2"
+  - name: WAREHOUSE_ID
+    value: "f738fde9a1197aeb"
+  # Genie spaces + dashboard are created after the data exists. Leave blank —
+  # create_ai_assets makes these fresh each deploy and the app resolves them
+  # BY TITLE at runtime (titles suffixed " (gen2)"). Hardcoding a stale id
+  # breaks on redeploy (points at a trashed space → 403).
+  - name: GENIE_SPACE_ID
+    value: ""
+  - name: GENIE_QUOTE_SPACE_ID
+    value: ""
+  - name: MART_DASHBOARD_ID
+    value: ""
+  # Root of the deployed source tree — drives workspace links to notebooks
+  # without baking in a deployer's home path (production mode → /Workspace/Shared).
+  - name: BUNDLE_FILES_BASE
+    value: "/Workspace/Shared/.bundle/pricing-workbench-gen2/pricingv2/files/src"
+  - name: BUNDLE_NAME
+    value: "pricing-workbench-gen2"
+  - name: BUNDLE_TARGET
+    value: "pricingv2"
+  # Comma-separated emails allowed to run destructive admin actions (demo reset,
+  # sleep, AI-mode/cache) — so a random viewer can't wipe a live demo.
+  - name: ADMIN_USERS
+    value: "laurence.ryszka@databricks.com"

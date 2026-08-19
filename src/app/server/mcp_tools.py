@@ -7,7 +7,7 @@ motor pricing engine. Both surfaces sit on top of it:
   server/routes/broker.py conversational quote page (Claude drives these tools)
 
 Design rule: the LLM never invents a premium. Every price returned here comes
-from the `motor_pricing_scorer` Model Serving endpoint — the same route-optimized
+from the `pwg2_motor_scorer` Model Serving endpoint — the same route-optimized
 endpoint the Live Pricing System and the load tester hit. The engine is
 data-in / price-out; these tools only decide *what data* goes in.
 
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # The 28 features the motor models consume. Must stay in step with
 # WHATIF_FEATURES in routes/live_pricing.py and UNION_FEATURES in the scorer
-# notebook (src/07_serving/live_pricing/motor_pricing_scorer.py).
+# notebook (src/07_serving/live_pricing/pwg2_motor_scorer.py).
 MOTOR_FEATURES = [
     "annual_mileage", "at_fault_count_5y", "avg_speed_mph", "behaviour_score",
     "business_use", "claim_count_5y", "current_premium", "distinct_perils",
@@ -127,7 +127,7 @@ QUOTE_QUESTIONS: list[dict[str, Any]] = [
 QUESTION_INDEX = {q["field"]: q for q in QUOTE_QUESTIONS}
 REQUIRED_FIELDS = [q["field"] for q in QUOTE_QUESTIONS if q["required"]]
 
-# Whole-number vs continuous features. `motor_pricing_scorer_direct` is a plain
+# Whole-number vs continuous features. `pwg2_motor_scorer_direct` is a plain
 # pyfunc and tolerates floats throughout, but sending a clean 42 rather than
 # 42.0 keeps the payload honest and stays correct if a signature is ever
 # enforced on it (the route-optimized sibling does enforce one).

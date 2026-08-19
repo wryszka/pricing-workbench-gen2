@@ -22,8 +22,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",  "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",   "pricing_upt")
+dbutils.widgets.text("catalog_name",  "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",   "pricing_workbench_gen2")
 dbutils.widgets.text("model_family",  "freq_glm")
 dbutils.widgets.text("model_version", "")          # blank = latest
 dbutils.widgets.text("requested_by",  "app")
@@ -1101,7 +1101,7 @@ try:
           f"pack-baked mode. Report DETECTION, DIAGNOSIS, JUSTIFICATION, "
           f"EVIDENCE, MITIGATION, CONCLUSION in 5-8 sentences per section.")
     _resp = _rq.post(
-        f"{_host}/serving-endpoints/pricing_chat_agent/invocations",
+        f"{_host}/serving-endpoints/pwg2_chat_agent/invocations",
         headers={**_token, "Content-Type": "application/json"},
         json={"dataframe_records": [{
             "messages": [{"role": "user", "content": _q}],

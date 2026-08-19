@@ -7,7 +7,7 @@
 resources:
   jobs:
     apply_metadata:
-      name: "Apply Metadata (tables, columns, volumes, models)"
+      name: "Apply Metadata (tables, columns, volumes, models) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

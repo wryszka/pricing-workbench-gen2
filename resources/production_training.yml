@@ -4,7 +4,7 @@
 resources:
   jobs:
     production_training:
-      name: "v1 — Train production pricing models (Scene A)"
+      name: "v1 — Train production pricing models (Scene A) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

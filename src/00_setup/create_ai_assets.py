@@ -15,7 +15,7 @@
 # COMMAND ----------
 
 dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
-dbutils.widgets.text("schema_name", "pricing_workbench")
+dbutils.widgets.text("schema_name", "pricing_workbench_gen2")
 dbutils.widgets.text("warehouse_id", "")
 dbutils.widgets.text("app_service_principal_id", "")
 dbutils.widgets.text("assets_path", "")   # DAB passes ${workspace.file_path}/resources/ai_assets

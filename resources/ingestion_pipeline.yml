@@ -10,7 +10,7 @@
 resources:
   pipelines:
     silver_external_data:
-      name: "Silver — External Data Cleansing"
+      name: "Silver — External Data Cleansing (gen2)"
       catalog: ${var.catalog_name}
       target: ${var.schema_name}
       channel: CURRENT
@@ -25,7 +25,7 @@ resources:
 
   jobs:
     ingest_external_data:
-      name: "Ingest External Data → Raw → Silver"
+      name: "Ingest External Data → Raw → Silver (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

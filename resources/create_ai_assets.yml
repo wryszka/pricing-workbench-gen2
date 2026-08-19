@@ -5,7 +5,7 @@
 resources:
   jobs:
     create_ai_assets:
-      name: "Build — create Genie spaces + mart dashboard"
+      name: "Build — create Genie spaces + mart dashboard (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

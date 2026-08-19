@@ -8,8 +8,8 @@
 resources:
   apps:
     pricing_workbench:
-      name: "pricing-workbench"
-      description: "End-to-end commercial pricing workbench — data ingestion HITL, feature store, model factory, quote review, governance"
+      name: "pricing-workbench-gen2"
+      description: "Pricing Workbench gen2 — commercial pricing: ingestion HITL, feature store, model factory, quote review, governance, agents"
       source_code_path: ../src/app
 
       resources:

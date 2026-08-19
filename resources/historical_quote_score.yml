@@ -3,7 +3,7 @@
 resources:
   jobs:
     historical_quote_score:
-      name: "v1 — Historical quote score (any release)"
+      name: "v1 — Historical quote score (any release) (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

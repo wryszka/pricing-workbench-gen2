@@ -19,12 +19,12 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name",  "lr_serverless_aws_us_catalog")
-dbutils.widgets.text("schema_name",   "pricing_upt")
-dbutils.widgets.text("endpoint_name", "motor_pricing_scorer")
+dbutils.widgets.text("catalog_name",  "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",   "pricing_workbench_gen2")
+dbutils.widgets.text("endpoint_name", "pwg2_motor_scorer")
 # deploy_mode: "full" also deploys the route-optimized FeatureLookup endpoint
 # (needs the Lakebase online store — the optional live-serving tier). "direct_only"
-# deploys ONLY the scale-to-zero motor_pricing_scorer_direct endpoint, which is
+# deploys ONLY the scale-to-zero pwg2_motor_scorer_direct endpoint, which is
 # all the agentic buyer / MCP needs and requires no online store — the Core
 # default on a workspace without the live tier.
 dbutils.widgets.text("deploy_mode",   "full")
@@ -42,7 +42,7 @@ schema         = dbutils.widgets.get("schema_name")
 endpoint_name  = dbutils.widgets.get("endpoint_name")
 deploy_mode    = dbutils.widgets.get("deploy_mode").strip().lower()
 fqn            = f"{catalog}.{schema}"
-scorer_uc_name = f"{fqn}.motor_pricing_scorer"
+scorer_uc_name = f"{fqn}.pwg2_motor_scorer"
 
 import json, os, tempfile, shutil
 import pandas as pd
@@ -366,7 +366,7 @@ input_example = pd.DataFrame({"policy_id": sample_pids})
 
 # COMMAND ----------
 
-with mlflow.start_run(run_name="motor_pricing_scorer_deploy") as run:
+with mlflow.start_run(run_name="pwg2_motor_scorer_deploy") as run:
     fe.log_model(
         model                 = MotorPricingScorer(),
         artifact_path         = "scorer",
@@ -473,7 +473,7 @@ else:
 # MAGIC
 # MAGIC The same `MotorPricingScorer` class + artifacts, logged as a PLAIN
 # MAGIC pyfunc (no FeatureLookup) so it accepts a full feature vector directly.
-# MAGIC Backs a small, scale-to-zero `motor_pricing_scorer_direct` endpoint. The
+# MAGIC Backs a small, scale-to-zero `pwg2_motor_scorer_direct` endpoint. The
 # MAGIC quote form pushes the editable fields; the app composes them onto the
 # MAGIC policy's other features (pulled from the feature table) and posts the
 # MAGIC full vector here — so edits (mileage, value, age…) move the price live.
@@ -482,12 +482,12 @@ else:
 
 # COMMAND ----------
 
-direct_uc_name = f"{fqn}.motor_pricing_scorer_direct"
-direct_endpoint = "motor_pricing_scorer_direct"
+direct_uc_name = f"{fqn}.pwg2_motor_scorer_direct"
+direct_endpoint = "pwg2_motor_scorer_direct"
 _sample_features = (
     spark.table(f"{fqn}.unified_motor_table_live").select(*UNION_FEATURES).limit(1).toPandas()
 )
-with mlflow.start_run(run_name="motor_pricing_scorer_direct") as _drun:
+with mlflow.start_run(run_name="pwg2_motor_scorer_direct") as _drun:
     mlflow.pyfunc.log_model(
         artifact_path         = "scorer_direct",
         python_model          = MotorPricingScorer(),

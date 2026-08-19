@@ -52,7 +52,7 @@ FAMILIES = [
 # via the governance_agent_deploy bundle job. The agent has 3 tools it calls
 # on-demand (query_pack_index, read_pack_artefact, query_audit_log) and
 # returns a tool-use trace for the UI "Show full LLM interaction" panel.
-AGENT_ENDPOINT = "pricing_governance_agent"
+AGENT_ENDPOINT = "pwg2_governance_agent"
 # Direct FM call as fallback if the agent endpoint is unavailable (e.g.
 # during first deploy / cold start). Preserves the chat UX.
 FM_ENDPOINT = "databricks-claude-sonnet-4-6"
@@ -743,7 +743,7 @@ async def ask_governance_agent(req: AskRequest) -> dict:
 
     from server.agent_client import invoke_agent
     result = await invoke_agent(
-        endpoint_name=AGENT_ENDPOINT,   # pricing_governance_agent
+        endpoint_name=AGENT_ENDPOINT,   # pwg2_governance_agent
         question=req.question,
         custom_inputs={"pack_id": ""},  # pack-agnostic — agent picks up via tools
         timeout=300,
@@ -779,7 +779,7 @@ async def ask_governance_agent(req: AskRequest) -> dict:
 # Bias monitor — aggregate stats + agent-driven investigation
 # ---------------------------------------------------------------------------
 
-CHAT_AGENT_ENDPOINT = "pricing_chat_agent"
+CHAT_AGENT_ENDPOINT = "pwg2_chat_agent"
 _PROTECTED_ATTRS = {"director_gender", "postcode_demographic", "ethnicity_proxy", "director_age_band"}
 _FAMILY_METRIC = {
     "freq_glm":   "freq_pred",
@@ -876,7 +876,7 @@ class BiasInvestigateRequest(BaseModel):
 
 @router.post("/bias-investigate")
 async def bias_investigate(req: BiasInvestigateRequest) -> dict:
-    """Live bias investigation — dispatches to the `pricing_chat_agent`
+    """Live bias investigation — dispatches to the `pwg2_chat_agent`
     endpoint with persona=bias_investigator. The agent runs its tool-use
     loop (bias monitor + actual experience + proxy features + pack fairness
     sections) and returns a structured DETECTION / DIAGNOSIS / JUSTIFICATION
