@@ -3,7 +3,7 @@ bundle:
 
 # ---------------------------------------------------------------------------
 # gen2 line. Seeded from pricing-workbench v2 but renamed end to end so it can
-# coexist with (a) the frozen AXA v2 deployment on the pricingv2 FEVM and
+# coexist with (a) the frozen v2 client deployment on the pricingv2 FEVM and
 # (b) gen1 on dev: UC schema `pricing_workbench_gen2`, workspace-global assets
 # prefixed `pwg2_`, app `pricing-workbench-gen2`, Genie/dashboard titles
 # suffixed " (gen2)". Dev-loops on pricingv2 for now; ultimately moves to dev

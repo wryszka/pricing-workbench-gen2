@@ -1,5 +1,5 @@
 # Pricing Workbench gen2 — pricingv2 env values (FEVM: fevm-lr-pricing-v2-aws-us).
-# Dev-loop workspace for now; runs ALONGSIDE the frozen AXA v2 deployment, so
+# Dev-loop workspace for now; runs ALONGSIDE the frozen v2 client deployment, so
 # everything here is gen2-namespaced (schema pricing_workbench_gen2).
 # deploy.sh copies this over app.yaml before `bundle deploy --target pricingv2`.
 command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
