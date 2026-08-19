@@ -1,0 +1,73 @@
+# ---------------------------------------------------------------------------
+# Price-optimization constraint set — VERSIONED IN THE REPO.
+#
+# This file IS the pricing policy. The solver (src/09_optimization) reads it and
+# is bound by it; an agent cannot bypass it (the deployment gate enforces the
+# corridor server-side). Change it via pull request — the git history of this
+# file is the auditable record of how the pricing policy evolved.
+#
+# Demo beat: open this file + `git log -p` on it, live, in the room.
+# ---------------------------------------------------------------------------
+version: "v1"
+effective_from: "auto"          # resolved to the current rate-book month at solve time
+approved_by: "pricing_committee@bricksurance.com"
+narrative: >
+  Launch constraint set. Deviation corridor of +/-15% around the technical
+  (risk) price; renewals never priced above equivalent new business (UK GIPP);
+  per-segment rate-change caps; protected/proxy signals excluded from the
+  optimisation objective; monotonicity and sanity floors enforced.
+
+# --- Jurisdiction toggles ---------------------------------------------------
+# The single switch that makes the same engine legal in different regimes.
+jurisdiction:
+  name: "UK"
+  elasticity_may_contribute: true        # UK: demand may shape margin above the floor.
+                                         # Set false for US cost-based states — the
+                                         # solver then optimises within cost only.
+  gipp_renewal_rule: true                # UK GIPP: renewal price <= equivalent new-business price.
+  consumer_duty_fair_value: true         # fair-value evidence pack required before deploy.
+
+# --- Deviation corridor around the technical (risk) price -------------------
+# The optimiser shapes margin ONLY within this corridor. The risk model is the
+# floor; this bounds how far price may move from it.
+deviation_corridor:
+  lower_pct: -15.0                       # never price below 85% of technical
+  upper_pct:  15.0                       # never price above 115% of technical
+  hard: true                             # breaches are rejected, not warned
+
+# --- Renewal rule (GIPP) ----------------------------------------------------
+renewal:
+  max_vs_equivalent_new_business_pct: 0.0   # renewal <= equivalent NB price (GIPP)
+  max_year_on_year_increase_pct: 25.0       # anti-shock cap on any single renewal
+
+# --- Per-segment rate-change caps -------------------------------------------
+# How far the book may move in one optimisation cycle, per segment dimension.
+segment_caps:
+  by: "trade"                            # trade (SIC) | region
+  max_increase_pct: 10.0
+  max_decrease_pct: 12.0
+  # Optional per-segment overrides (segment_key: {max_increase_pct, max_decrease_pct})
+  overrides: {}
+
+# --- Forbidden signals ------------------------------------------------------
+# Features that must NOT influence the optimised price (directly or as a
+# demanded lever). The fairness reviewer also proxy-tests against these.
+forbidden_signals:
+  - director_gender
+  - ethnicity_proxy
+  - postcode_demographic          # demographic quintile — proxy risk
+  - director_age_band             # age proxy
+proxy_correlation_max: 0.35       # flag any rating factor correlating > this with a forbidden signal
+
+# --- Monotonicity & sanity --------------------------------------------------
+sanity:
+  price_monotone_in_risk: true    # higher technical premium -> not-lower charged premium
+  demand_monotone_in_price: true  # P(convert) must fall as price rises (enforced in the model too)
+  min_premium: 150.0              # absolute floor (matches rating engine v2.0)
+  max_premium: 250000.0
+
+# --- Objective --------------------------------------------------------------
+objective:
+  maximise: "expected_profit"     # expected_profit | expected_gwp | retention_weighted_profit
+  # expected_profit = sum over policies of P(convert|price) * (price - technical_cost)
+  retention_weight: 0.0           # >0 tilts toward volume/retention over pure margin
