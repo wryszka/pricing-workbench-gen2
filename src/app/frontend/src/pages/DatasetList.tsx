@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Database, ChevronRight, CheckCircle2, XCircle, Clock, Building2, Globe } from 'lucide-react';
+import { Database, CheckCircle2, XCircle, Clock, Building2, Globe } from 'lucide-react';
 import { api } from '../lib/api';
+import {
+  Page, PageHeader, OnThisPage, Card, Section, Pill, AgentLead, UnderTheHood, Skeleton, SectionHead,
+} from '../components/ui';
 
 export default function DatasetList() {
   const [datasets, setDatasets] = useState<any[]>([]);
@@ -17,41 +20,42 @@ export default function DatasetList() {
       .finally(() => setStatsLoading(false));
   }, []);
 
-  return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-6 flex items-baseline gap-3">
-        <h2 className="text-2xl font-bold text-gray-900">Data Ingestion</h2>
-        {statsLoading && datasets.length > 0 && (
-          <span className="text-xs text-gray-500">loading stats…</span>
-        )}
-      </div>
-      <p className="text-gray-500 -mt-5 mb-6">Every dataset that feeds pricing — the internal book (policies, claims), vendor feeds awaiting review, and real public reference data.</p>
+  const internalCount = datasets.filter(d => (d.category || 'external_vendor') === 'internal').length;
+  const externalCount = datasets.filter(d => (d.category || 'external_vendor') === 'external_vendor').length;
+  const refCount = datasets.filter(d => (d.category || 'external_vendor') === 'reference_data').length;
+  const pendingCount = datasets.filter(d => (d.category || 'external_vendor') === 'external_vendor' && d.approval?.decision === 'pending').length;
 
-      {/* Context panels */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1">Databricks features demonstrated</h4>
-          <div className="flex flex-wrap gap-1.5">
-            {["Delta Live Tables expectations", "Unity Catalog governance", "Volumes for file ingestion", "Shadow pricing simulation", "Audit trail logging"].map(f => (
-              <span key={f} className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">{f}</span>
-            ))}
-          </div>
-        </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <h4 className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">Why it matters for actuaries</h4>
-          <p className="text-xs text-amber-700">
-            Replaces manual spreadsheet comparison of data versions. Actuaries see the exact financial
-            impact of new data on their portfolio <em>before</em> it enters the rating engine — with
-            a single click to approve or reject.
-          </p>
-        </div>
-      </div>
+  return (
+    <Page>
+      <PageHeader
+        eyebrow="Bricksurance SE · Data Ingestion"
+        title="Data Ingestion"
+        subtitle="Every dataset that feeds pricing — internal book, vendor feeds awaiting review, and public reference data. Actuaries review pricing impact before approval."
+        icon={Database}
+      />
+
+      {/* Lead with the agent — Ingestion Impact explains the current state then answers follow-ups */}
+      <AgentLead
+        persona="explain"
+        title="Ingestion impact"
+        subtitle="Ask why premiums move when data changes. Your data scientist reads the pending approvals and recent uploads, then answers your questions."
+        seed="In 3 sentences: what data sources feed pricing, is anything pending review, and what's the pricing impact of the latest change?"
+        examples={[
+          'Why did premiums change after the last data update?',
+          'Which segments are most affected?',
+          'Is the new vendor data safe to approve?',
+        ]}
+      />
+
+      <OnThisPage>
+        Every data source is grouped by category: internal policies and claims need no approval; vendor feeds must be reviewed by an actuary before merging; reference data is one-shot public feeds. Inspect datasets to see the exact data changes, impact analysis, and approval history.
+      </OnThisPage>
 
       {/* Skeleton shown only when even the meta hasn't arrived yet. */}
       {datasets.length === 0 && (
-        <div className="grid gap-3 mb-6">
+        <div className="space-y-3">
           {[0, 1, 2, 3, 4].map(i => (
-            <div key={i} className="h-20 rounded-lg bg-gray-100 border border-gray-200 animate-pulse" />
+            <Skeleton key={i} className="h-20" />
           ))}
         </div>
       )}
@@ -70,20 +74,28 @@ export default function DatasetList() {
         :                              'Freely-available reference data (e.g. ONS). One-shot builds.';
 
         return (
-          <section key={cat} className="mb-6">
-            <div className="flex items-baseline justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">{heading}</h3>
-              <span className="text-xs text-gray-400">{headingHelp}</span>
-            </div>
-            <div className="grid gap-3">
+          <div key={cat}>
+            <SectionHead>{heading}</SectionHead>
+            <div className="text-xs text-mut mb-3">{headingHelp}</div>
+            <div className="space-y-2">
               {rows.map((ds) => (
                 <DatasetCard key={ds.id} ds={ds} />
               ))}
             </div>
-          </section>
+          </div>
         );
       })}
-    </div>
+
+      <UnderTheHood
+        title="Data Ingestion"
+        lines={[
+          { component: 'Lakeflow / DLT', detail: 'Bronze → silver with expectations (nulls, ranges, cardinality)' },
+          { component: 'Unity Catalog', detail: 'Lineage + HITL approval gate before silver is tagged for pricing' },
+          { component: 'Shadow pricing', detail: 'Re-rate affected policies on new vendor data before approval' },
+          { component: 'Audit trail', detail: 'Every upload, approval, rejection, and download is immutably logged' },
+        ]}
+      />
+    </Page>
   );
 }
 
@@ -120,66 +132,67 @@ function DatasetCard({ ds }: { ds: any }) {
   return (
     <Link
       to={`/dataset/${ds.id}`}
-      className="bg-white rounded-lg border border-gray-200 p-5 hover:border-blue-300 hover:shadow-md transition-all group block"
+      className="block"
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${tile.ring}`}>
-            <tile.Icon className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-              {ds.display_name}
-            </h3>
-            <p className="text-sm text-gray-500 line-clamp-2">{ds.description}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-6 shrink-0">
-          <div className="text-right min-w-[8rem]">
-            <div className="text-xs text-gray-500">Source</div>
-            <div className="text-sm font-medium truncate max-w-[12rem]">{ds.source}</div>
-          </div>
-          {isInternal || isReference ? (
-            <div className="text-right min-w-[7rem]">
-              <div className="text-xs text-gray-500">Rows</div>
-              <div className="text-sm font-medium">
-                {ds.silver_row_count == null
-                  ? <span className="inline-block w-16 h-3 rounded bg-gray-200 animate-pulse" />
-                  : Number(ds.silver_row_count).toLocaleString()}
-              </div>
+      <Card drill>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tile.ring}`}>
+              <tile.Icon className="w-5 h-5" />
             </div>
-          ) : (
-            <>
-              <div className="text-right min-w-[8rem]">
-                <div className="text-xs text-gray-500">Last ingested</div>
-                <div className="text-sm font-medium">
-                  {ds.last_ingested === undefined
-                    ? <span className="inline-block w-24 h-3 rounded bg-gray-200 animate-pulse" />
-                    : formatIngested(ds.last_ingested)}
+            <div className="min-w-0">
+              <h3 className="font-semibold text-ink">
+                {ds.display_name}
+              </h3>
+              <p className="text-[13px] text-mut line-clamp-2">{ds.description}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-6 shrink-0">
+            <div className="text-right min-w-[8rem]">
+              <div className="text-[11px] font-bold uppercase text-mut">Source</div>
+              <div className="text-[13px] font-medium truncate max-w-[12rem]">{ds.source}</div>
+            </div>
+            {isInternal || isReference ? (
+              <div className="text-right min-w-[7rem]">
+                <div className="text-[11px] font-bold uppercase text-mut">Rows</div>
+                <div className="text-[13px] font-medium">
+                  {ds.silver_row_count == null
+                    ? <span className="inline-block w-16 h-3 rounded bg-slate-200 animate-pulse" />
+                    : Number(ds.silver_row_count).toLocaleString()}
                 </div>
               </div>
-              <div className="text-right min-w-[9rem]">
-                <div className="text-xs text-gray-500">Pending / Approved</div>
-                <div className="text-sm font-medium">
-                  {ds.raw_row_count == null
-                    ? <span className="inline-block w-24 h-3 rounded bg-gray-200 animate-pulse" />
-                    : <>{Number(ds.raw_row_count).toLocaleString()} / {Number(ds.silver_row_count).toLocaleString()}</>}
+            ) : (
+              <>
+                <div className="text-right min-w-[8rem]">
+                  <div className="text-[11px] font-bold uppercase text-mut">Last Ingested</div>
+                  <div className="text-[13px] font-medium">
+                    {ds.last_ingested === undefined
+                      ? <span className="inline-block w-24 h-3 rounded bg-slate-200 animate-pulse" />
+                      : formatIngested(ds.last_ingested)}
+                  </div>
                 </div>
-              </div>
-              <div className="text-right min-w-[5rem]">
-                <div className="text-xs text-gray-500">Rows blocked</div>
-                <div className={`text-sm font-medium ${ds.rows_dropped_by_dq && ds.rows_dropped_by_dq > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-                  {ds.rows_dropped_by_dq == null
-                    ? <span className="inline-block w-8 h-3 rounded bg-gray-200 animate-pulse" />
-                    : ds.rows_dropped_by_dq}
+                <div className="text-right min-w-[9rem]">
+                  <div className="text-[11px] font-bold uppercase text-mut">Pending / Approved</div>
+                  <div className="text-[13px] font-medium">
+                    {ds.raw_row_count == null
+                      ? <span className="inline-block w-24 h-3 rounded bg-slate-200 animate-pulse" />
+                      : <>{Number(ds.raw_row_count).toLocaleString()} / {Number(ds.silver_row_count).toLocaleString()}</>}
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
-          <StatusBadge dataset={ds} />
-          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-500 shrink-0" />
+                <div className="text-right min-w-[5rem]">
+                  <div className="text-[11px] font-bold uppercase text-mut">Blocked</div>
+                  <div className={`text-[13px] font-medium ${ds.rows_dropped_by_dq && ds.rows_dropped_by_dq > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {ds.rows_dropped_by_dq == null
+                      ? <span className="inline-block w-8 h-3 rounded bg-slate-200 animate-pulse" />
+                      : ds.rows_dropped_by_dq}
+                  </div>
+                </div>
+              </>
+            )}
+            <StatusBadge dataset={ds} />
+          </div>
         </div>
-      </div>
+      </Card>
     </Link>
   );
 }
@@ -188,38 +201,18 @@ function StatusBadge({ dataset }: { dataset: any }) {
   const cat = dataset.category || 'external_vendor';
   // Internal and reference datasets skip approval entirely.
   if (cat === 'internal') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-        <Building2 className="w-3.5 h-3.5" /> Internal source
-      </span>
-    );
+    return <Pill tone="slate"><Building2 className="w-3 h-3" /> Internal</Pill>;
   }
   if (cat === 'reference_data') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
-        <Globe className="w-3.5 h-3.5" /> Reference
-      </span>
-    );
+    return <Pill tone="blue"><Globe className="w-3 h-3" /> Reference</Pill>;
   }
   // External vendor feed — real approval workflow
   const status = dataset.approval?.decision || 'pending';
   if (status === 'approved') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
-        <CheckCircle2 className="w-3.5 h-3.5" /> Approved
-      </span>
-    );
+    return <Pill tone="green"><CheckCircle2 className="w-3 h-3" /> Approved</Pill>;
   }
   if (status === 'rejected') {
-    return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-        <XCircle className="w-3.5 h-3.5" /> Rejected
-      </span>
-    );
+    return <Pill tone="red"><XCircle className="w-3 h-3" /> Rejected</Pill>;
   }
-  return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-      <Clock className="w-3.5 h-3.5" /> Pending review
-    </span>
-  );
+  return <Pill tone="amber"><Clock className="w-3 h-3" /> Pending</Pill>;
 }

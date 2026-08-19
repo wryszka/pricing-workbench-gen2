@@ -6,6 +6,10 @@ import {
   PieChart, Zap, Clock, Wand2, Database, ArrowRight, FileText,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import {
+  Page, PageHeader, OnThisPage, Card, CardTitle, Section, Metric, Pill,
+  UnderTheHood, Skeleton, Loading, Grid, AskBox, SectionHead,
+} from '../components/ui';
 
 type Pack = {
   pack_id: string;
@@ -28,52 +32,52 @@ export default function Governance() {
   const [tab, setTab] = useState<TopTab>('monitor');
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Shield className="w-6 h-6 text-amber-600" /> Model Governance
-        </h2>
-        <p className="text-gray-500 mt-1">
-          Defend production models to regulators and auditors. Three lenses: continuous monitors,
-          targeted search across packs and policies, and a free-form agent.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Bricksurance SE · Model Governance"
+        title="Defend every model"
+        subtitle="Continuous monitoring, pack-based search, and grounded agent for regulator readiness. Every decision is auditable."
+        icon={Shield}
+      />
 
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            'Unity Catalog lineage',
-            'MLflow model registry',
-            'Governance pack generation',
-            'Fairness & risk register',
-            'Agent-assisted review · Claude Sonnet 4.6 (Foundation Model API)',
-            'Immutable audit trail',
-          ].map(f => (
-            <span key={f} className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-100 text-amber-800">{f}</span>
-          ))}
+      <OnThisPage>
+        Scan for fairness gaps and pricing adequacy in real time · search governance packs by model / date / policy
+        · ask the agent freely across all packs and audit history · review what data is collected.
+      </OnThisPage>
+
+      <div className="space-y-4">
+        <div className="bg-white border border-line rounded-xl p-4 inline-flex gap-1.5">
+          <TopTabButton active={tab === 'monitor'} onClick={() => setTab('monitor')}
+                        icon={<Activity className="w-3.5 h-3.5" />} label="Monitor"
+                        sub="bias · drift · adequacy" />
+          <TopTabButton active={tab === 'search'} onClick={() => setTab('search')}
+                        icon={<Search className="w-3.5 h-3.5" />} label="Search"
+                        sub="by model · date · policy" />
+          <TopTabButton active={tab === 'agent'} onClick={() => setTab('agent')}
+                        icon={<Bot className="w-3.5 h-3.5" />} label="Agent"
+                        sub="free-form Q&A" />
+          <TopTabButton active={tab === 'data'} onClick={() => setTab('data')}
+                        icon={<Database className="w-3.5 h-3.5" />} label="What's collected"
+                        sub="data inputs · how used" />
         </div>
+
+        {tab === 'monitor' && <MonitorTab />}
+        {tab === 'search'  && <SearchTab />}
+        {tab === 'agent'   && <GovernanceAgentChat />}
+        {tab === 'data'    && <DataInfoTab />}
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 p-1 mb-6 inline-flex gap-1">
-        <TopTabButton active={tab === 'monitor'} onClick={() => setTab('monitor')}
-                      icon={<Activity className="w-3.5 h-3.5" />} label="Monitor"
-                      sub="bias · drift · adequacy" />
-        <TopTabButton active={tab === 'search'} onClick={() => setTab('search')}
-                      icon={<Search className="w-3.5 h-3.5" />} label="Search"
-                      sub="by model · date · policy" />
-        <TopTabButton active={tab === 'agent'} onClick={() => setTab('agent')}
-                      icon={<Bot className="w-3.5 h-3.5" />} label="Agent"
-                      sub="free-form Q&A" />
-        <TopTabButton active={tab === 'data'} onClick={() => setTab('data')}
-                      icon={<Database className="w-3.5 h-3.5" />} label="What's collected"
-                      sub="data inputs · how used" />
-      </div>
-
-      {tab === 'monitor' && <MonitorTab />}
-      {tab === 'search'  && <SearchTab />}
-      {tab === 'agent'   && <GovernanceAgentChat />}
-      {tab === 'data'    && <DataInfoTab />}
-    </div>
+      <UnderTheHood
+        title="Model Governance"
+        lines={[
+          { component: 'governance_packs_index', detail: 'UC volume holding generated packs, searchable by model family / date / policy id' },
+          { component: '/api/governance', detail: 'Governance agent chat endpoint (Claude Sonnet 4.6 via Foundation Model API)' },
+          { component: '/api/pwg2_governance_agent', detail: 'Pack lifecycle + approval workflow agent' },
+          { component: 'audit_log', detail: 'Immutable event log of all governance actions + agent traces' },
+          { component: 'Mosaic AI Agent Framework', detail: 'Grounded LLM agents for bias investigation, adequacy analysis, pack Q&A' },
+        ]}
+      />
+    </Page>
   );
 }
 
@@ -81,13 +85,13 @@ function TopTabButton({ active, onClick, icon, label, sub }:
   { active: boolean; onClick: () => void; icon: React.ReactNode; label: string; sub: string }) {
   return (
     <button onClick={onClick}
-            className={`px-3.5 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
-              active ? 'bg-amber-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+            className={`px-3.5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+              active ? 'bg-brand text-white' : 'text-ink hover:bg-slate-50'
             }`}>
       {icon}
       <span className="flex flex-col items-start leading-tight">
         <span>{label}</span>
-        <span className={`text-[10px] ${active ? 'text-amber-100' : 'text-gray-500'}`}>{sub}</span>
+        <span className={`text-[10px] ${active ? 'text-white/80' : 'text-mut'}`}>{sub}</span>
       </span>
     </button>
   );
@@ -1560,90 +1564,84 @@ function GovernanceAgentChat() {
   };
 
   return (
-    <div className="mb-6 rounded-xl border border-gray-200 bg-white overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-white flex items-center gap-3">
-        <Bot className="w-5 h-5 text-amber-700" />
-        <div>
-          <div className="font-semibold text-gray-900">Ask the governance agent</div>
-          <div className="text-xs text-gray-500">
-            Free-form Q&A across every pack, audit event, and model artefact.
-            Tools: <code>query_pack_index</code> · <code>read_pack_artefact</code> · <code>query_audit_log</code>.
-          </div>
+    <Card>
+      <div className="flex items-center gap-2 mb-3">
+        <Bot className="w-4 h-4 text-brand" />
+        <CardTitle>Ask the governance agent</CardTitle>
+      </div>
+      <p className="text-[12.5px] text-mut mb-3">Free-form Q&A across every pack, audit event, and model artefact. Tools: <code className="bg-slate-100 px-1 rounded text-[11px]">query_pack_index</code> · <code className="bg-slate-100 px-1 rounded text-[11px]">read_pack_artefact</code> · <code className="bg-slate-100 px-1 rounded text-[11px]">query_audit_log</code>.</p>
+
+      <div className="border border-line rounded-lg overflow-hidden flex flex-col" style={{ height: '480px' }}>
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50">
+          {turns.length === 0 && !busy && (
+            <div>
+              <div className="text-[12.5px] text-mut mb-2">Try one of these, or ask anything governance-related:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {examples.map((ex, i) => (
+                  <button key={i}
+                          onClick={() => ask(ex)}
+                          className="text-[11px] px-2 py-1 rounded-full border border-brand/20 bg-white hover:bg-brand/5 text-ink">
+                    {ex}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {turns.map((t, i) => (
+            t.role === 'user' ? (
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[80%] rounded-lg bg-brand text-white text-sm px-3 py-2 whitespace-pre-wrap">
+                  {t.text}
+                </div>
+              </div>
+            ) : (
+              <div key={i} className="flex flex-col">
+                {t.trace && t.trace.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {t.trace.map((step: any, j: number) => (
+                      <span key={j}
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-line bg-white text-ink">
+                        {step.tool}{String(step.result_summary || '').startsWith('error') ? ' ⚠' : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="max-w-[92%] rounded-lg bg-white border border-line text-sm px-3 py-2 whitespace-pre-wrap">
+                  {t.text}
+                </div>
+                {t.usage?.total_tokens && (
+                  <div className="text-[10px] text-mut mt-0.5">
+                    {t.trace?.length || 0} tool calls · {t.usage.total_tokens.toLocaleString()} tokens · {t.model}
+                  </div>
+                )}
+              </div>
+            )
+          ))}
+          {busy && (
+            <div className="flex items-center gap-2 text-[12.5px] text-mut italic">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Agent is calling tools…
+            </div>
+          )}
         </div>
-      </div>
 
-      <div className="px-5 py-4 max-h-[520px] overflow-y-auto space-y-3">
-        {turns.length === 0 && !busy && (
-          <div>
-            <div className="text-xs text-gray-500 mb-2">Try one of these, or ask anything governance-related:</div>
-            <div className="flex flex-wrap gap-1.5">
-              {examples.map((ex, i) => (
-                <button key={i}
-                        onClick={() => ask(ex)}
-                        className="text-[11px] px-2 py-1 rounded-full border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900">
-                  {ex}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {turns.map((t, i) => (
-          t.role === 'user' ? (
-            <div key={i} className="flex justify-end">
-              <div className="max-w-[80%] rounded-lg bg-blue-600 text-white text-sm px-3 py-2 whitespace-pre-wrap">
-                {t.text}
-              </div>
-            </div>
-          ) : (
-            <div key={i} className="flex flex-col">
-              {t.trace && t.trace.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-1.5">
-                  {t.trace.map((step: any, j: number) => (
-                    <span key={j}
-                          className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800">
-                      {step.tool}{String(step.result_summary || '').startsWith('error') ? ' ⚠' : ''}
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="max-w-[92%] rounded-lg bg-gray-50 border border-gray-200 text-sm px-3 py-2 whitespace-pre-wrap">
-                {t.text}
-              </div>
-              {t.usage?.total_tokens && (
-                <div className="text-[10px] text-gray-500 mt-0.5">
-                  {t.trace?.length || 0} tool calls · {t.usage.total_tokens.toLocaleString()} tokens · {t.model}
-                </div>
-              )}
-            </div>
-          )
-        ))}
-        {busy && (
-          <div className="flex items-center gap-2 text-xs text-gray-500 italic">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Agent is calling tools…
-          </div>
-        )}
-      </div>
-
-      <div className="px-5 py-3 border-t border-gray-200 bg-gray-50">
-        <div className="flex gap-2">
+        <div className="border-t border-line bg-white p-2 flex gap-2">
           <input
             value={q}
             onChange={e => setQ(e.target.value)}
             placeholder="Ask anything about packs, audit history, lineage, approvals…"
-            className="flex-1 px-3 py-1.5 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="flex-1 px-3 py-1.5 rounded-lg border border-line text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={busy}
             onKeyDown={e => { if (e.key === 'Enter') ask(q); }}
           />
           <button
             onClick={() => ask(q)}
             disabled={busy || !q.trim()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {busy ? 'Thinking…' : 'Ask'}
           </button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 

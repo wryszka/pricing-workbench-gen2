@@ -6,6 +6,10 @@ import {
   Receipt, Radio, Gauge, Network,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import {
+  Page, PageHeader, OnThisPage, Card, CardTitle, Section, Metric, Pill, AgentLead,
+  UnderTheHood, Grid, SectionHead, Btn,
+} from '../components/ui';
 
 type Family = {
   family: string;
@@ -26,13 +30,33 @@ export default function ModelDeployment() {
   const [tab, setTab] = useState<Tab>('production');
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-gray-900">Model Deployment</h2>
-        <p className="text-gray-500 mt-1">Production champions and the live pricing system.</p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Bricksurance SE · Model Deployment"
+        title="Model Deployment"
+        subtitle="Champions, rollback, and endpoint health monitoring"
+        icon={Rocket}
+      />
 
-      <div className="flex gap-1 border-b border-gray-200 mb-6">
+      <AgentLead
+        persona="drift_monitor"
+        title="Monitoring"
+        subtitle="Watches deployed champions for calibration drift."
+        seed="Are the deployed champions healthy — any calibration drift I should act on, and what would you recommend?"
+        examples={[
+          'Is the frequency model drifting?',
+          'How fresh is the scoring?',
+          'Draft a committee note on any drift',
+        ]}
+      />
+
+      <OnThisPage>
+        The live champion versions across all four model families, their deployment status, and governance pack
+        linkage. Production rollback is one-click — swaps the champion alias back to the previous version with an
+        audit-logged justification. Live endpoint metrics stream below.
+      </OnThisPage>
+
+      <div className="flex gap-1 border-b border-line mb-5">
         <TabButton active={tab === 'production'} onClick={() => setTab('production')}
                    icon={<ShieldCheck className="w-4 h-4" />} label="Production Models" />
         <TabButton active={tab === 'live'} onClick={() => setTab('live')}
@@ -41,7 +65,17 @@ export default function ModelDeployment() {
 
       {tab === 'production' && <ProductionModels />}
       {tab === 'live'       && <LivePricing />}
-    </div>
+
+      <UnderTheHood
+        title="Deployment architecture"
+        lines={[
+          { component: 'UC model aliases', detail: 'champion, previous_champion — point to versioned MLflow models' },
+          { component: 'Mosaic AI endpoints', detail: 'pwg2_freq_scorer, sev, demand, fraud — four independent serving endpoints' },
+          { component: 'Governance packs', detail: 'PDF generated on promotion, stored in UC Volumes, linked to champion version' },
+          { component: 'Rollback mechanism', detail: 'Swaps alias + demotes current → previous_champion; audit-logged with justification' },
+        ]}
+      />
+    </Page>
   );
 }
 
@@ -49,10 +83,10 @@ function TabButton({ active, onClick, icon, label }:
   { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
   return (
     <button onClick={onClick}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg inline-flex items-center gap-2 -mb-px border-b-2 transition ${
+            className={`px-4 py-2 text-sm font-medium inline-flex items-center gap-2 border-b-2 transition ${
               active
-                ? 'border-blue-600 text-blue-700 bg-white'
-                : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+                ? 'border-brand text-brand'
+                : 'border-transparent text-mut hover:text-ink'
             }`}>
       {icon} {label}
     </button>
@@ -95,134 +129,122 @@ function ProductionModels() {
   };
 
   return (
-    <div>
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-        <h3 className="font-semibold text-blue-800 mb-1 text-sm">Production Models</h3>
-        <p className="text-sm text-blue-700">
-          Current champions across all pricing models. Promotion from the <em>Promote</em> tab
-          flips the <code className="bg-blue-100 px-1 rounded text-[11px]">champion</code> alias and
-          demotes the prior version to <code className="bg-blue-100 px-1 rounded text-[11px]">previous_champion</code>.
-          Rollback swaps them back.
+    <div className="space-y-5">
+      <Card className="border-[#ddd6fe] bg-[#faf5ff]">
+        <CardTitle>Production champions</CardTitle>
+        <p className="text-[13px] text-ink leading-relaxed mb-3">
+          Current champions across all pricing models. Promotion flips the <code className="bg-white border border-line px-1 rounded text-[10px] font-mono">champion</code> alias and demotes the prior version to <code className="bg-white border border-line px-1 rounded text-[10px] font-mono">previous_champion</code>.
+          Rollback swaps them back with an audit-logged justification.
         </p>
-        <div className="flex flex-wrap gap-1.5 mt-2.5">
-          {['UC model registry', 'Alias-based versioning', 'One-click rollback',
-            'Audit-logged promotions', 'Governance pack linkage'].map(f => (
-            <span key={f} className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-700">{f}</span>
+        <div className="flex flex-wrap gap-1.5">
+          {['UC model aliases', 'One-click rollback', 'Audit-logged', 'Governance packs'].map(f => (
+            <Pill key={f} tone="blue">{f}</Pill>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-4 py-2.5 bg-gray-50 border-b flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-800">Current production champions</h3>
-          <span className="text-xs text-gray-500">{families.length} model families</span>
+      <Card>
+        <div className="flex items-center justify-between mb-3">
+          <CardTitle>Current champions</CardTitle>
+          <span className="text-[11px] text-mut">{families.length} families</span>
         </div>
         {loading ? (
-          <div className="py-10 text-center text-sm text-gray-500">
-            <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> Loading champions…
-          </div>
+          <div className="py-8 text-center text-mut text-sm"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading…</div>
         ) : families.length === 0 ? (
-          <div className="py-10 text-center text-sm text-gray-500 italic">
-            No production models registered yet.
-          </div>
+          <div className="py-8 text-center text-mut text-sm italic">No production models registered yet.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-500 border-b bg-gray-50">
-                <th className="text-left px-3 py-2 font-medium w-4"></th>
-                <th className="text-left px-3 py-2 font-medium">Model</th>
-                <th className="text-left px-3 py-2 font-medium">Champion</th>
-                <th className="text-left px-3 py-2 font-medium">Promoted</th>
-                <th className="text-left px-3 py-2 font-medium">By</th>
-                <th className="text-left px-3 py-2 font-medium">Governance pack</th>
-                <th className="text-left px-3 py-2 font-medium">Previous</th>
-                <th className="text-right px-3 py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {families.map(f => {
-                const isOpen = openRow === f.family;
-                const canRollback = Boolean(f.previous_champion);
-                return (
-                  <>
-                    <tr key={`${f.family}-row`}
-                        className={`border-b last:border-0 hover:bg-gray-50 ${isOpen ? 'bg-blue-50' : ''}`}>
-                      <td className="px-3 py-2">
-                        <button onClick={() => toggleRow(f.family)} className="text-gray-500 hover:text-gray-700">
-                          {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="font-medium text-gray-900">{f.label}</div>
-                        <div className="text-[10px] text-gray-500 font-mono">{f.uc_name.split('.').slice(-1)[0]}</div>
-                      </td>
-                      <td className="px-3 py-2">
-                        {f.champion ? (
-                          <span className="font-mono text-xs">
-                            v{f.champion.version}
-                            {!f.champion_is_alias && (
-                              <span title="Alias not yet set — showing latest version"
-                                    className="ml-1 text-[9px] text-amber-700 bg-amber-100 px-1 rounded">
-                                latest
-                              </span>
-                            )}
-                          </span>
-                        ) : <span className="text-gray-400">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-600">
-                        {formatDate(f.champion?.created_at)}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-600">
-                        {(f.champion?.created_by || '').split('@')[0] || '—'}
-                      </td>
-                      <td className="px-3 py-2">
-                        {f.latest_pack ? (
-                          <a href={f.latest_pack.download_url} target="_blank" rel="noopener noreferrer"
-                             className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
-                            <FileCheck2 className="w-3 h-3" />
-                            {formatDate(f.latest_pack.generated_at)}
-                          </a>
-                        ) : (
-                          <span className="text-[11px] text-amber-700 inline-flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" /> No pack yet
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-gray-600">
-                        {f.previous_champion ? `v${f.previous_champion.version}` : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <button onClick={() => setRollbackFor(f)}
-                                disabled={!canRollback}
-                                title={canRollback ? 'Swap champion back to previous version' : 'No previous champion on record'}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium ${
-                                  canRollback
-                                    ? 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'
-                                    : 'bg-gray-50 text-gray-400 border border-gray-200 cursor-not-allowed'
-                                }`}>
-                          <Undo2 className="w-3 h-3" /> Rollback
-                        </button>
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr key={`${f.family}-det`} className="border-b bg-blue-50/30">
-                        <td colSpan={8} className="px-4 py-3">
-                          <RowDetail family={f} events={history[f.family] || null} />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[11px] text-mut uppercase tracking-[0.04em] border-b">
+                  <th className="text-left px-3 py-2 font-semibold w-4"></th>
+                  <th className="text-left px-3 py-2 font-semibold">Model</th>
+                  <th className="text-left px-3 py-2 font-semibold">Champion</th>
+                  <th className="text-left px-3 py-2 font-semibold">Promoted</th>
+                  <th className="text-left px-3 py-2 font-semibold">By</th>
+                  <th className="text-left px-3 py-2 font-semibold">Pack</th>
+                  <th className="text-left px-3 py-2 font-semibold">Previous</th>
+                  <th className="text-right px-3 py-2 font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {families.map(f => {
+                  const isOpen = openRow === f.family;
+                  const canRollback = Boolean(f.previous_champion);
+                  return (
+                    <>
+                      <tr key={`${f.family}-row`}
+                          className={`border-b last:border-0 hover:bg-slate-50 text-sm ${isOpen ? 'bg-slate-50' : ''}`}>
+                        <td className="px-3 py-2">
+                          <button onClick={() => toggleRow(f.family)} className="text-mut hover:text-ink">
+                            {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="font-medium text-ink">{f.label}</div>
+                          <div className="text-[10px] text-mut font-mono">{f.uc_name.split('.').slice(-1)[0]}</div>
+                        </td>
+                        <td className="px-3 py-2">
+                          {f.champion ? (
+                            <span className="font-mono text-xs text-ink">
+                              v{f.champion.version}
+                              {!f.champion_is_alias && (
+                                <Pill tone="amber" className="ml-1 inline-flex">latest</Pill>
+                              )}
+                            </span>
+                          ) : <span className="text-mut">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-mut">
+                          {formatDate(f.champion?.created_at)}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-mut">
+                          {(f.champion?.created_by || '').split('@')[0] || '—'}
+                        </td>
+                        <td className="px-3 py-2">
+                          {f.latest_pack ? (
+                            <a href={f.latest_pack.download_url} target="_blank" rel="noopener noreferrer"
+                               className="inline-flex items-center gap-1 text-xs text-brand hover:text-blue-700">
+                              <FileCheck2 className="w-3 h-3" />
+                              {formatDate(f.latest_pack.generated_at)}
+                            </a>
+                          ) : (
+                            <span className="text-[11px] text-mut inline-flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> —
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-mut">
+                          {f.previous_champion ? `v${f.previous_champion.version}` : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Btn tone={canRollback ? 'bad' : 'ghost'}
+                               onClick={() => setRollbackFor(f)}
+                               disabled={!canRollback}
+                               className="text-[11px]">
+                            <Undo2 className="w-3 h-3" /> Rollback
+                          </Btn>
                         </td>
                       </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
+                      {isOpen && (
+                        <tr key={`${f.family}-det`} className="border-b bg-slate-50/50">
+                          <td colSpan={8} className="px-4 py-3">
+                            <RowDetail family={f} events={history[f.family] || null} />
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </Card>
 
-      {/* Serving SLO tiles — what the rating engine sees at quote time */}
+      {/* Serving SLO tiles */}
       <ServingSLOs />
 
-      {/* Live endpoint metrics — placeholder stream, simulated client-side */}
+      {/* Live endpoint metrics */}
       {families.length > 0 && <LiveEndpointMetrics families={families} />}
 
       {rollbackFor && (
@@ -235,7 +257,7 @@ function ProductionModels() {
 
       {toast && (
         <div onClick={() => setToast(null)}
-             className="fixed bottom-4 right-4 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg z-50 cursor-pointer">
+             className="fixed bottom-4 right-4 bg-ink text-white text-sm px-4 py-2 rounded-lg shadow-lg z-50 cursor-pointer">
           {toast}
         </div>
       )}
@@ -245,62 +267,62 @@ function ProductionModels() {
 
 function RowDetail({ family, events }: { family: Family; events: any[] | null }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div className="bg-white border border-gray-200 rounded p-3">
-        <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Champion</h4>
+    <Grid cols={3}>
+      <Card>
+        <CardTitle>Champion</CardTitle>
         {family.champion ? (
-          <div className="text-xs space-y-0.5">
-            <div><span className="text-gray-500">Version:</span> <span className="font-mono">v{family.champion.version}</span></div>
-            <div><span className="text-gray-500">Run:</span> <span className="font-mono text-[10px] break-all">{family.champion.run_id}</span></div>
-            <div><span className="text-gray-500">Status:</span> {family.champion.status}</div>
-            <div><span className="text-gray-500">Trained by:</span> {family.champion.created_by}</div>
-            <div><span className="text-gray-500">Trained at:</span> {formatDate(family.champion.created_at)}</div>
+          <div className="text-[12px] space-y-0.5">
+            <div><span className="text-mut">Version:</span> <span className="font-mono text-ink">v{family.champion.version}</span></div>
+            <div><span className="text-mut">Run:</span> <span className="font-mono text-[10px] break-all text-ink">{family.champion.run_id}</span></div>
+            <div><span className="text-mut">Status:</span> <span className="text-ink">{family.champion.status}</span></div>
+            <div><span className="text-mut">Trained by:</span> <span className="text-ink">{family.champion.created_by}</span></div>
+            <div><span className="text-mut">Trained at:</span> <span className="text-ink">{formatDate(family.champion.created_at)}</span></div>
           </div>
-        ) : <div className="text-xs text-gray-500 italic">No champion assigned.</div>}
+        ) : <div className="text-xs text-mut italic">No champion assigned.</div>}
         <a href={family.catalog_url} target="_blank" rel="noopener noreferrer"
-           className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-2">
+           className="inline-flex items-center gap-1 text-xs text-brand hover:underline mt-2">
           Open in Catalog <ExternalLink className="w-3 h-3" />
         </a>
-      </div>
+      </Card>
 
-      <div className="bg-white border border-gray-200 rounded p-3">
-        <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Governance pack</h4>
+      <Card>
+        <CardTitle>Governance pack</CardTitle>
         {family.latest_pack ? (
-          <div className="text-xs space-y-0.5">
-            <div><span className="text-gray-500">Pack ID:</span> <span className="font-mono text-[10px]">{family.latest_pack.pack_id}</span></div>
-            <div><span className="text-gray-500">Generated:</span> {formatDate(family.latest_pack.generated_at)}</div>
-            <div><span className="text-gray-500">By:</span> {family.latest_pack.generated_by}</div>
+          <div className="text-[12px] space-y-0.5">
+            <div><span className="text-mut">Pack ID:</span> <span className="font-mono text-[10px] text-ink">{family.latest_pack.pack_id}</span></div>
+            <div><span className="text-mut">Generated:</span> <span className="text-ink">{formatDate(family.latest_pack.generated_at)}</span></div>
+            <div><span className="text-mut">By:</span> <span className="text-ink">{family.latest_pack.generated_by}</span></div>
             <a href={family.latest_pack.download_url} target="_blank" rel="noopener noreferrer"
-               className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 mt-1">
+               className="inline-flex items-center gap-1 text-brand hover:underline mt-1">
               <FileCheck2 className="w-3 h-3" /> Download PDF
             </a>
           </div>
-        ) : <div className="text-xs text-gray-500 italic">No pack generated for this family yet.</div>}
-      </div>
+        ) : <div className="text-xs text-mut italic">No pack yet.</div>}
+      </Card>
 
-      <div className="bg-white border border-gray-200 rounded p-3">
-        <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">Approval history</h4>
+      <Card>
+        <CardTitle>Approval history</CardTitle>
         {events === null ? (
-          <div className="text-xs text-gray-500"><Loader2 className="w-3 h-3 inline animate-spin mr-1" /> Loading…</div>
+          <div className="text-xs text-mut"><Loader2 className="w-3 h-3 inline animate-spin mr-1" /> Loading…</div>
         ) : events.length === 0 ? (
-          <div className="text-xs text-gray-500 italic">No events recorded.</div>
+          <div className="text-xs text-mut italic">No events.</div>
         ) : (
           <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
             {events.map((e, i) => (
               <li key={i} className="flex items-start gap-2">
-                <span className={`mt-0.5 text-[10px] px-1 rounded font-medium ${eventColor(e.event_type)}`}>
+                <Pill tone={eventTone(e.event_type)} className="text-[10px]">
                   {eventShortLabel(e.event_type)}
-                </span>
-                <span className="text-gray-700">
+                </Pill>
+                <span className="text-ink">
                   v{e.version || '—'} · {formatDate(e.timestamp)}
-                  <span className="text-gray-500"> · {(e.user || '').split('@')[0]}</span>
+                  <span className="text-mut"> · {(e.user || '').split('@')[0]}</span>
                 </span>
               </li>
             ))}
           </ul>
         )}
-      </div>
-    </div>
+      </Card>
+    </Grid>
   );
 }
 
@@ -328,7 +350,6 @@ function LiveEndpointMetrics({ families }: { families: Family[] }) {
   }, []);
 
   useEffect(() => {
-    // advance each series one step
     setHistory(cur => {
       const next: Record<string, number[]> = { ...cur };
       for (const f of families) {
@@ -344,7 +365,6 @@ function LiveEndpointMetrics({ families }: { families: Family[] }) {
     });
   }, [tick]);
 
-  // Roll-up stats across all champions.
   const allQps = families.reduce((acc, f) => {
     const s = history[f.family] || [];
     return acc + (s[s.length - 1] ?? 0);
@@ -356,67 +376,46 @@ function LiveEndpointMetrics({ families }: { families: Family[] }) {
   const uptime = 99.97 + 0.02 * Math.cos(tick / 9);
 
   return (
-    <section className="bg-white border border-gray-200 rounded-lg mt-4 overflow-hidden">
-      <div className="px-4 py-2.5 bg-gray-50 border-b flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-          <Zap className="w-4 h-4 text-violet-600" /> Live endpoint metrics
-        </h3>
-        <div className="text-[11px] text-gray-500 inline-flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          Streaming · updated every 2s
-          <span className="ml-2 text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-medium">
-            demo stream
-          </span>
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <CardTitle>Live endpoint metrics</CardTitle>
+        <div className="text-[11px] text-mut inline-flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Updated every 2s
+          <Pill tone="amber" className="ml-1">demo</Pill>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 border-b">
-        <MetricTile label="Quotes / sec (all models)" value={Math.round(allQps).toLocaleString()}
-                    subtext="request rate summed across champions" tone="blue" />
-        <MetricTile label="Latency p50" value={`${p50.toFixed(0)} ms`} subtext="median end-to-end" tone="emerald" />
-        <MetricTile label="Latency p95" value={`${p95.toFixed(0)} ms`}
-                    subtext={p95 < 400 ? "within SLA" : "approaching SLA"}
-                    tone={p95 < 400 ? "emerald" : "amber"} />
-        <MetricTile label="Latency p99" value={`${p99.toFixed(0)} ms`}
-                    subtext={p99 < 500 ? "within SLA" : "breaching 500ms"}
-                    tone={p99 < 500 ? "emerald" : "red"} />
-        <MetricTile label="Error rate" value={`${errRate.toFixed(2)}%`}
-                    subtext={`uptime ${uptime.toFixed(2)}%`}
-                    tone={errRate > 0.5 ? "red" : "emerald"} />
-      </div>
+      <Grid cols={5} className="mb-3 pb-3 border-b">
+        <Metric label="QPS (all)" value={Math.round(allQps).toLocaleString()} sub="request rate" tone="blue" />
+        <Metric label="Latency p50" value={`${p50.toFixed(0)} ms`} sub="median" tone="green" />
+        <Metric label="Latency p95" value={`${p95.toFixed(0)} ms`} sub={p95 < 400 ? "within SLA" : "approaching SLA"} tone={p95 < 400 ? "green" : "amber"} />
+        <Metric label="Latency p99" value={`${p99.toFixed(0)} ms`} sub={p99 < 500 ? "within SLA" : "breaching"} tone={p99 < 500 ? "green" : "red"} />
+        <Metric label="Error rate" value={`${errRate.toFixed(2)}%`} sub={`uptime ${uptime.toFixed(2)}%`} tone={errRate > 0.5 ? "red" : "green"} />
+      </Grid>
 
-      <div className="px-4 py-3">
-        <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
-          Per-model throughput (last 2 min)
-        </h4>
-        <div className="space-y-1.5">
-          {families.map(f => {
-            const s = history[f.family] || [];
-            const current = s[s.length - 1] ?? 0;
-            return (
-              <div key={f.family} className="flex items-center gap-3 text-xs">
-                <div className="w-32 shrink-0 text-gray-800 font-medium">{f.label}</div>
-                <Sparkline values={s} height={26} className="flex-1" />
-                <div className="w-24 text-right text-gray-900 font-mono">{Math.round(current)} q/s</div>
-                <div className="w-20 text-right text-gray-500 font-mono">
-                  {(pickLatency(0.5, tick + f.family.length) + 20).toFixed(0)} ms
-                </div>
+      <SectionHead>Per-model throughput (last 2 min)</SectionHead>
+      <div className="space-y-1.5 mb-3">
+        {families.map(f => {
+          const s = history[f.family] || [];
+          const current = s[s.length - 1] ?? 0;
+          return (
+            <div key={f.family} className="flex items-center gap-3 text-xs">
+              <div className="w-32 shrink-0 text-ink font-medium">{f.label}</div>
+              <Sparkline values={s} height={26} className="flex-1" />
+              <div className="w-24 text-right text-ink font-mono">{Math.round(current)} q/s</div>
+              <div className="w-20 text-right text-mut font-mono">
+                {(pickLatency(0.5, tick + f.family.length) + 20).toFixed(0)} ms
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="px-4 py-2.5 border-t bg-gray-50 text-[11px] text-gray-500 flex items-center justify-between">
-        <div>
-          Sources (when live): <code className="bg-gray-100 px-1 rounded text-[10px]">serving_endpoints.metrics</code>,
-          request-tracing, Lakehouse Monitoring. Thresholds: p95 &lt; 400ms, p99 &lt; 500ms, error rate &lt; 0.5%.
-        </div>
-        <div className="inline-flex items-center gap-1">
-          Last tick: #{tick.toString().padStart(3, '0')}
-        </div>
+      <div className="text-[11px] text-mut pt-2 border-t">
+        <span className="font-semibold block mb-1">SLO targets:</span> p95 &lt; 400ms, p99 &lt; 500ms, error rate &lt; 0.5%
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -502,41 +501,41 @@ function RollbackDialog({ family, onClose, onDone }:
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-40">
-      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full mx-4">
-        <div className="px-5 py-3 border-b flex items-center gap-2">
-          <Undo2 className="w-4 h-4 text-red-700" />
-          <h3 className="font-semibold text-gray-900">Rollback {family.label}</h3>
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 border border-line">
+        <div className="px-5 py-3 border-b border-line flex items-center gap-2">
+          <Undo2 className="w-4 h-4 text-red-600" />
+          <h3 className="font-semibold text-ink">Rollback {family.label}</h3>
         </div>
-        <div className="p-5">
-          <p className="text-sm text-gray-700 mb-3">
-            The <code className="bg-gray-100 px-1 rounded text-[11px]">champion</code> alias will move from
+        <div className="p-5 space-y-3">
+          <p className="text-sm text-ink leading-relaxed">
+            The <code className="bg-slate-100 border border-line px-1 rounded text-[11px] font-mono">champion</code> alias will move from
             <strong className="mx-1">v{family.champion?.version}</strong>
             back to
             <strong className="mx-1">v{family.previous_champion?.version}</strong>.
-            The current champion will become the new <code className="bg-gray-100 px-1 rounded text-[11px]">previous_champion</code>.
+            Current champion becomes <code className="bg-slate-100 border border-line px-1 rounded text-[11px] font-mono">previous_champion</code>.
           </p>
-          <label className="text-xs font-medium text-gray-700 block mb-1">
-            Justification <span className="text-red-600">*</span> <span className="text-gray-500 font-normal">(min 10 chars, logged to audit trail)</span>
+          <label className="text-xs font-bold uppercase tracking-[0.04em] text-ink block">
+            Justification <span className="text-red-600">*</span>
+            <span className="text-mut font-normal text-[11px]">
+              {' '}(minimum 10 characters, logged to audit trail)
+            </span>
           </label>
           <textarea value={note} onChange={e => setNote(e.target.value)}
                     rows={3}
                     placeholder="e.g. Observed +14% false-positive rate in fraud referrals since promotion"
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
-          {err && <div className="mt-2 text-xs text-red-700 flex items-start gap-1.5">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/50" />
+          {err && <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 flex items-start gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {err}
           </div>}
         </div>
-        <div className="px-5 py-3 border-t bg-gray-50 flex items-center justify-end gap-2">
-          <button onClick={onClose}
-                  className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded">
-            Cancel
-          </button>
-          <button onClick={submit}
-                  disabled={busy || note.trim().length < 10}
-                  className="px-3 py-1.5 text-sm font-medium bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-1.5">
-            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />}
+        <div className="px-5 py-3 border-t border-line bg-slate-50/50 flex items-center justify-end gap-2">
+          <Btn tone="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn tone="bad"
+               onClick={submit}
+               disabled={busy || note.trim().length < 10}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
             Confirm rollback
-          </button>
+          </Btn>
         </div>
       </div>
     </div>
@@ -606,44 +605,37 @@ function LivePricing() {
   })();
 
   return (
-    <div>
+    <div className="space-y-5">
       {/* Header — power button + state */}
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+      <Card>
+        <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
           <div className="flex items-center gap-3">
             <span className={`w-3 h-3 rounded-full ${stateBadge.dot}`} aria-hidden />
             <div>
-              <h3 className="font-semibold text-gray-900 text-base flex items-center gap-2">
-                <Zap className="w-4 h-4 text-violet-600" />
-                Live Pricing System — <span className="text-gray-700">{stateBadge.label}</span>
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">{stateBadge.desc}</p>
+              <h2 className="font-bold text-ink text-base flex items-center gap-2">
+                <Zap className="w-4 h-4 text-purple-600" />
+                Live Pricing System
+              </h2>
+              <p className="text-xs text-mut mt-0.5">
+                {stateBadge.label} — {stateBadge.desc}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={togglePower}
-              disabled={actionBusy !== null || inTransition}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium border transition
-                ${status?.state === 'on'
-                  ? 'border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100'
-                  : 'border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'}
-                ${(actionBusy !== null || inTransition) ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {actionBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
-              {status?.state === 'on' ? 'Deactivate' : 'Activate'}
-            </button>
-          </div>
+          <Btn tone={status?.state === 'on' ? 'bad' : 'primary'}
+               onClick={togglePower}
+               disabled={actionBusy !== null || inTransition}>
+            {actionBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+            {status?.state === 'on' ? 'Deactivate' : 'Activate'}
+          </Btn>
         </div>
         {statusError && (
-          <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2 flex items-start gap-2">
+          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 flex items-start gap-2 mb-3">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>{statusError}</span>
           </div>
         )}
-        {/* Component breakdown — small status chips */}
         {status && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">
+          <Grid cols={2}>
             <StatusChip
               icon={<Server className="w-3.5 h-3.5" />}
               label="Endpoint"
@@ -655,31 +647,26 @@ function LivePricing() {
             />
             <StatusChip
               icon={<Database className="w-3.5 h-3.5" />}
-              label="Online store (Lakebase)"
+              label="Online store"
               value={status.online_store.name}
               detail={status.online_store.present
                 ? `${status.online_store.state ?? '?'} · ${status.online_store.capacity ?? '?'}`
                 : 'not present'}
               ok={status.online_store.present && (status.online_store.state ?? '').endsWith('AVAILABLE')}
             />
-          </div>
+          </Grid>
         )}
-      </div>
+      </Card>
 
-      {/* Customer-facing demo pages — standalone, chrome-less UIs that drive
-          the same live endpoint. Open in a new tab (full page load) so they
-          render outside the workbench shell. Hidden when the system is not ON
-          (like the demo flow / load test below) — the pages can't return
-          quotes without a live endpoint, so we don't surface dead links. */}
       {status?.state === 'on' && (
-        <div className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-          <h4 className="text-sm font-semibold text-gray-800 mb-1 flex items-center gap-1.5">
-            <ExternalLink className="w-4 h-4 text-violet-600" /> Demo pages
-          </h4>
-          <p className="text-xs text-gray-500 mb-3">
-            Standalone customer-facing UIs for the live pricing story. Best opened in their own tabs.
+        <Card>
+          <CardTitle className="flex items-center gap-1.5 mb-1">
+            <ExternalLink className="w-4 h-4 text-purple-600" /> Demo pages
+          </CardTitle>
+          <p className="text-[13px] text-mut mb-3">
+            Standalone customer-facing UIs for the live pricing story. Best opened in new tabs.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <Grid cols={2}>
             <DemoLink href="/quote"       icon={Receipt} accent="blue"
                       title="Quote portal"   desc="Consumer quote, pre-filled for John" />
             <DemoLink href="/blackbox"    icon={Radio} accent="amber"
@@ -688,9 +675,9 @@ function LivePricing() {
                       title="Live quote tester" desc="Streaming QPS + latency" />
             <DemoLink href="/quote-chat"  icon={Network} accent="fuchsia"
                       title="Agentic MCP sales"
-                      desc="Buy by conversation — Claude calls the engine over MCP" />
-          </div>
-        </div>
+                      desc="Buy by conversation — Claude calls engine over MCP" />
+          </Grid>
+        </Card>
       )}
 
       {/* Sections only show when ON */}
@@ -703,49 +690,42 @@ function LivePricing() {
       )}
 
       {status?.state !== 'on' && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-5 mb-5 text-sm text-gray-600 space-y-3">
-          <p>
-            Activate the system to access the live-pricing demo pages, demo flow, single-quote latency probe, and load-test chart.
-            The first activation provisions a Lakebase online store at CU_2 and warm-starts the scorer endpoint —
-            typically 5–10 minutes end-to-end. Subsequent activations on the same workspace reuse what's there.
+        <Card className="bg-slate-50/50 border-line">
+          <p className="text-[13px] text-ink mb-3">
+            Activate the system to access demo pages, demo flow, latency probe, and load-test chart.
+            First activation provisions a Lakebase online store and warm-starts the scorer endpoint —
+            typically 5–10 minutes. Subsequent activations reuse what's there.
           </p>
-          {/* The agentic journey prices a BRAND-NEW risk through
-              motor_pricing_scorer_direct, which is independent of the Lakebase
-              online store and the route-optimized endpoint — so it works with
-              the live system off, and stays available here. */}
-          <div className="pt-1">
-            <div className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold mb-2">
-              Available without activating
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <DemoLink href="/quote-chat" icon={Network} accent="fuchsia"
-                        title="Agentic MCP sales"
-                        desc="Prices a new risk via motor_pricing_scorer_direct — no online store needed" />
-            </div>
-          </div>
-        </div>
+          <SectionHead>Available without activating</SectionHead>
+          <p className="text-[13px] text-mut mb-3">
+            The agentic journey prices a BRAND-NEW risk independently — no online store needed.
+          </p>
+          <DemoLink href="/quote-chat" icon={Network} accent="fuchsia"
+                    title="Agentic MCP sales"
+                    desc="Prices a new risk — Claude calls engine over MCP" />
+        </Card>
       )}
 
       {/* Architecture — collapsible */}
-      <section className="bg-white border border-gray-200 rounded-lg mb-5">
+      <Card>
         <button
           onClick={() => setArchOpen(o => !o)}
-          className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-gray-800 hover:bg-gray-50"
+          className="w-full flex items-center justify-between"
         >
-          <span className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 mb-0">
             {archOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             Architecture
-          </span>
-          <span className="text-[11px] font-normal text-gray-500">
+          </CardTitle>
+          <span className="text-[11px] text-mut font-normal">
             {archOpen ? 'Hide diagram' : 'Show diagram'}
           </span>
         </button>
         {archOpen && (
-          <div className="px-5 pb-5 flex justify-center overflow-x-auto">
+          <div className="mt-3 flex justify-center overflow-x-auto">
             <ArchitectureDiagram />
           </div>
         )}
-      </section>
+      </Card>
     </div>
   );
 }
@@ -784,9 +764,10 @@ function DemoLink({ href, title, desc, icon: Icon, accent = 'violet' }: {
 function StatusChip({ icon, label, value, detail, ok }:
   { icon: React.ReactNode; label: string; value: string; detail: string; ok: boolean }) {
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded border text-xs
-      ${ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+    <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs
+      ${ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-line text-mut'}`}>
       {icon}
+      <span className="font-semibold">{ok ? 'text-emerald-900' : 'text-ink'}</span>
       <span className="font-semibold">{label}</span>
       <span className="font-mono text-[11px] truncate">{value}</span>
       <span className="text-[11px] opacity-70 ml-auto">{detail}</span>
@@ -843,25 +824,25 @@ function DemoFlow() {
     : null;
 
   return (
-    <section className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+    <Card>
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-        <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
-          <Activity className="w-4 h-4 text-violet-600" /> Demo flow
-        </h4>
+        <CardTitle className="flex items-center gap-1.5 mb-0">
+          <Activity className="w-4 h-4 text-purple-600" /> Demo flow
+        </CardTitle>
         <div className="flex items-center gap-2">
           <input
             value={policyId}
             onChange={e => setPolicyId(e.target.value.toUpperCase())}
-            className="text-xs font-mono px-2 py-1 border border-gray-300 rounded w-36"
+            className="text-xs font-mono px-2 py-1 border border-line rounded w-36 focus:outline-none focus:ring-2 focus:ring-brand/50"
             placeholder="POL-MOTOR-00000001"
           />
-          <button onClick={reset} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1">
+          <Btn tone="ghost" onClick={reset} className="text-xs">
             <Undo2 className="w-3 h-3" /> Reset
-          </button>
+          </Btn>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <Grid cols={3}>
         <DemoCard
           step={1} title="Initial quote" icon={<Zap className="w-4 h-4" />}
           body={step1
@@ -931,15 +912,15 @@ function DemoFlow() {
                     Run
                   </button>}
         />
-      </div>
+      </Grid>
 
       {err && (
-        <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2 flex items-start gap-2">
+        <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 flex items-start gap-2">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <span>{err}</span>
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -1010,32 +991,31 @@ function SingleQuote() {
   };
 
   return (
-    <section className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
-      <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-1.5">
-        <Server className="w-4 h-4 text-violet-600" /> Single quote
-      </h4>
+    <Card>
+      <CardTitle className="flex items-center gap-1.5 mb-3">
+        <Server className="w-4 h-4 text-purple-600" /> Single quote
+      </CardTitle>
       <div className="flex items-end gap-2 flex-wrap">
-        <label className="text-xs text-gray-600">
-          <div className="mb-1">policy_id</div>
+        <label className="text-xs text-mut">
+          <div className="mb-1 font-semibold uppercase tracking-wide">policy_id</div>
           <input value={policyId}
                  onChange={e => setPolicyId(e.target.value.toUpperCase())}
-                 className="px-2 py-1 border border-gray-300 rounded font-mono text-xs w-44" />
+                 className="px-2 py-1 border border-line rounded font-mono text-xs w-44 focus:outline-none focus:ring-2 focus:ring-brand/50" />
         </label>
-        <button onClick={run} disabled={busy}
-                className="text-xs px-3 py-1.5 rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 inline-flex items-center gap-1">
+        <Btn onClick={run} disabled={busy} className="text-xs">
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
           Quote
-        </button>
+        </Btn>
         {last && last.ok && (
-          <div className="text-xs text-gray-700 ml-3 inline-flex items-center gap-3">
-            <span className="font-semibold text-gray-900">£{Number(last.result?.final_premium ?? 0).toFixed(2)}</span>
-            <span><Clock className="w-3 h-3 inline" /> {Number(last.latency_ms).toFixed(0)} ms</span>
-            <span className="text-gray-500">re v{last.result?.rating_engine_version ?? '?'}</span>
+          <div className="text-xs text-ink ml-3 inline-flex items-center gap-3">
+            <span className="font-semibold">£{Number(last.result?.final_premium ?? 0).toFixed(2)}</span>
+            <span className="text-mut"><Clock className="w-3 h-3 inline" /> {Number(last.latency_ms).toFixed(0)} ms</span>
+            <span className="text-mut">re v{last.result?.rating_engine_version ?? '?'}</span>
           </div>
         )}
       </div>
-      {err && <div className="mt-2 text-xs text-rose-700">{err}</div>}
-    </section>
+      {err && <div className="mt-2 text-xs text-red-700">{err}</div>}
+    </Card>
   );
 }
 
@@ -1118,40 +1098,38 @@ function LoadTest() {
   };
 
   return (
-    <section className="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+    <Card>
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
-          <Activity className="w-4 h-4 text-violet-600" /> Load test
-        </h4>
+        <CardTitle className="flex items-center gap-1.5 mb-0">
+          <Activity className="w-4 h-4 text-purple-600" /> Load test
+        </CardTitle>
         <div className="flex items-center gap-2 text-xs">
-          <label className="flex items-center gap-1">
+          <label className="flex items-center gap-1 text-mut">
             target qps
             <input type="number" value={targetQps} min={10} max={500} step={10}
                    onChange={e => setTargetQps(Number(e.target.value))}
                    disabled={!!running}
-                   className="px-1.5 py-0.5 border border-gray-300 rounded font-mono w-16" />
+                   className="px-1.5 py-0.5 border border-line rounded font-mono w-16 focus:outline-none focus:ring-2 focus:ring-brand/50" />
           </label>
-          <label className="flex items-center gap-1">
+          <label className="flex items-center gap-1 text-mut">
             duration (s)
             <input type="number" value={duration} min={10} max={600} step={10}
                    onChange={e => setDuration(Number(e.target.value))}
                    disabled={!!running}
-                   className="px-1.5 py-0.5 border border-gray-300 rounded font-mono w-16" />
+                   className="px-1.5 py-0.5 border border-line rounded font-mono w-16 focus:outline-none focus:ring-2 focus:ring-brand/50" />
           </label>
           {running ? (
-            <button onClick={stop}
-                    className="px-2.5 py-1 rounded bg-rose-600 text-white hover:bg-rose-700 inline-flex items-center gap-1">
+            <Btn tone="bad" onClick={stop} className="text-xs">
               <Square className="w-3 h-3" /> Stop
-            </button>
+            </Btn>
           ) : (
-            <button onClick={start}
-                    className="px-2.5 py-1 rounded bg-violet-600 text-white hover:bg-violet-700 inline-flex items-center gap-1">
+            <Btn tone="primary" onClick={start} className="text-xs">
               <Play className="w-3 h-3" /> Start
-            </button>
+            </Btn>
           )}
           {running?.run_page_url && (
             <a href={running.run_page_url} target="_blank" rel="noreferrer"
-               className="text-violet-700 hover:underline inline-flex items-center gap-0.5">
+               className="text-brand hover:underline inline-flex items-center gap-0.5">
               run <ExternalLink className="w-3 h-3" />
             </a>
           )}
@@ -1159,7 +1137,7 @@ function LoadTest() {
       </div>
 
       {!tableReady && (
-        <div className="text-xs text-gray-500 mb-2">
+        <div className="text-xs text-mut mb-2">
           Metrics table not yet populated — first load test will create it.
         </div>
       )}
@@ -1167,15 +1145,15 @@ function LoadTest() {
       <LatencyChart rows={rows} />
 
       {rows.length > 0 && (
-        <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
-          <Stat label="qps (last)"   value={rows[rows.length - 1].qps.toString()} />
-          <Stat label="p50 (last)"   value={`${rows[rows.length - 1].p50_ms.toFixed(0)} ms`} />
-          <Stat label="p95 (last)"   value={`${rows[rows.length - 1].p95_ms.toFixed(0)} ms`} />
-          <Stat label="p99 (last)"   value={`${rows[rows.length - 1].p99_ms.toFixed(0)} ms`} />
-        </div>
+        <Grid cols={4} className="mt-3">
+          <Metric label="QPS" value={rows[rows.length - 1].qps.toString()} tone="plain" />
+          <Metric label="P50" value={`${rows[rows.length - 1].p50_ms.toFixed(0)} ms`} tone="plain" />
+          <Metric label="P95" value={`${rows[rows.length - 1].p95_ms.toFixed(0)} ms`} tone="plain" />
+          <Metric label="P99" value={`${rows[rows.length - 1].p99_ms.toFixed(0)} ms`} tone="plain" />
+        </Grid>
       )}
-      {err && <div className="mt-2 text-xs text-rose-700">{err}</div>}
-    </section>
+      {err && <div className="mt-2 text-xs text-red-700">{err}</div>}
+    </Card>
   );
 }
 
@@ -1371,6 +1349,12 @@ function eventShortLabel(t: string): string {
   if (t === 'model_trained')    return 'train';
   return t;
 }
+function eventTone(t: string): 'red' | 'green' | 'blue' | 'slate' {
+  if (t === 'model_rollback' || t === 'model_rolled_back') return 'red';
+  if (t === 'model_promoted') return 'green';
+  if (t === 'governance_pack_generated') return 'blue';
+  return 'slate';
+}
 function eventColor(t: string): string {
   if (t === 'model_rollback' || t === 'model_rolled_back') return 'bg-red-100 text-red-700';
   if (t === 'model_promoted') return 'bg-emerald-100 text-emerald-700';
@@ -1384,35 +1368,22 @@ function eventColor(t: string): string {
 
 function ServingSLOs() {
   const tiles = [
-    { icon: <Clock    className="w-4 h-4 text-emerald-600" />, label: 'Feature lookup p50',    value: '38 ms',  sub: 'online feature store',     tone: 'emerald' as const },
-    { icon: <Clock    className="w-4 h-4 text-emerald-600" />, label: 'Feature lookup p99',    value: '92 ms',  sub: 'sub-100ms target',         tone: 'emerald' as const },
+    { icon: <Clock    className="w-4 h-4 text-emerald-600" />, label: 'Feature lookup p50',    value: '38 ms',  sub: 'online feature store',     tone: 'green' as const },
+    { icon: <Clock    className="w-4 h-4 text-emerald-600" />, label: 'Feature lookup p99',    value: '92 ms',  sub: 'sub-100ms target',         tone: 'green' as const },
     { icon: <Database className="w-4 h-4 text-blue-600" />,    label: 'Features tested',       value: '3.0 M',  sub: 'across all candidates',    tone: 'blue'    as const },
-    { icon: <Zap      className="w-4 h-4 text-purple-600" />,  label: 'End-to-end quote',      value: '<500 ms',sub: '4 models + factor build-up', tone: 'purple'  as const },
+    { icon: <Zap      className="w-4 h-4 text-purple-600" />,  label: 'End-to-end quote',      value: '<500 ms',sub: '4 models + factor build-up', tone: 'violet'  as const },
   ];
   return (
-    <section className="mt-5 mb-5 bg-white border border-gray-200 rounded-lg p-4">
-      <div className="flex items-baseline justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-900">Serving SLOs</h3>
-        <span className="text-[11px] text-gray-500 italic">
-          what the rating engine sees at quote time
-        </span>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <Section title="Serving SLOs" subtitle="What the rating engine sees at quote time">
+      <Grid cols={4}>
         {tiles.map(t => (
-          <div key={t.label} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
-            <div className="flex items-center gap-1.5 mb-1">{t.icon}
-              <span className="text-[11px] uppercase tracking-wider text-gray-600 font-semibold">{t.label}</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-900 leading-tight">{t.value}</div>
-            <div className="text-[11px] text-gray-500">{t.sub}</div>
-          </div>
+          <Metric key={t.label} label={t.label} value={t.value} sub={t.sub} tone={t.tone} />
         ))}
-      </div>
-      <div className="mt-3 text-[11px] text-gray-500 italic">
-        Targets representative of a Mosaic AI Model Serving + Online Feature Store deployment. Real
-        numbers populate when the endpoint receives production traffic — an Inference Table records
-        every request, latency, and feature snapshot for governance.
-      </div>
-    </section>
+      </Grid>
+      <p className="text-[11px] text-mut mt-3">
+        Targets representative of Mosaic AI Model Serving deployment. Real numbers populate when the endpoint
+        receives production traffic — an Inference Table records every request, latency, and feature for governance.
+      </p>
+    </Section>
   );
 }

@@ -1175,6 +1175,35 @@ except Exception as e:
 
 # COMMAND ----------
 
+# Robustness: agents.deploy() sometimes logs a new version + sets @Production but
+# leaves the endpoint serving the OLD version (seen 2026-08-19). Reconcile — wait
+# for the endpoint to settle, then force the served entity to `latest` if needed.
+import time as _tr
+from databricks.sdk import WorkspaceClient as _WR
+from databricks.sdk.service.serving import ServedEntityInput as _SEIR
+_wr = _WR()
+for _i in range(40):
+    try:
+        _ep = _wr.serving_endpoints.get(endpoint_name)
+        _cu = str(_ep.state.config_update) if _ep.state else ""
+        _se = (_ep.config.served_entities[0] if (_ep.config and _ep.config.served_entities) else None)
+        _sv = _se.entity_version if _se else None
+        if "NOT_UPDATING" in _cu:
+            if str(_sv) != str(latest):
+                print(f"Reconciling served version {_sv} → {latest}")
+                _env = (_se.environment_vars or {}) if _se else {}
+                _wr.serving_endpoints.update_config(name=endpoint_name, served_entities=[_SEIR(
+                    entity_name=agent_uc_name, entity_version=str(latest),
+                    scale_to_zero_enabled=True, workload_size="Small", environment_vars=_env)])
+            else:
+                print(f"Endpoint already serving latest v{latest}.")
+            break
+    except Exception as _e:
+        print(f"reconcile poll: {str(_e)[:120]}")
+    _tr.sleep(15)
+
+# COMMAND ----------
+
 dbutils.notebook.exit(json.dumps({
     "agent_uc_name": agent_uc_name,
     "model_version": latest,

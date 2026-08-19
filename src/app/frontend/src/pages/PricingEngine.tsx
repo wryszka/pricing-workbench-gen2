@@ -4,6 +4,10 @@ import {
   ChevronDown, ChevronRight, GitCompareArrows, FileText, Calendar, RefreshCw, Tag,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import {
+  Page, PageHeader, OnThisPage, Card, CardTitle, Section, Metric, Pill, AgentLead,
+  UnderTheHood, Grid, SectionHead, Btn,
+} from '../components/ui';
 
 // ---------------------------------------------------------------------------
 // Pricing Engine — organised around MONTHLY releases. One release bundles
@@ -42,23 +46,38 @@ export default function PricingEngine() {
   }, []);
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Calculator className="w-6 h-6 text-teal-600" /> Pricing Engine
-        </h2>
-        <p className="text-gray-500 mt-1">
-          Our rate book. Ships as a monthly <em>release</em> — one object, committee-approved,
-          bundling every model version and the rating-engine config that priced a quote on that date.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Bricksurance SE · Pricing Engine"
+        title="Pricing Engine"
+        subtitle="The live monthly rate book and release history"
+        icon={Calculator}
+      />
+
+      <AgentLead
+        persona="rate_change"
+        title="Rate-change analyst"
+        subtitle="Reads the live rate book and models rate moves."
+        seed="Describe this month's live rate book vs last month, and any rate-change considerations."
+        examples={[
+          'What changed in the current rate book?',
+          'Who wins/loses if we raise rates 3%?',
+          'What's the retention risk?',
+        ]}
+      />
+
+      <OnThisPage>
+        One monthly <em>release</em> bundles every model version, rating-engine configuration, and governance metadata.
+        Live release is the active rate book pricing all new quotes. Quote this month's rates, re-price policies on historical
+        releases, or browse the release timeline with comparison tools.
+      </OnThisPage>
 
       {/* Current release headline */}
       {current && <CurrentReleaseCard release={current} />}
-      {loading && <div className="h-32 rounded-lg bg-gray-100 animate-pulse" />}
+      {loading && <Card className="h-32 bg-slate-100 animate-pulse" />}
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 border-b border-gray-200 mt-6 mb-5">
+      <div className="flex gap-1 border-b border-line">
         <Tab active={section === 'quote'}   onClick={() => setSection('quote')}
              icon={<PlayCircle className="w-4 h-4" />}  label="Quote Runner" />
         <Tab active={section === 'mta'}     onClick={() => setSection('mta')}
@@ -70,7 +89,17 @@ export default function PricingEngine() {
       {section === 'quote'   && <QuoteRunner   current={current} />}
       {section === 'mta'     && <MtaSimulator  current={current} />}
       {section === 'history' && <ReleaseHistory releases={releases} />}
-    </div>
+
+      <UnderTheHood
+        title="Rate book architecture"
+        lines={[
+          { component: 'pricing_engine_releases', detail: 'Monthly bundles; effective_date + all 4 model versions' },
+          { component: 'UC model aliases', detail: 'champion (live), previous_champion (rollback), archived' },
+          { component: 'Governance packs', detail: 'PDF generated on release approval; linked to release_id' },
+          { component: 'Inference tables', detail: 'Every quote scored on the live release is logged for audit' },
+        ]}
+      />
+    </Page>
   );
 }
 
@@ -79,7 +108,7 @@ function Tab({ active, onClick, icon, label }:
   return (
     <button onClick={onClick}
             className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition ${
-              active ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-600 hover:text-gray-900'
+              active ? 'border-brand text-brand' : 'border-transparent text-mut hover:text-ink'
             }`}>
       {icon} {label}
     </button>
@@ -92,41 +121,39 @@ function Tab({ active, onClick, icon, label }:
 
 function CurrentReleaseCard({ release }: { release: Release }) {
   return (
-    <div className="rounded-xl border border-teal-300 bg-gradient-to-r from-teal-50 to-white p-5">
+    <Card className="bg-[linear-gradient(135deg,#eef2ff_0%,#faf5ff_100%)] border-[#ddd6fe]">
       <div className="flex items-start justify-between mb-2">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-700">
+          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-brand">
             Current release · effective {release.effective_date}
           </div>
-          <div className="text-2xl font-bold text-gray-900 mt-0.5 flex items-center gap-2">
+          <div className="text-2xl font-bold text-ink mt-0.5 flex items-center gap-2">
             {release.display_name} rate book
-            <ShieldCheck className="w-5 h-5 text-teal-600" />
+            <ShieldCheck className="w-5 h-5 text-brand" />
           </div>
           {release.approved_by && (
-            <div className="text-xs text-gray-500 mt-0.5">
+            <div className="text-xs text-mut mt-0.5">
               Approved by {release.approved_by.split('@')[0]}
             </div>
           )}
         </div>
-        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-600 text-white">
-          CHAMPION
-        </span>
+        <Pill tone="live">live</Pill>
       </div>
 
       {release.narrative && (
-        <div className="mt-2 text-sm text-gray-700 leading-relaxed max-w-3xl">
+        <div className="mt-2 text-[13px] text-ink leading-relaxed max-w-3xl">
           {release.narrative}
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
+      <Grid cols={5} className="mt-4">
         <VersionChip label="Frequency GLM"   v={release.freq_glm_version} />
         <VersionChip label="Severity GLM"    v={release.sev_glm_version} />
         <VersionChip label="Demand GBM"      v={release.demand_gbm_version} />
         <VersionChip label="Fraud GBM"       v={release.fraud_gbm_version} />
         <VersionChip label="Rating engine"   v={release.rating_engine_version} highlight />
-      </div>
-    </div>
+      </Grid>
+    </Card>
   );
 }
 

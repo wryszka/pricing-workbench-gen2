@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, GitCompare, TrendingUp, ShieldCheck, CheckCircle2, XCircle, Loader2, Download, Upload, History, Bot, ChevronDown, ChevronUp, Sparkles, Send } from 'lucide-react';
+import { ArrowLeft, GitCompare, TrendingUp, ShieldCheck, CheckCircle2, XCircle, Loader2, Download, Upload, History, ChevronDown, ChevronUp, Sparkles, Send } from 'lucide-react';
 import { api } from '../lib/api';
+import {
+  Page, PageHeader, OnThisPage, Card, Section, Pill, Metric, AskBox, UnderTheHood, Skeleton, Loading,
+} from '../components/ui';
 
 type Tab = 'diff' | 'impact' | 'quality' | 'upload' | 'approval';
 
@@ -58,26 +61,32 @@ export default function DatasetDetail() {
       ];
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-600 mb-4">
+    <Page>
+      <Link to="/datasets" className="inline-flex items-center gap-1.5 text-[12.5px] text-brand hover:underline mb-4">
         <ArrowLeft className="w-4 h-4" /> Back to datasets
       </Link>
 
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">{ds.display_name}</h2>
-        <p className="text-gray-500 mt-1">{ds.description} &middot; Source: {ds.source} &middot; Join key: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">{ds.join_key}</code></p>
-      </div>
+      <PageHeader
+        eyebrow="Bricksurance SE · Data Ingestion"
+        title={ds.display_name}
+        subtitle={`${ds.description} — Source: ${ds.source} · Join key: ${ds.join_key}`}
+        icon={GitCompare}
+      />
+
+      <OnThisPage>
+        Inspect the data changes since the last approval, see the impact on your portfolio, check data quality, and approve or reject before it enters pricing.
+      </OnThisPage>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-gray-200 mb-6">
+      <div className="flex gap-1 border-b border-line mb-5">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors ${
               tab === t.id
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-brand text-brand'
+                : 'border-transparent text-mut hover:text-ink hover:border-line'
             }`}
           >
             <t.icon className="w-4 h-4" />
@@ -91,7 +100,17 @@ export default function DatasetDetail() {
       {tab === 'quality' && <QualityTab datasetId={datasetId!} />}
       {tab === 'upload' && <UploadDownloadTab datasetId={datasetId!} datasetName={ds.display_name} />}
       {tab === 'approval' && <ApprovalTab datasetId={datasetId!} />}
-    </div>
+
+      <UnderTheHood
+        title="Dataset Detail"
+        lines={[
+          { component: 'Data diff', detail: 'Row-by-row comparison between pending (raw/bronze) and current approved (silver)' },
+          { component: 'Impact analysis', detail: 'Shadow pricing on 100% of affected policies to show exact premium impact' },
+          { component: 'Data quality', detail: 'DLT expectations + completeness metrics + freshness checks' },
+          { component: 'Approval workflow', detail: 'HITL gate with actuary notes; audit trail immutable' },
+        ]}
+      />
+    </Page>
   );
 }
 
@@ -107,55 +126,55 @@ function DiffTab({ datasetId }: { datasetId: string }) {
     api.getDatasetDiff(datasetId).then(setData).finally(() => setLoading(false));
   }, [datasetId]);
 
-  if (loading) return <Spinner />;
-  if (!data) return <ErrorMsg msg="Failed to load diff" />;
+  if (loading) return <Loading />;
+  if (!data) return <Card className="border-red-200 text-red-600 text-sm">Failed to load diff</Card>;
 
   const s = data.summary;
 
   return (
-    <div className="space-y-6">
-      {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4">
-        <MetricCard label="Raw (Pending)" value={Number(s.raw_total).toLocaleString()} color="blue" />
-        <MetricCard label="Silver (Current)" value={Number(s.silver_total).toLocaleString()} color="gray" />
-        <MetricCard label="New Rows" value={Number(s.new_rows).toLocaleString()} color="green" />
-        <MetricCard label="Removed Rows" value={Number(s.removed_rows).toLocaleString()} color="red" />
+    <div className="space-y-5">
+      {/* Summary metrics */}
+      <div className="grid grid-cols-4 gap-3">
+        <Metric label="Raw (Pending)" value={Number(s.raw_total).toLocaleString()} tone="blue" />
+        <Metric label="Silver (Current)" value={Number(s.silver_total).toLocaleString()} tone="plain" />
+        <Metric label="New Rows" value={Number(s.new_rows).toLocaleString()} tone="green" />
+        <Metric label="Removed Rows" value={Number(s.removed_rows).toLocaleString()} tone="amber" />
       </div>
 
       {/* Changed rows */}
       {data.changed_rows.length > 0 && (
         <Section title={`Changed Records (${data.changed_rows.length} shown)`}>
-          <div className="overflow-x-auto">
+          <Card className="overflow-x-auto p-0">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">{data.key_column}</th>
+                <tr className="bg-slate-50 border-b border-line">
+                  <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">{data.key_column}</th>
                   {data.compare_columns.map((col: string) => (
-                    <th key={col} colSpan={2} className="px-3 py-2 text-center font-medium text-gray-600">{col}</th>
+                    <th key={col} colSpan={2} className="px-3 py-2 text-center font-medium text-mut text-xs uppercase">{col}</th>
                   ))}
                 </tr>
-                <tr className="bg-gray-50 border-b">
+                <tr className="bg-slate-50 border-b border-line">
                   <th></th>
                   {data.compare_columns.map((col: string) => (
                     <>
-                      <th key={`old_${col}`} className="px-3 py-1 text-center text-xs text-gray-400">Old</th>
-                      <th key={`new_${col}`} className="px-3 py-1 text-center text-xs text-blue-500">New</th>
+                      <th key={`old_${col}`} className="px-3 py-1 text-center text-[11px] text-mut">Old</th>
+                      <th key={`new_${col}`} className="px-3 py-1 text-center text-[11px] text-brand">New</th>
                     </>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {data.changed_rows.slice(0, 20).map((row: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-blue-50/30">
-                    <td className="px-3 py-2 font-mono text-xs">{row[data.key_column]}</td>
+                  <tr key={i} className="border-b border-line hover:bg-blue-50/30">
+                    <td className="px-3 py-2 font-mono text-xs text-mut">{row[data.key_column]}</td>
                     {data.compare_columns.map((col: string) => {
                       const oldVal = row[`old_${col}`];
                       const newVal = row[`new_${col}`];
                       const changed = String(oldVal) !== String(newVal);
                       return (
                         <>
-                          <td key={`old_${col}_${i}`} className="px-3 py-2 text-center text-gray-500">{formatVal(oldVal)}</td>
-                          <td key={`new_${col}_${i}`} className={`px-3 py-2 text-center font-medium ${changed ? 'text-blue-600 bg-blue-50' : ''}`}>
+                          <td key={`old_${col}_${i}`} className="px-3 py-2 text-center text-mut text-sm">{formatVal(oldVal)}</td>
+                          <td key={`new_${col}_${i}`} className={`px-3 py-2 text-center font-medium text-sm ${changed ? 'text-brand bg-blue-50' : 'text-ink'}`}>
                             {formatVal(newVal)}
                           </td>
                         </>
@@ -165,7 +184,7 @@ function DiffTab({ datasetId }: { datasetId: string }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </Section>
       )}
 
@@ -184,10 +203,10 @@ function DiffTab({ datasetId }: { datasetId: string }) {
       )}
 
       {data.changed_rows.length === 0 && data.new_rows.length === 0 && data.removed_rows.length === 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-          <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
-          <p className="text-green-700 font-medium">No differences detected between raw and silver versions.</p>
-        </div>
+        <Card className="bg-emerald-50 border-emerald-200 text-center p-6">
+          <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+          <p className="text-emerald-700 font-medium">No differences detected between raw and silver versions.</p>
+        </Card>
       )}
     </div>
   );
@@ -200,164 +219,87 @@ function DiffTab({ datasetId }: { datasetId: string }) {
 // AI overview + ask-anything box — leads the Impact tab. Uses the
 // ingestion-impact explainability agent (Claude on the Databricks FM API).
 function AiImpactLead({ datasetId, pi }: { datasetId: string; pi: any }) {
-  const [overview, setOverview] = useState<any>(null);
-  const [ovLoading, setOvLoading] = useState(true);
-  const [q, setQ] = useState('');
-  const [thread, setThread] = useState<{ q: string; a: string }[]>([]);
-  const [asking, setAsking] = useState(false);
-
   const label = datasetId.replace(/_/g, ' ');
   const ctx = pi?.affected_policies
     ? `${pi.affected_policies} of ${pi.total_policies} policies affected (${pi.affected_pct}%).`
     : '';
-  const answerText = (r: any) =>
-    r?.explanation?.explanation || r?.transparency?.raw_response ||
-    (r?.success === false ? `Agent error: ${r?.error || r?.transparency?.error || 'unavailable'}` : '');
 
-  useEffect(() => {
-    setOvLoading(true);
-    api.runExplainability(
-      `In 3 short sentences, summarise the pricing impact of the ${label} data update and say what a pricing actuary should look at first. ${ctx}`,
-    ).then(setOverview).catch(() => setOverview(null)).finally(() => setOvLoading(false));
-  }, [datasetId]);   // eslint-disable-line react-hooks/exhaustive-deps
-
-  const ask = async () => {
-    const question = q.trim();
-    if (!question || asking) return;
-    setAsking(true); setQ('');
-    try {
-      const r = await api.runExplainability(`${question} (Context: ${label} data update. ${ctx})`);
-      setThread((t) => [...t, { q: question, a: answerText(r) || 'No answer returned.' }]);
-    } catch (e: any) {
-      setThread((t) => [...t, { q: question, a: `Error: ${e.message || e}` }]);
-    } finally { setAsking(false); }
+  const onAsk = async (q: string) => {
+    const r = await api.runExplainability(`${q} (Context: ${label} data update. ${ctx})`);
+    return r?.explanation?.explanation || r?.transparency?.raw_response ||
+      (r?.success === false ? `Agent error: ${r?.error || r?.transparency?.error || 'unavailable'}` : 'No answer returned.');
   };
 
+  const seedQ = `In 3 short sentences, summarise the pricing impact of the ${label} data update and say what a pricing actuary should look at first. ${ctx}`;
+
   return (
-    <div className="rounded-lg border border-purple-200 bg-purple-50/60 p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Sparkles className="w-4 h-4 text-purple-600" />
-        <span className="text-[10px] font-semibold text-purple-800 uppercase tracking-wide">
-          AI overview — where we are, what to look at
-        </span>
-      </div>
-      <div className="text-sm text-gray-800 leading-relaxed min-h-[2.5rem]">
-        {ovLoading
-          ? <span className="inline-flex items-center gap-1.5 text-purple-700/70"><Loader2 className="w-3.5 h-3.5 animate-spin" /> analysing the impact…</span>
-          : (answerText(overview) || 'AI overview unavailable — see the detail below.')}
-      </div>
-
-      {thread.length > 0 && (
-        <div className="mt-3 space-y-3 border-t border-purple-200 pt-3">
-          {thread.map((m, i) => (
-            <div key={i}>
-              <div className="text-xs font-semibold text-purple-800">Q: {m.q}</div>
-              <div className="text-sm text-gray-700 whitespace-pre-line mt-0.5">{m.a}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-3 flex gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') ask(); }}
-          placeholder="Ask a detailed question about this impact…"
-          className="flex-1 px-3 py-2 rounded-lg border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
-        <button onClick={ask} disabled={asking || !q.trim()}
-          className="px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-50 inline-flex items-center gap-1.5">
-          {asking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Ask
-        </button>
-      </div>
-      <p className="text-[10px] text-purple-500 mt-1.5">
-        Grounded via the ingestion-impact agent (Claude on the Databricks Foundation Model API).
-      </p>
-    </div>
+    <AskBox
+      title="Impact Analysis"
+      subtitle="Why did premiums change? Ask AI to trace data updates to pricing impact."
+      examples={[
+        'Why did premiums change for this update?',
+        'Which risk segments are most affected?',
+        'Is the premium impact significant or noise?',
+      ]}
+      onAsk={onAsk}
+      placeholder="Ask a detailed question about this impact…"
+      seedQuestion={seedQ}
+    />
   );
 }
 
 function ImpactTab({ datasetId }: { datasetId: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [explainResult, setExplainResult] = useState<any>(null);
-  const [explainLoading, setExplainLoading] = useState(false);
-  const [explainExpanded, setExplainExpanded] = useState(false);
 
   useEffect(() => {
     api.getDatasetImpact(datasetId).then(setData).finally(() => setLoading(false));
   }, [datasetId]);
 
-  const askExplain = async () => {
-    setExplainLoading(true);
-    try {
-      setExplainResult(await api.runExplainability(
-        `Why did premiums change for the ${datasetId.replace(/_/g, ' ')} dataset update?`
-      ));
-    } catch (e: any) { setExplainResult({ success: false, error: e.message }); }
-    finally { setExplainLoading(false); }
-  };
-
-  if (loading) return <Spinner />;
-  if (!data) return <ErrorMsg msg="Failed to load impact analysis" />;
+  if (loading) return <Loading />;
+  if (!data) return <Card className="border-red-200 text-red-600 text-sm">Failed to load impact analysis</Card>;
 
   const dd = data.data_diff || {};
   const pi = data.portfolio_impact || {};
   const rs = data.risk_summary || {};
 
   return (
-    <div className="space-y-8">
-      {/* Header + download */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-bold text-gray-900">Shadow Pricing Impact Analysis</h3>
-          <p className="text-sm text-gray-500 mt-1">
-            Automatic re-rating of every affected policy using the current pricing model to show exact financial impact before approval.
-          </p>
-        </div>
-        <a href={api.downloadImpactReport(datasetId)}
-           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-          <Download className="w-4 h-4" /> Download Report
-        </a>
-      </div>
-
+    <div className="space-y-5">
       {/* Lead with the AI overview + an ask-anything box */}
       <AiImpactLead datasetId={datasetId} pi={pi} />
 
       {/* ── Section 1: Data Diff Summary ── */}
       <Section title="Data Change Summary">
-        <p className="text-sm text-gray-500 mb-4">
-          <strong>What this shows:</strong> Statistical comparison between the incoming data (raw/bronze)
-          and the current approved version (silver). Highlights magnitude of change in each column.
-        </p>
         <div className="grid grid-cols-4 gap-3 mb-4">
-          <MetricCard label="Incoming Rows" value={dd.raw_count?.toLocaleString() || '0'} color="blue" />
-          <MetricCard label="Current Rows" value={dd.silver_count?.toLocaleString() || '0'} color="gray" />
-          <MetricCard label="New Rows" value={dd.new_rows?.toLocaleString() || '0'} color="green" />
-          <MetricCard label="Removed Rows" value={dd.removed_rows?.toLocaleString() || '0'} color="red" />
+          <Metric label="Incoming Rows" value={dd.raw_count?.toLocaleString() || '0'} tone="blue" />
+          <Metric label="Current Rows" value={dd.silver_count?.toLocaleString() || '0'} tone="plain" />
+          <Metric label="New Rows" value={dd.new_rows?.toLocaleString() || '0'} tone="green" />
+          <Metric label="Removed Rows" value={dd.removed_rows?.toLocaleString() || '0'} tone="amber" />
         </div>
         {dd.column_shifts?.length > 0 && (
-          <div className="overflow-x-auto">
+          <Card className="overflow-x-auto p-0">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b">
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Column</th>
-                  <th className="px-3 py-2 text-right font-medium text-gray-600">Old Mean</th>
-                  <th className="px-3 py-2 text-right font-medium text-gray-600">New Mean</th>
-                  <th className="px-3 py-2 text-right font-medium text-gray-600">Shift</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Direction</th>
+                <tr className="bg-slate-50 border-b border-line">
+                  <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Column</th>
+                  <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">Old Mean</th>
+                  <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">New Mean</th>
+                  <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">Shift</th>
+                  <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Direction</th>
                 </tr>
               </thead>
               <tbody>
                 {dd.column_shifts.map((s: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="px-3 py-2 font-mono text-xs">{s.column}</td>
-                    <td className="px-3 py-2 text-right text-gray-500">{s.old_mean}</td>
-                    <td className="px-3 py-2 text-right font-medium">{s.new_mean}</td>
-                    <td className={`px-3 py-2 text-right font-semibold ${
-                      s.severity === 'high' ? 'text-red-600' : s.severity === 'medium' ? 'text-amber-600' : 'text-green-600'
+                  <tr key={i} className="border-b border-line hover:bg-slate-50">
+                    <td className="px-3 py-2 font-mono text-xs text-mut">{s.column}</td>
+                    <td className="px-3 py-2 text-right text-mut text-sm">{s.old_mean}</td>
+                    <td className="px-3 py-2 text-right font-medium text-ink text-sm">{s.new_mean}</td>
+                    <td className={`px-3 py-2 text-right font-semibold text-sm ${
+                      s.severity === 'high' ? 'text-red-600' : s.severity === 'medium' ? 'text-amber-600' : 'text-emerald-600'
                     }`}>{s.shift_pct > 0 ? '+' : ''}{s.shift_pct}%</td>
                     <td className="px-3 py-2">
-                      <div className="w-20 h-3 bg-gray-100 rounded-full overflow-hidden relative">
-                        <div className={`absolute top-0 h-full rounded-full ${s.shift_pct >= 0 ? 'bg-red-400 left-1/2' : 'bg-green-400 right-1/2'}`}
+                      <div className="w-20 h-3 bg-slate-100 rounded-full overflow-hidden relative">
+                        <div className={`absolute top-0 h-full rounded-full ${s.shift_pct >= 0 ? 'bg-red-400 left-1/2' : 'bg-emerald-400 right-1/2'}`}
                              style={{ width: `${Math.min(50, Math.abs(s.shift_pct) * 2.5)}%` }} />
                       </div>
                     </td>
@@ -365,7 +307,7 @@ function ImpactTab({ datasetId }: { datasetId: string }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         )}
       </Section>
 
@@ -373,40 +315,31 @@ function ImpactTab({ datasetId }: { datasetId: string }) {
       {pi.affected_policies > 0 ? (
         <>
           <Section title="Portfolio Impact — Affected Policies">
-            <p className="text-sm text-gray-500 mb-4">
-              <strong>What this shows:</strong> The system joined the new data against the active policy book
-              and re-rated every affected policy using the proxy pricing model. This is the "shadow run" —
-              showing exact premium impact before any changes go live.
-            </p>
             <div className="grid grid-cols-4 gap-3 mb-4">
-              <MetricCard label="Affected Policies" value={`${pi.affected_policies?.toLocaleString()} of ${pi.total_policies?.toLocaleString()} (${pi.affected_pct}%)`} color="blue" />
-              <MetricCard label="Total Premium Delta" value={`£${formatGwp(pi.premium_delta_total)}`} color={pi.premium_delta_total > 0 ? 'red' : 'green'} />
-              <MetricCard label="Avg Delta / Policy" value={`£${pi.premium_delta_avg?.toLocaleString()}`} color="gray" />
-              <MetricCard label="Flagged (>10% change)" value={pi.flagged_count?.toLocaleString() || '0'} color={pi.flagged_count > 0 ? 'red' : 'green'} />
+              <Metric label="Affected Policies" value={`${pi.affected_policies?.toLocaleString()} of ${pi.total_policies?.toLocaleString()}`} sub={`(${pi.affected_pct}%)`} tone="blue" />
+              <Metric label="Total Premium Delta" value={`£${formatGwp(pi.premium_delta_total)}`} tone={pi.premium_delta_total > 0 ? 'amber' : 'green'} />
+              <Metric label="Avg Delta / Policy" value={`£${pi.premium_delta_avg?.toLocaleString()}`} tone="plain" />
+              <Metric label="Flagged (>10%)" value={pi.flagged_count?.toLocaleString() || '0'} tone={pi.flagged_count > 0 ? 'amber' : 'green'} />
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div className="border rounded-lg p-3 text-center bg-red-50 border-red-200">
+              <Card className="bg-red-50 border-red-200 text-center p-3">
                 <div className="text-2xl font-bold text-red-700">{pi.policies_increase?.toLocaleString()}</div>
-                <div className="text-xs text-red-600 mt-1">Premium Increase</div>
-              </div>
-              <div className="border rounded-lg p-3 text-center bg-green-50 border-green-200">
-                <div className="text-2xl font-bold text-green-700">{pi.policies_decrease?.toLocaleString()}</div>
-                <div className="text-xs text-green-600 mt-1">Premium Decrease</div>
-              </div>
-              <div className="border rounded-lg p-3 text-center bg-gray-50 border-gray-200">
-                <div className="text-2xl font-bold text-gray-700">{pi.policies_unchanged?.toLocaleString()}</div>
-                <div className="text-xs text-gray-600 mt-1">Unchanged</div>
-              </div>
+                <div className="text-[11px] text-red-600 mt-1 font-bold uppercase">Premium Increase</div>
+              </Card>
+              <Card className="bg-emerald-50 border-emerald-200 text-center p-3">
+                <div className="text-2xl font-bold text-emerald-700">{pi.policies_decrease?.toLocaleString()}</div>
+                <div className="text-[11px] text-emerald-600 mt-1 font-bold uppercase">Premium Decrease</div>
+              </Card>
+              <Card className="bg-slate-50 border-slate-200 text-center p-3">
+                <div className="text-2xl font-bold text-slate-700">{pi.policies_unchanged?.toLocaleString()}</div>
+                <div className="text-[11px] text-slate-600 mt-1 font-bold uppercase">Unchanged</div>
+              </Card>
             </div>
           </Section>
 
           {/* Histogram */}
           {pi.histogram?.length > 0 && (
             <Section title="Premium Change Distribution">
-              <p className="text-sm text-gray-500 mb-4">
-                <strong>What this shows:</strong> How premium changes are distributed across the portfolio.
-                A concentration in the tails (&gt;10% or &lt;-10%) indicates significant pricing disruption.
-              </p>
               <div className="flex items-end gap-1.5 h-40">
                 {pi.histogram.map((h: any, i: number) => {
                   const maxCount = Math.max(...pi.histogram.map((x: any) => x.count || 0));
@@ -415,12 +348,12 @@ function ImpactTab({ datasetId }: { datasetId: string }) {
                   const isExtreme = h.bucket.includes('10');
                   return (
                     <div key={i} className="flex-1 flex flex-col items-center">
-                      <div className="text-xs font-medium text-gray-700 mb-1">{h.count}</div>
+                      <div className="text-xs font-medium text-ink mb-1">{h.count}</div>
                       <div className={`w-full rounded-t transition-all ${
-                        isExtreme ? (isNegative ? 'bg-green-500' : 'bg-red-500')
-                        : isNegative ? 'bg-green-300' : h.bucket === '0%' ? 'bg-gray-300' : 'bg-red-300'
+                        isExtreme ? (isNegative ? 'bg-emerald-500' : 'bg-red-500')
+                        : isNegative ? 'bg-emerald-300' : h.bucket === '0%' ? 'bg-slate-300' : 'bg-red-300'
                       }`} style={{ height: `${heightPct}%`, minHeight: h.count > 0 ? '4px' : '0' }} />
-                      <div className="text-[10px] text-gray-500 mt-1 text-center leading-tight">{h.bucket}</div>
+                      <div className="text-[10px] text-mut mt-1 text-center leading-tight">{h.bucket}</div>
                     </div>
                   );
                 })}
@@ -431,19 +364,15 @@ function ImpactTab({ datasetId }: { datasetId: string }) {
           {/* By Industry */}
           {pi.by_industry?.length > 0 && (
             <Section title="Impact by Class of Business">
-              <p className="text-sm text-gray-500 mb-3">
-                <strong>What this shows:</strong> How the premium impact breaks down by industry risk tier.
-                Identifies which business lines face the most pricing pressure.
-              </p>
-              <div className="overflow-x-auto">
+              <Card className="overflow-x-auto p-0">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 border-b">
-                      <th className="px-3 py-2 text-left font-medium text-gray-600">Industry Tier</th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-600">Policies</th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-600">GWP</th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-600">Total Delta</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-600">Impact</th>
+                    <tr className="bg-slate-50 border-b border-line">
+                      <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Industry Tier</th>
+                      <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">Policies</th>
+                      <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">GWP</th>
+                      <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">Total Delta</th>
+                      <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Impact</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -451,16 +380,16 @@ function ImpactTab({ datasetId }: { datasetId: string }) {
                       const maxDelta = Math.max(...pi.by_industry.map((x: any) => Math.abs(x.total_delta || 0)));
                       const barPct = maxDelta > 0 ? Math.abs(row.total_delta) / maxDelta * 100 : 0;
                       return (
-                        <tr key={i} className="border-b hover:bg-gray-50">
-                          <td className="px-3 py-2 font-medium">{row.industry}</td>
-                          <td className="px-3 py-2 text-right">{row.policies?.toLocaleString()}</td>
-                          <td className="px-3 py-2 text-right">£{formatGwp(row.gwp)}</td>
-                          <td className={`px-3 py-2 text-right font-semibold ${row.total_delta > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        <tr key={i} className="border-b border-line hover:bg-slate-50">
+                          <td className="px-3 py-2 font-medium text-ink">{row.industry}</td>
+                          <td className="px-3 py-2 text-right text-ink">{row.policies?.toLocaleString()}</td>
+                          <td className="px-3 py-2 text-right text-ink">£{formatGwp(row.gwp)}</td>
+                          <td className={`px-3 py-2 text-right font-semibold ${row.total_delta > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                             {row.total_delta > 0 ? '+' : ''}£{formatGwp(row.total_delta)}
                           </td>
                           <td className="px-3 py-2">
-                            <div className="w-24 h-3 bg-gray-100 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${row.total_delta > 0 ? 'bg-red-400' : 'bg-green-400'}`}
+                            <div className="w-24 h-3 bg-slate-100 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${row.total_delta > 0 ? 'bg-red-400' : 'bg-emerald-400'}`}
                                    style={{ width: `${barPct}%` }} />
                             </div>
                           </td>
@@ -469,29 +398,24 @@ function ImpactTab({ datasetId }: { datasetId: string }) {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </Card>
             </Section>
           )}
 
           {/* By Region */}
           {pi.by_region?.length > 0 && (
             <Section title="Geographic Distribution of Impact">
-              <p className="text-sm text-gray-500 mb-3">
-                <strong>What this shows:</strong> Regional breakdown of premium changes. Identifies geographic
-                concentration risk — if one region is disproportionately affected, it may indicate
-                localised risk events (e.g. new flood mapping) that need specific underwriting attention.
-              </p>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                 {pi.by_region.map((row: any, i: number) => (
-                  <div key={i} className={`border rounded-lg p-3 text-center ${
-                    row.total_delta > 0 ? 'bg-red-50 border-red-200' : row.total_delta < 0 ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                  <Card key={i} className={`text-center p-3 ${
+                    row.total_delta > 0 ? 'bg-red-50 border-red-200' : row.total_delta < 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
                   }`}>
-                    <div className="font-bold text-gray-800">{row.region}</div>
-                    <div className="text-xs text-gray-500">{row.policies} policies</div>
-                    <div className={`text-sm font-semibold mt-1 ${row.total_delta > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    <div className="font-bold text-ink">{row.region}</div>
+                    <div className="text-[11px] text-mut">{row.policies} policies</div>
+                    <div className={`text-sm font-semibold mt-1 ${row.total_delta > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                       {row.total_delta > 0 ? '+' : ''}£{formatGwp(row.total_delta)}
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
             </Section>
@@ -500,79 +424,67 @@ function ImpactTab({ datasetId }: { datasetId: string }) {
           {/* Flagged Policies */}
           {pi.flagged_policies?.length > 0 && (
             <Section title={`Policies Requiring Attention (${pi.flagged_count} with >10% change)`}>
-              <p className="text-sm text-gray-500 mb-3">
-                <strong>What this shows:</strong> Individual policies where the premium impact exceeds 10%.
-                These require senior underwriter review before the data merge is approved — a large rate
-                change could trigger customer churn or regulatory scrutiny.
-              </p>
-              <div className="overflow-x-auto">
+              <Card className="overflow-x-auto p-0">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 border-b">
-                      <th className="px-3 py-2 text-left font-medium text-gray-600">Policy ID</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-600">Postcode</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-600">Industry</th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-600">Current Premium</th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-600">Delta</th>
-                      <th className="px-3 py-2 text-right font-medium text-gray-600">Change %</th>
+                    <tr className="bg-slate-50 border-b border-line">
+                      <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Policy ID</th>
+                      <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Postcode</th>
+                      <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Industry</th>
+                      <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">Current Premium</th>
+                      <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">Delta</th>
+                      <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">Change %</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pi.flagged_policies.slice(0, 15).map((row: any, i: number) => (
-                      <tr key={i} className="border-b hover:bg-red-50/30">
-                        <td className="px-3 py-2 font-mono text-xs">{row.policy_id}</td>
-                        <td className="px-3 py-2">{row.postcode}</td>
-                        <td className="px-3 py-2">{row.industry}</td>
-                        <td className="px-3 py-2 text-right">£{row.current_premium?.toLocaleString()}</td>
-                        <td className={`px-3 py-2 text-right font-semibold ${row.premium_delta > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      <tr key={i} className="border-b border-line hover:bg-red-50/30">
+                        <td className="px-3 py-2 font-mono text-xs text-mut">{row.policy_id}</td>
+                        <td className="px-3 py-2 text-ink">{row.postcode}</td>
+                        <td className="px-3 py-2 text-ink">{row.industry}</td>
+                        <td className="px-3 py-2 text-right text-ink">£{row.current_premium?.toLocaleString()}</td>
+                        <td className={`px-3 py-2 text-right font-semibold ${row.premium_delta > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                           {row.premium_delta > 0 ? '+' : ''}£{row.premium_delta?.toLocaleString()}
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            Math.abs(row.delta_pct) > 20 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                          }`}>{row.delta_pct > 0 ? '+' : ''}{row.delta_pct}%</span>
+                          <Pill tone={Math.abs(row.delta_pct) > 20 ? 'red' : 'amber'}>{row.delta_pct > 0 ? '+' : ''}{row.delta_pct}%</Pill>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </Card>
             </Section>
           )}
         </>
       ) : (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-          <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
-          <p className="text-green-700 font-medium">No pricing impact detected — the new data matches current values.</p>
-        </div>
+        <Card className="bg-emerald-50 border-emerald-200 text-center p-6">
+          <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+          <p className="text-emerald-700 font-medium">No pricing impact detected — the new data matches current values.</p>
+        </Card>
       )}
 
       {/* ── Section 3: Risk Summary ── */}
       {rs.score_type && (
         <Section title={`Risk Score Analysis — ${rs.score_type}`}>
-          <p className="text-sm text-gray-500 mb-4">
-            <strong>What this shows:</strong> How risk scores are shifting between the old and new dataset version.
-            Tier migration shows policies moving between risk categories — "Low to High" transitions are the
-            most important to flag as they represent newly discovered risk.
-          </p>
           {rs.score_shift && (
             <div className="grid grid-cols-5 gap-3 mb-4">
-              <MetricCard label={`Old Avg ${rs.score_type}`} value={String(rs.score_shift.old_avg_score ?? '—')} color="gray" />
-              <MetricCard label={`New Avg ${rs.score_type}`} value={String(rs.score_shift.new_avg_score ?? '—')} color="blue" />
-              <MetricCard label="Worsened" value={String(rs.score_shift.worsened ?? 0)} color="red" />
-              <MetricCard label="Improved" value={String(rs.score_shift.improved ?? 0)} color="green" />
-              <MetricCard label="Unchanged" value={String(rs.score_shift.unchanged ?? 0)} color="gray" />
+              <Metric label={`Old Avg ${rs.score_type}`} value={String(rs.score_shift.old_avg_score ?? '—')} tone="plain" />
+              <Metric label={`New Avg ${rs.score_type}`} value={String(rs.score_shift.new_avg_score ?? '—')} tone="blue" />
+              <Metric label="Worsened" value={String(rs.score_shift.worsened ?? 0)} tone="amber" />
+              <Metric label="Improved" value={String(rs.score_shift.improved ?? 0)} tone="green" />
+              <Metric label="Unchanged" value={String(rs.score_shift.unchanged ?? 0)} tone="plain" />
             </div>
           )}
           {rs.tier_migration?.length > 0 && (
-            <div className="overflow-x-auto">
+            <Card className="overflow-x-auto p-0">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 border-b">
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">From Tier</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">To Tier</th>
-                    <th className="px-3 py-2 text-right font-medium text-gray-600">Count</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">Direction</th>
+                  <tr className="bg-slate-50 border-b border-line">
+                    <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">From Tier</th>
+                    <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">To Tier</th>
+                    <th className="px-3 py-2 text-right font-medium text-mut text-xs uppercase">Count</th>
+                    <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Direction</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -586,97 +498,25 @@ function ImpactTab({ datasetId }: { datasetId: string }) {
                     const improved = (to === 'Low' && from !== 'Low') || (to === 'Medium' && from === 'High') ||
                                      (to === 'Prime' && from !== 'Prime');
                     return (
-                      <tr key={i} className={`border-b ${worsened ? 'bg-red-50/40' : improved ? 'bg-green-50/40' : ''}`}>
-                        <td className="px-3 py-2 font-medium">{from}</td>
-                        <td className="px-3 py-2 font-medium">{to}</td>
-                        <td className="px-3 py-2 text-right">{Number(count).toLocaleString()}</td>
+                      <tr key={i} className={`border-b border-line ${worsened ? 'bg-red-50/40' : improved ? 'bg-emerald-50/40' : ''}`}>
+                        <td className="px-3 py-2 font-medium text-ink">{from}</td>
+                        <td className="px-3 py-2 font-medium text-ink">{to}</td>
+                        <td className="px-3 py-2 text-right text-ink">{Number(count).toLocaleString()}</td>
                         <td className="px-3 py-2">
-                          {from === to ? <span className="text-gray-400 text-xs">No change</span> :
-                           worsened ? <span className="text-red-600 text-xs font-medium">Risk increased</span> :
-                           improved ? <span className="text-green-600 text-xs font-medium">Risk decreased</span> :
-                           <span className="text-amber-600 text-xs">Shifted</span>}
+                          {from === to ? <Pill tone="slate">No change</Pill> :
+                           worsened ? <Pill tone="red">Risk increased</Pill> :
+                           improved ? <Pill tone="green">Risk decreased</Pill> :
+                           <Pill tone="amber">Shifted</Pill>}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
+            </Card>
           )}
         </Section>
       )}
-      {/* AI Explainability */}
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-5">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Bot className="w-5 h-5 text-purple-600" />
-            <h3 className="font-semibold text-purple-800">Ask AI: Why did this change?</h3>
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-600 border border-purple-200">OPTIONAL</span>
-          </div>
-          <button onClick={askExplain} disabled={explainLoading}
-            className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-1.5">
-            {explainLoading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analysing...</> : 'Explain This'}
-          </button>
-        </div>
-        <p className="text-xs text-purple-600 mb-3">
-          Uses AI to trace the causal chain from data changes to premium impact. Produces a
-          plain-English explanation suitable for regulatory submissions.
-        </p>
-        {explainResult?.success && explainResult.explanation && (
-          <div className="bg-white border border-purple-200 rounded-lg p-4 space-y-3">
-            <h4 className="font-semibold text-gray-900">{explainResult.explanation.headline}</h4>
-            <p className="text-sm text-gray-700 whitespace-pre-line">{explainResult.explanation.explanation}</p>
-            {explainResult.explanation.key_drivers?.length > 0 && (
-              <div>
-                <h5 className="text-xs font-semibold text-gray-500 uppercase mb-1">Key Drivers</h5>
-                {explainResult.explanation.key_drivers.map((d: any, i: number) => (
-                  <div key={i} className="text-sm text-gray-600 mb-1">
-                    <strong>{d.factor}</strong> ({d.contribution}): {d.detail}
-                  </div>
-                ))}
-              </div>
-            )}
-            {explainResult.explanation.regulatory_statement && (
-              <div className="bg-gray-50 border rounded p-3">
-                <h5 className="text-xs font-semibold text-gray-500 uppercase mb-1">Regulatory Statement</h5>
-                <p className="text-sm text-gray-700 italic">{explainResult.explanation.regulatory_statement}</p>
-              </div>
-            )}
-            <button onClick={() => setExplainExpanded(!explainExpanded)} className="text-xs text-purple-500 flex items-center gap-1">
-              {explainExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              {explainExpanded ? 'Hide' : 'Show'} full LLM interaction
-            </button>
-            {explainExpanded && (
-              <pre className="text-[10px] bg-gray-50 border rounded p-2 max-h-40 overflow-auto whitespace-pre-wrap">
-                {explainResult.transparency?.raw_response}
-              </pre>
-            )}
-          </div>
-        )}
-        {/* Agent ran successfully but the LLM response wasn't structured JSON —
-            still render it as plain prose so the panel doesn't go blank. */}
-        {explainResult?.success && !explainResult.explanation && explainResult.transparency?.raw_response && (
-          <div className="bg-white border border-purple-200 rounded-lg p-4 space-y-2">
-            <p className="text-sm text-gray-700 whitespace-pre-line">
-              {explainResult.transparency.raw_response}
-            </p>
-            <p className="text-[11px] text-gray-500 italic">
-              Agent returned a free-text answer rather than the structured response template.
-              Shown as-is.
-            </p>
-          </div>
-        )}
-        {explainResult && explainResult.success === false && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-            Agent error: {explainResult.transparency?.error || explainResult.error || 'Unknown — check the audit log for details.'}
-          </div>
-        )}
-        {explainResult && explainResult.success && !explainResult.explanation && !explainResult.transparency?.raw_response && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-            Agent returned an empty response. Try again, or check that <code>pricing_chat_agent</code> is warm.
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -693,86 +533,86 @@ function QualityTab({ datasetId }: { datasetId: string }) {
     api.getDatasetQuality(datasetId).then(setData).finally(() => setLoading(false));
   }, [datasetId]);
 
-  if (loading) return <Spinner />;
-  if (!data) return <ErrorMsg msg="Failed to load quality metrics" />;
+  if (loading) return <Loading />;
+  if (!data) return <Card className="border-red-200 text-red-600 text-sm">Failed to load quality metrics</Card>;
+
+  const passRateTone = data.dq_pass_rate >= 95 ? 'green' : data.dq_pass_rate >= 85 ? 'amber' : 'plain';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Top-line metrics */}
-      <div className="grid grid-cols-4 gap-4">
-        <MetricCard label="Raw Rows" value={Number(data.raw_row_count).toLocaleString()} color="blue" />
-        <MetricCard label="Silver Rows (passed DQ)" value={Number(data.silver_row_count).toLocaleString()} color="green" />
-        <MetricCard label="Rows Dropped" value={Number(data.rows_dropped).toLocaleString()} color="red" />
-        <MetricCard
+      <div className="grid grid-cols-4 gap-3">
+        <Metric label="Raw Rows" value={Number(data.raw_row_count).toLocaleString()} tone="blue" />
+        <Metric label="Silver Rows (passed DQ)" value={Number(data.silver_row_count).toLocaleString()} tone="green" />
+        <Metric label="Rows Dropped" value={Number(data.rows_dropped).toLocaleString()} tone="amber" />
+        <Metric
           label="DQ Pass Rate"
           value={`${data.dq_pass_rate}%`}
-          color={data.dq_pass_rate >= 95 ? 'green' : data.dq_pass_rate >= 85 ? 'amber' : 'red'}
+          tone={passRateTone}
         />
       </div>
 
       {/* Freshness */}
-      <div className={`rounded-lg p-4 border ${data.freshness_status === 'fresh' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+      <Card className={`border-l-4 ${data.freshness_status === 'fresh' ? 'bg-emerald-50 border-l-emerald-500' : 'bg-amber-50 border-l-amber-500'} p-4`}>
         <div className="flex items-center justify-between">
           <div>
-            <h4 className="font-semibold text-gray-800">Data Freshness</h4>
-            <p className="text-sm text-gray-600">Last ingested: {data.last_ingested || 'Never'}</p>
+            <h4 className="font-semibold text-ink">Data Freshness</h4>
+            <p className="text-[13px] text-mut">Last ingested: {data.last_ingested || 'Never'}</p>
           </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-            data.freshness_status === 'fresh' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-          }`}>
+          <Pill tone={data.freshness_status === 'fresh' ? 'green' : 'amber'}>
             {data.freshness_status === 'fresh' ? 'Fresh' : 'Stale'}
-          </span>
+          </Pill>
         </div>
-      </div>
+      </Card>
 
       {/* DQ Expectations */}
       <Section title="Data Quality Expectations">
-        <div className="overflow-x-auto">
+        <Card className="overflow-x-auto p-0">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="px-3 py-2 text-left font-medium text-gray-600">Expectation</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-600">Rule</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-600">Action</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-600">Status</th>
+              <tr className="bg-slate-50 border-b border-line">
+                <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Expectation</th>
+                <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Rule</th>
+                <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Action</th>
+                <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Status</th>
               </tr>
             </thead>
             <tbody>
               {data.expectations?.map((exp: any, i: number) => (
-                <tr key={i} className="border-b hover:bg-gray-50">
-                  <td className="px-3 py-2 font-mono text-xs">{exp.name}</td>
-                  <td className="px-3 py-2 text-gray-700">{exp.rule}</td>
+                <tr key={i} className="border-b border-line hover:bg-slate-50">
+                  <td className="px-3 py-2 font-mono text-xs text-mut">{exp.name}</td>
+                  <td className="px-3 py-2 text-ink text-sm">{exp.rule}</td>
                   <td className="px-3 py-2">
-                    <span className="px-2 py-0.5 rounded text-xs bg-red-50 text-red-600 border border-red-200">{exp.action}</span>
+                    <Pill tone="red">{exp.action}</Pill>
                   </td>
                   <td className="px-3 py-2">
-                    <span className="px-2 py-0.5 rounded text-xs bg-green-50 text-green-600 border border-green-200">{exp.status}</span>
+                    <Pill tone="green">{exp.status}</Pill>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       </Section>
 
       {/* Column completeness */}
       <Section title="Column Completeness (% non-null in Silver)">
         <div className="grid grid-cols-3 gap-3">
           {Object.entries(data.completeness || {}).map(([col, pct]: [string, any]) => (
-            <div key={col} className="flex items-center justify-between bg-white border rounded-lg px-3 py-2">
-              <span className="text-sm font-mono text-gray-700">{col}</span>
+            <Card key={col} className="flex items-center justify-between p-3">
+              <span className="text-[13px] font-mono text-ink">{col}</span>
               <div className="flex items-center gap-2">
-                <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${Number(pct) >= 99 ? 'bg-green-500' : Number(pct) >= 90 ? 'bg-amber-400' : 'bg-red-400'}`}
+                    className={`h-full rounded-full ${Number(pct) >= 99 ? 'bg-emerald-500' : Number(pct) >= 90 ? 'bg-amber-400' : 'bg-red-400'}`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                <span className={`text-xs font-medium w-12 text-right ${Number(pct) >= 99 ? 'text-green-600' : Number(pct) >= 90 ? 'text-amber-600' : 'text-red-600'}`}>
+                <span className={`text-[11px] font-bold w-12 text-right ${Number(pct) >= 99 ? 'text-emerald-600' : Number(pct) >= 90 ? 'text-amber-600' : 'text-red-600'}`}>
                   {pct}%
                 </span>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       </Section>
@@ -806,31 +646,25 @@ function ApprovalTab({ datasetId }: { datasetId: string }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {result && (
-        <div className={`rounded-lg p-4 border ${result.decision === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-          <p className={`font-semibold ${result.decision === 'approved' ? 'text-green-800' : 'text-red-800'}`}>
+        <Card className={`border-l-4 ${result.decision === 'approved' ? 'bg-emerald-50 border-l-emerald-500' : 'bg-red-50 border-l-red-500'} p-4`}>
+          <p className={`font-semibold ${result.decision === 'approved' ? 'text-emerald-800' : 'text-red-800'}`}>
             {result.message}
           </p>
-          <p className="text-sm text-gray-600 mt-1">Reviewer: {result.reviewer}</p>
-        </div>
+          <p className="text-[13px] text-mut mt-1">Reviewer: {result.reviewer}</p>
+        </Card>
       )}
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Review Decision</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Confirm that this dataset version has been reviewed and is suitable for merging into the Unified Pricing Table,
-          or reject it with notes explaining why.
-        </p>
-
+      <Section title="Review Decision">
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Reviewer Notes</label>
+          <label className="block text-[13px] font-semibold text-ink mb-2">Reviewer Notes</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            placeholder="Optional: add notes about this review decision..."
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            placeholder="Optional: add notes about this review decision…"
+            className="w-full border border-line rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand focus:border-brand outline-none"
           />
         </div>
 
@@ -838,7 +672,7 @@ function ApprovalTab({ datasetId }: { datasetId: string }) {
           <button
             onClick={() => handleDecision('approved')}
             disabled={submitting}
-            className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             Approve & Merge
@@ -852,41 +686,39 @@ function ApprovalTab({ datasetId }: { datasetId: string }) {
             Reject
           </button>
         </div>
-      </div>
+      </Section>
 
       {/* Approval history */}
       {history.length > 0 && (
         <Section title="Approval History">
-          <div className="overflow-x-auto">
+          <Card className="overflow-x-auto p-0">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b">
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Date</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Decision</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Reviewer</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Notes</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600">Raw/Silver</th>
+                <tr className="bg-slate-50 border-b border-line">
+                  <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Date</th>
+                  <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Decision</th>
+                  <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Reviewer</th>
+                  <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Notes</th>
+                  <th className="px-3 py-2 text-left font-medium text-mut text-xs uppercase">Raw/Silver</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((h: any, i: number) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="px-3 py-2 text-gray-600">{h.reviewed_at}</td>
+                  <tr key={i} className="border-b border-line hover:bg-slate-50">
+                    <td className="px-3 py-2 text-mut text-sm">{h.reviewed_at}</td>
                     <td className="px-3 py-2">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        h.decision === 'approved' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                      }`}>
+                      <Pill tone={h.decision === 'approved' ? 'green' : 'red'}>
                         {h.decision}
-                      </span>
+                      </Pill>
                     </td>
-                    <td className="px-3 py-2 text-gray-700">{h.reviewer}</td>
-                    <td className="px-3 py-2 text-gray-500">{h.reviewer_notes || '—'}</td>
-                    <td className="px-3 py-2 text-gray-600">{h.raw_row_count} / {h.silver_row_count}</td>
+                    <td className="px-3 py-2 text-ink text-sm">{h.reviewer}</td>
+                    <td className="px-3 py-2 text-mut text-sm">{h.reviewer_notes || '—'}</td>
+                    <td className="px-3 py-2 text-ink text-sm">{h.raw_row_count} / {h.silver_row_count}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </Section>
       )}
     </div>
@@ -943,52 +775,47 @@ function UploadDownloadTab({ datasetId, datasetName }: { datasetId: string; data
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Download section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Download Current Data</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Export the current version of this dataset as CSV for offline review or editing.
-          Downloads are logged in the audit trail.
+      <Section title="Download Current Data">
+        <p className="text-[13px] text-mut mb-4">
+          Export the current version as CSV for offline review. Downloads are logged in the audit trail.
         </p>
         <div className="flex gap-3">
           <a
             href={api.downloadDataset(datasetId, 'silver')}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg text-[13px] font-medium hover:bg-blue-700 transition-colors"
           >
             <Download className="w-4 h-4" /> Download Silver (Cleansed)
           </a>
           <a
             href={api.downloadDataset(datasetId, 'raw')}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg text-[13px] font-medium hover:bg-slate-700 transition-colors"
           >
             <Download className="w-4 h-4" /> Download Raw (Bronze)
           </a>
         </div>
-      </div>
+      </Section>
 
       {/* Upload section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload New Data</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Upload a CSV file to replace or append data in the bronze layer. The file must match
-          the expected column schema. After upload, run the ingestion pipeline to promote to silver.
+      <Section title="Upload New Data">
+        <p className="text-[13px] text-mut mb-4">
+          Upload a CSV to replace or append data in the bronze layer. File must match the expected schema. After upload, the ingestion pipeline promotes to silver.
         </p>
 
         {/* Upload result banner */}
         {uploadResult && !uploadResult.error && (
-          <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="font-semibold text-green-800">Upload successful</p>
-            <p className="text-sm text-green-600 mt-1">
-              {uploadResult.row_count} rows written to {uploadResult.target_table} ({uploadResult.mode} mode).
-              File hash: <code className="text-xs">{uploadResult.file_hash?.slice(0, 16)}...</code>
+          <Card className="mb-4 bg-emerald-50 border-emerald-200 p-4">
+            <p className="font-semibold text-emerald-800">Upload successful</p>
+            <p className="text-[13px] text-emerald-600 mt-1">
+              {uploadResult.row_count} rows → {uploadResult.target_table} ({uploadResult.mode} mode)
             </p>
-          </div>
+          </Card>
         )}
         {uploadResult?.error && (
-          <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+          <Card className="mb-4 bg-red-50 border-red-200 p-4">
             <p className="font-semibold text-red-800">Upload failed: {uploadResult.error}</p>
-          </div>
+          </Card>
         )}
 
         {/* Mode selector */}

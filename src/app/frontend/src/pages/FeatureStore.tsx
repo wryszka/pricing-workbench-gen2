@@ -3,10 +3,14 @@ import {
   Database, Zap, ExternalLink, AlertTriangle, Tag,
   BookOpen, Shield, Loader2, PlayCircle, PauseCircle, CheckCircle2, XCircle,
   FileInput, Briefcase, Globe2, ArrowRight,
-  LayoutDashboard, ListTree, Clock, Layers, TrendingUp, AlertOctagon,
+  LayoutDashboard, ListTree, Clock, Layers, TrendingUp, AlertOctagon, Table2,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import GenieChat from '../components/GenieChat';
+import {
+  Page, PageHeader, OnThisPage, Card, CardTitle, Section, Metric, Pill,
+  AgentLead, UnderTheHood, SectionHead, Grid, Loading, Prov,
+} from '../components/ui';
 
 type Feature = {
   feature_name: string;
@@ -108,32 +112,34 @@ export default function FeatureStore() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-5">
-        <h2 className="text-2xl font-bold text-gray-900">Modelling Mart</h2>
-        <p className="text-gray-500 mt-1">
-          The modelling dataset — every approved feed joined onto the active book: policies, claims,
-          market benchmarks, geospatial hazard, credit bureau, and real UK postcode enrichment.
-          <code className="text-xs bg-gray-100 px-1 rounded">policy_id</code> is the <em>grain</em>
-          (one row per policy), not the identity.
-        </p>
-        <div className="mt-2 inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-900">
-          <span className="text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-blue-200 text-blue-900">
-            Showing
-          </span>
-          SME Commercial — Property and Motor each have a parallel mart with the same medallion pattern
-          (per-line-of-business by design, not one mega-table).
-        </div>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Bricksurance SE · Modelling Mart"
+        title="Feature Catalog"
+        subtitle="Every approved feed joined onto the active book: policies, claims, market benchmarks, geospatial hazard, credit bureau, and real UK postcode enrichment. policy_id is the grain (one row per policy), not the identity."
+        icon={Table2}
+      />
 
-      {loading && (
-        <div className="mb-4 flex items-center gap-2 text-xs text-gray-500">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading live mart status…
-        </div>
-      )}
+      <AgentLead
+        persona="ask_the_book"
+        title="Ask the Book"
+        subtitle="Your pricing analyst over the governed mart."
+        seed="What's in the modelling mart and which signals stand out for pricing right now?"
+        examples={[
+          'Which factors matter most?',
+          'Any data-quality gaps?',
+          'Where is exposure concentrated?',
+        ]}
+      />
+
+      <OnThisPage>
+        The modelling dataset — feature composition, health, coverage across the portfolio, and claim patterns. Three views: Overview (dashboard), Dashboard (embedded Lakeview), and Details (lineage, governance, online serving).
+      </OnThisPage>
+
+      {loading && <Loading label="Loading live mart status…" />}
 
       {/* Tab bar — Overview (app-rendered) | Dashboard (Databricks embedded) | Details */}
-      <div className="flex gap-1 border-b border-gray-200 mb-6">
+      <div className="flex gap-1 border-b border-line mb-5">
         {[
           { id: 'overview'  as const, label: 'Overview',  icon: LayoutDashboard },
           { id: 'dashboard' as const, label: 'Dashboard', icon: TrendingUp },
@@ -144,8 +150,8 @@ export default function FeatureStore() {
             onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               tab === t.id
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-brand text-brand'
+                : 'border-transparent text-mut hover:text-ink hover:border-line'
             }`}
           >
             <t.icon className="w-4 h-4" />
@@ -191,7 +197,16 @@ export default function FeatureStore() {
           lifecycleMsg={lifecycleMsg} lifecycleTone={lifecycleTone}
         />
       )}
-    </div>
+
+      <UnderTheHood
+        lines={[
+          { component: 'Databricks Feature Store', detail: 'Unity Catalog–backed feature table; offline (Delta) + online (Lakebase) serving.' },
+          { component: 'MLflow experiment tracking', detail: 'All training runs logged with governance tags and model registry references.' },
+          { component: 'Databricks AI/BI dashboards', detail: 'The embedded dashboard is live Lakeview; click "Open in Databricks" to edit.' },
+          { component: 'Genie', detail: 'Natural-language questions over the mart; backed by the Genie space.' },
+        ]}
+      />
+    </Page>
   );
 }
 
@@ -203,12 +218,12 @@ export default function FeatureStore() {
 function DashboardTab({ dashboardId, host }: { dashboardId?: string; host?: string }) {
   if (!dashboardId) {
     return (
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 text-sm text-amber-800 space-y-2">
+      <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-3.5 text-sm text-amber-800 space-y-2">
         <div className="font-semibold">Modelling Mart dashboard not configured for this workspace.</div>
         <div>
           Each workspace has its own Lakeview dashboard id. Set
-          {' '}<code className="bg-white px-1 rounded border">MART_DASHBOARD_ID</code> in
-          {' '}<code className="bg-white px-1 rounded border">src/app/app.&lt;target&gt;.yaml</code>
+          {' '}<code className="bg-white px-1 rounded border text-[12px]">MART_DASHBOARD_ID</code> in
+          {' '}<code className="bg-white px-1 rounded border text-[12px]">src/app/app.&lt;target&gt;.yaml</code>
           {' '}and redeploy.
         </div>
       </div>
@@ -218,25 +233,25 @@ function DashboardTab({ dashboardId, host }: { dashboardId?: string; host?: stri
   const embedUrl = `${workspaceHost}/embed/dashboardsv3/${dashboardId}`;
   const openUrl  = `${workspaceHost}/dashboardsv3/${dashboardId}`;
   return (
-    <div>
+    <Card>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-mut">
           Powered by Databricks AI/BI Dashboards · the same embed your execs open in-workspace
         </div>
         <a href={openUrl} target="_blank" rel="noopener noreferrer"
-           className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
+           className="inline-flex items-center gap-1 text-xs text-brand hover:text-blue-700 font-medium">
           Open in Databricks <ExternalLink className="w-3 h-3" />
         </a>
       </div>
       <iframe
         src={embedUrl}
         title="Modelling Mart — Overview"
-        className="w-full rounded-lg border border-gray-200 bg-white"
+        className="w-full rounded-lg border border-line bg-white"
         // Two-page dashboard. The user switches pages via the top-of-dashboard
         // tabs; each page sits around 900px. Pick the larger so no clipping.
         style={{ height: 1000 }}
       />
-    </div>
+    </Card>
   );
 }
 
@@ -248,7 +263,7 @@ function DashboardTab({ dashboardId, host }: { dashboardId?: string; host?: stri
 
 function OverviewTab({ profile }: { profile: any }) {
   if (!profile) {
-    return <div className="py-16 text-center text-gray-400 text-sm"><Loader2 className="w-6 h-6 animate-spin inline-block mr-2" />Computing mart profile…</div>;
+    return <Loading label="Computing mart profile…" />;
   }
   const h = profile.headline || {};
   const groups: { feature_group: string; n: any }[] = profile.factor_groups || [];
@@ -260,147 +275,139 @@ function OverviewTab({ profile }: { profile: any }) {
   const recent = profile.recent_activity?.refreshes || [];
 
   return (
-    <div className="space-y-6">
-      {/* Headline tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Tile label="Total rows"       value={fmt(h.total_rows)} hint="one row per policy in the mart" />
-        <Tile label="Unique policies"  value={fmt(h.unique_policies)} hint={
+    <div className="space-y-5">
+      {/* Headline metrics */}
+      <Grid cols={3}>
+        <Metric label="Total rows" value={fmt(h.total_rows)} sub="one row per policy in the mart" tone="blue" />
+        <Metric label="Unique policies" value={fmt(h.unique_policies)} sub={
           h.total_rows && h.total_rows === h.unique_policies ? 'grain intact' : 'grain mismatch'
-        } />
-        <Tile label="Date range"       value={
+        } tone="blue" />
+        <Metric label="Date range" value={
           h.policy_date_min && h.policy_date_max
             ? `${shortDate(h.policy_date_min)} → ${shortDate(h.policy_date_max)}`
             : '—'
-        } hint="inception → renewal" />
-        <Tile label="Last refresh"     value={relativeTime(h.last_refresh)} hint={
+        } sub="inception → renewal" tone="blue" />
+        <Metric label="Last refresh" value={relativeTime(h.last_refresh)} sub={
           h.last_refresh_version !== undefined ? `version ${h.last_refresh_version}` : ''
-        } />
-        <Tile label="Columns"          value={fmt(h.column_count)} hint="factors exposed" />
-        <Tile label="Contributing feeds" value={fmt(h.upstream_feeds_count)} hint="approved upstream sources" />
-      </div>
+        } tone="blue" />
+        <Metric label="Columns" value={fmt(h.column_count)} sub="factors exposed" tone="blue" />
+        <Metric label="Contributing feeds" value={fmt(h.upstream_feeds_count)} sub="approved upstream sources" tone="blue" />
+      </Grid>
 
       {/* Factor group composition + Feature health side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card title="Factor catalog — composition"
-              icon={<Layers className="w-4 h-4 text-blue-600" />}
-              help="How the factor catalog breaks down by role. An actuary uses this to confirm there's enough variety — rating factors for the model, claim_derived for labels, enrichment for lift.">
+      <Grid cols={2}>
+        <Section title="Factor catalog — composition" subtitle="How the factor catalog breaks down by role. Rating factors for the model, claim_derived for labels, enrichment for lift.">
           <GroupedBars rows={groups.map((g) => ({ label: g.feature_group, value: Number(g.n || 0) }))} />
-        </Card>
+        </Section>
 
-        <Card title="Feature health — highest missingness"
-              icon={<AlertOctagon className="w-4 h-4 text-amber-600" />}
-              help="The 10 factors with the most nulls on the current mart. Excludes claim-derived columns (NULL by design when a policy has no 5-year claim history). High missingness is an early warning that a factor may not be usable for modelling — either drop it, impute, or investigate upstream.">
+        <Section title="Feature health — highest missingness" subtitle="The 10 factors with the most nulls on the current mart. High missingness is an early warning that a factor may not be usable for modelling.">
           {top.length === 0 ? (
-            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-3">
-              <CheckCircle2 className="w-4 h-4 inline mr-1" />
+            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
               No factors with significant missing data — catalogue is clean.
             </div>
           ) : (
             <div className="space-y-1.5">
               {top.map((f: any) => (
                 <div key={f.feature_name} className="flex items-center gap-3">
-                  <code className="text-xs text-gray-700 w-52 shrink-0 truncate">{f.feature_name}</code>
-                  <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <code className="text-xs text-ink w-52 shrink-0 truncate">{f.feature_name}</code>
+                  <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${
                       f.null_rate > 0.3 ? 'bg-red-500' : f.null_rate > 0.1 ? 'bg-amber-400' : 'bg-yellow-300'
                     }`} style={{ width: `${Math.min(100, f.null_rate * 100)}%` }} />
                   </div>
                   <span className={`text-xs font-mono w-16 text-right ${
-                    f.null_rate > 0.3 ? 'text-red-700' : f.null_rate > 0.1 ? 'text-amber-700' : 'text-gray-600'
+                    f.null_rate > 0.3 ? 'text-red-700' : f.null_rate > 0.1 ? 'text-amber-700' : 'text-mut'
                   }`}>{(f.null_rate * 100).toFixed(1)}%</span>
                 </div>
               ))}
             </div>
           )}
-        </Card>
-      </div>
+        </Section>
+      </Grid>
 
       {/* Coverage */}
-      <Card title="Coverage across the book"
-            icon={<Globe2 className="w-4 h-4 text-indigo-600" />}
-            help="Where does the mart have data? This reveals concentration — if 80% of policies are in one region, the model will struggle to generalise.">
+      <Section title="Coverage across the book" subtitle="Where does the mart have data? This reveals concentration — if 80% of policies are in one region, the model will struggle to generalise.">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Policies by region</div>
+            <SectionHead>Policies by region</SectionHead>
             <GroupedBars rows={byRegion.map((r) => ({ label: r.region, value: Number(r.n || 0) }))} />
           </div>
           <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Policies by industry risk tier</div>
+            <SectionHead>Policies by industry risk tier</SectionHead>
             <GroupedBars rows={byTier.map((r) => ({ label: r.tier, value: Number(r.n || 0) }))} />
           </div>
         </div>
-      </Card>
+      </Section>
 
       {/* Claims sanity */}
-      <Card title="Claims — does the label distribution look right?"
-            icon={<TrendingUp className="w-4 h-4 text-red-600" />}
-            help="The labels we model against. If the claim frequency, severity, or loss ratio look off compared to what an actuary expects for this book, the mart likely has a bug — investigate before modelling.">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-          <Tile compact label="Total claims (5y)"   value={fmt(claims.total_claims)} />
-          <Tile compact label="Avg freq / policy"   value={Number(claims.avg_freq_5y || 0).toFixed(2)} hint="over 5 years" />
-          <Tile compact label="Mean severity"       value={`£${fmt(Math.round(claims.mean_severity || 0))}`} />
-          <Tile compact label="Portfolio loss ratio"
-                value={`${(Number(claims.portfolio_loss_ratio_5y || 0) * 100).toFixed(1)}%`}
-                hint="5-yr claims £ ÷ premium £" />
-        </div>
+      <Section title="Claims — does the label distribution look right?" subtitle="The labels we model against. If the claim frequency, severity, or loss ratio look off, the mart likely has a bug — investigate before modelling.">
+        <Grid cols={4}>
+          <Metric label="Total claims (5y)" value={fmt(claims.total_claims)} tone="amber" />
+          <Metric label="Avg freq / policy" value={Number(claims.avg_freq_5y || 0).toFixed(2)} sub="over 5 years" tone="amber" />
+          <Metric label="Mean severity" value={`£${fmt(Math.round(claims.mean_severity || 0))}`} tone="amber" />
+          <Metric label="Portfolio loss ratio" value={`${(Number(claims.portfolio_loss_ratio_5y || 0) * 100).toFixed(1)}%`} sub="5-yr claims £ ÷ premium £" tone="amber" />
+        </Grid>
         {lrByTier.length > 0 && (
-          <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Loss ratio by industry tier (premium-weighted)</div>
+          <div className="mt-4">
+            <SectionHead>Loss ratio by industry tier (premium-weighted)</SectionHead>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-mut uppercase tracking-wide border-b border-line">
+                    <th className="text-left py-2 pr-3 font-medium">Tier</th>
+                    <th className="text-right py-2 pr-3 font-medium">Policies</th>
+                    <th className="text-right py-2 pr-3 font-medium">Claims (5y)</th>
+                    <th className="text-right py-2 font-medium">Loss ratio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lrByTier.map((r: any) => (
+                    <tr key={r.tier} className="border-b border-line last:border-b-0 hover:bg-slate-50">
+                      <td className="py-2 pr-3 font-medium text-ink">{r.tier}</td>
+                      <td className="py-2 pr-3 text-right text-ink">{fmt(r.n)}</td>
+                      <td className="py-2 pr-3 text-right text-ink">{fmt(r.total_claims)}</td>
+                      <td className={`py-2 text-right font-mono ${
+                        Number(r.loss_ratio) > 0.8 ? 'text-red-700' : Number(r.loss_ratio) < 0.4 ? 'text-amber-600' : 'text-ink'
+                      }`}>{(Number(r.loss_ratio || 0) * 100).toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Section>
+
+      {/* Recent refresh activity */}
+      <Section title="Recent refresh activity" subtitle="The last five Delta commits on the mart — who rebuilt it, when, and what kind of operation.">
+        {recent.length === 0 ? (
+          <div className="text-xs text-mut italic">No refresh history yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs text-gray-500 border-b">
-                  <th className="text-left py-1.5 pr-3 font-medium">Tier</th>
-                  <th className="text-right py-1.5 pr-3 font-medium">Policies</th>
-                  <th className="text-right py-1.5 pr-3 font-medium">Claims (5y)</th>
-                  <th className="text-right py-1.5 font-medium">Loss ratio</th>
+                <tr className="text-xs text-mut uppercase tracking-wide border-b border-line">
+                  <th className="text-left py-2 pr-3 font-medium">Version</th>
+                  <th className="text-left py-2 pr-3 font-medium">Timestamp</th>
+                  <th className="text-left py-2 pr-3 font-medium">Operation</th>
+                  <th className="text-left py-2 font-medium">User</th>
                 </tr>
               </thead>
               <tbody>
-                {lrByTier.map((r: any) => (
-                  <tr key={r.tier} className="border-b last:border-b-0 hover:bg-gray-50">
-                    <td className="py-1.5 pr-3 font-medium">{r.tier}</td>
-                    <td className="py-1.5 pr-3 text-right">{fmt(r.n)}</td>
-                    <td className="py-1.5 pr-3 text-right">{fmt(r.total_claims)}</td>
-                    <td className={`py-1.5 text-right font-mono ${
-                      Number(r.loss_ratio) > 0.8 ? 'text-red-700' : Number(r.loss_ratio) < 0.4 ? 'text-amber-600' : 'text-gray-700'
-                    }`}>{(Number(r.loss_ratio || 0) * 100).toFixed(1)}%</td>
+                {recent.map((r: any, i: number) => (
+                  <tr key={i} className="border-b border-line last:border-b-0 hover:bg-slate-50">
+                    <td className="py-2 pr-3 font-mono text-xs text-ink">v{r.version}</td>
+                    <td className="py-2 pr-3 text-ink text-sm">{r.timestamp}</td>
+                    <td className="py-2 pr-3"><span className="text-xs bg-slate-100 rounded px-1.5 py-0.5 text-ink">{r.operation}</span></td>
+                    <td className="py-2 text-ink text-xs">{r.user || '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-      </Card>
-
-      {/* Recent refresh activity */}
-      <Card title="Recent refresh activity"
-            icon={<Clock className="w-4 h-4 text-gray-600" />}
-            help="The last five Delta commits on the mart — who rebuilt it, when, and what kind of operation. Ties to the full audit trail on the Governance tab.">
-        {recent.length === 0 ? (
-          <div className="text-xs text-gray-500 italic">No refresh history yet.</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-500 border-b">
-                <th className="text-left py-1.5 pr-3 font-medium">Version</th>
-                <th className="text-left py-1.5 pr-3 font-medium">Timestamp</th>
-                <th className="text-left py-1.5 pr-3 font-medium">Operation</th>
-                <th className="text-left py-1.5 font-medium">User</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map((r: any, i: number) => (
-                <tr key={i} className="border-b last:border-b-0 hover:bg-gray-50">
-                  <td className="py-1.5 pr-3 font-mono text-xs">v{r.version}</td>
-                  <td className="py-1.5 pr-3 text-gray-600">{r.timestamp}</td>
-                  <td className="py-1.5 pr-3"><span className="text-xs bg-gray-100 rounded px-1.5 py-0.5">{r.operation}</span></td>
-                  <td className="py-1.5 text-gray-600 text-xs">{r.user || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
+      </Section>
     </div>
   );
 }
@@ -414,100 +421,95 @@ function DetailsTab({ sources, catalog, upt, os, storeActive, tags,
                      promoting, pausing, promote, pause,
                      lifecycleMsg, lifecycleTone }: any) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Sources — every upstream that contributes */}
       <SourcesPanel sources={sources} targetLabel="Modelling Mart" />
 
       {/* Offline + Online status */}
-      <div className="grid grid-cols-2 gap-5">
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-5 py-3 bg-gray-50 border-b flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-blue-600" />
-              <h3 className="font-semibold text-gray-800">Offline (Delta Lake)</h3>
-            </div>
-            <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200">Active</span>
-          </div>
-          <div className="p-5 space-y-3">
+      <Grid cols={2}>
+        <Card>
+          <CardTitle>Offline (Delta Lake)</CardTitle>
+          <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <Stat label="Rows"          value={Number(upt.row_count || 0).toLocaleString()} />
-              <Stat label="Columns"       value={String(upt.column_count || 0)} />
-              <Stat label="Delta version" value={`v${upt.delta_version}`} />
-              <Stat label="Primary key"   value={upt.primary_key || 'policy_id'} />
+              <Metric label="Rows" value={Number(upt.row_count || 0).toLocaleString()} tone="blue" />
+              <Metric label="Columns" value={String(upt.column_count || 0)} tone="blue" />
             </div>
-            <div className="text-xs text-gray-500">Last modified: {upt.last_modified || '—'}</div>
+            <div className="text-xs text-mut">Delta version v{upt.delta_version} · Primary key: {upt.primary_key || 'policy_id'}</div>
+            <div className="text-xs text-mut">Last modified: {upt.last_modified || '—'}</div>
             {upt.catalog_url && (
               <a href={upt.catalog_url} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
+                className="inline-flex items-center gap-1 text-xs text-brand hover:text-blue-700 font-medium">
                 <ExternalLink className="w-3 h-3" /> View in Catalog Explorer
               </a>
             )}
+            <Pill tone="green">ACTIVE</Pill>
           </div>
-        </div>
+        </Card>
 
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-5 py-3 bg-gray-50 border-b flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" />
-              <h3 className="font-semibold text-gray-800">Online (Lakebase)</h3>
+        <Card>
+          <CardTitle>Online (Lakebase)</CardTitle>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-mut uppercase tracking-wide font-bold">State</span>
+              <StoreStateBadge state={os.state} />
             </div>
-            <StoreStateBadge state={os.state} />
-          </div>
-          <div className="p-5 space-y-3">
             {storeActive ? (
-              <div className="grid grid-cols-2 gap-3">
-                <Stat label="Store name" value={os.name} />
-                <Stat label="Capacity"   value={os.capacity || '—'} />
-              </div>
+              <>
+                <div>
+                  <div className="text-xs text-mut uppercase tracking-wide font-bold mb-1">Store</div>
+                  <div className="text-sm text-ink font-mono">{os.name}</div>
+                </div>
+                {os.capacity && (
+                  <div>
+                    <div className="text-xs text-mut uppercase tracking-wide font-bold mb-1">Capacity</div>
+                    <div className="text-sm text-ink">{os.capacity}</div>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="flex items-center gap-2 text-amber-600 text-sm">
-                <AlertTriangle className="w-4 h-4" />
+              <div className="flex items-center gap-2 text-amber-600 text-sm bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
                 {os.state === 'NOT_CREATED' ? 'Online serving disabled. Click Promote to provision Lakebase.' : `State: ${os.state}`}
               </div>
             )}
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex items-center gap-2 pt-3 border-t border-line">
               <button onClick={promote} disabled={promoting || pausing}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700 disabled:opacity-50">
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-brand text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition">
                 {promoting ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-                {storeActive ? 'Re-publish' : 'Promote to online'}
+                {storeActive ? 'Re-publish' : 'Promote'}
               </button>
               {storeActive && (
                 <button onClick={pause} disabled={promoting || pausing}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-line rounded-lg text-sm text-ink hover:bg-slate-50 disabled:opacity-50 transition">
                   {pausing ? <Loader2 className="w-4 h-4 animate-spin" /> : <PauseCircle className="w-4 h-4" />}
-                  Pause (drop)
+                  Pause
                 </button>
               )}
             </div>
             {lifecycleMsg && (
-              <div className={`rounded px-3 py-2 text-xs whitespace-pre-line ${
-                lifecycleTone === 'ok' ? 'bg-green-50 text-green-700 border border-green-200' :
-                                         'bg-red-50 text-red-700 border border-red-200'}`}>
+              <div className={`rounded-lg px-3 py-2.5 text-xs whitespace-pre-line border ${
+                lifecycleTone === 'ok' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                        'bg-red-50 text-red-700 border-red-200'}`}>
                 {lifecycleMsg}
               </div>
             )}
           </div>
-        </div>
-      </div>
+        </Card>
+      </Grid>
 
       {/* Feature catalog */}
       <FeatureCatalogPanel catalog={catalog} />
 
       {/* Tags */}
       {Object.keys(tags).length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-5 py-3 bg-gray-50 border-b flex items-center gap-2">
-            <Tag className="w-4 h-4 text-gray-600" />
-            <h3 className="font-semibold text-gray-800 text-sm">Feature table tags</h3>
-          </div>
-          <div className="p-5 flex flex-wrap gap-2">
+        <Card>
+          <CardTitle>Feature table tags</CardTitle>
+          <div className="flex flex-wrap gap-2">
             {Object.entries(tags).map(([k, v]) => (
-              <span key={k} className="px-3 py-1 bg-gray-100 rounded-full text-xs text-gray-700">
-                <strong>{k}:</strong> {v as string}
-              </span>
+              <Pill key={k} tone="slate">{k}: {v as string}</Pill>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -516,31 +518,6 @@ function DetailsTab({ sources, catalog, upt, os, storeActive, tags,
 // ---------------------------------------------------------------------------
 // Small helpers used across both tabs
 // ---------------------------------------------------------------------------
-
-function Tile({ label, value, hint, compact }: { label: string; value: React.ReactNode; hint?: string; compact?: boolean }) {
-  return (
-    <div className={`bg-white rounded-lg border border-gray-200 ${compact ? 'p-3' : 'p-4'}`}>
-      <div className={`${compact ? 'text-[10px]' : 'text-[11px]'} font-medium text-gray-500 uppercase tracking-wide`}>{label}</div>
-      <div className={`${compact ? 'text-lg' : 'text-xl'} font-bold text-gray-900 mt-1`}>{value}</div>
-      {hint && <div className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-gray-400 mt-0.5`}>{hint}</div>}
-    </div>
-  );
-}
-
-function Card({ title, icon, help, children }: { title: string; icon: React.ReactNode; help?: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="px-5 py-3 bg-gray-50 border-b flex items-center gap-2">
-        {icon}
-        <h3 className="font-semibold text-gray-800 text-sm">{title}</h3>
-      </div>
-      <div className="p-5">
-        {help && <p className="text-xs text-gray-500 mb-3 italic">{help}</p>}
-        {children}
-      </div>
-    </div>
-  );
-}
 
 // Horizontal bar chart — label on the left, filled bar, value on the right.
 function GroupedBars({ rows }: { rows: { label: string; value: number }[] }) {
@@ -619,15 +596,15 @@ function FeatureCatalogPanel({ catalog }: {
 
   if (!catalog || catalog.error) {
     return (
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-5">
+      <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-3.5">
         <div className="flex items-center gap-2 mb-1">
           <BookOpen className="w-5 h-5 text-amber-600" />
-          <h3 className="font-semibold text-amber-800">Feature catalog not available</h3>
+          <h3 className="font-semibold text-amber-800 text-sm">Feature catalog not available</h3>
         </div>
-        <p className="text-sm text-amber-700">
-          Run <code className="bg-white px-1 rounded">build_feature_catalog</code> (part of the{' '}
-          <code className="bg-white px-1 rounded">build_upt</code> bundle job) to populate the{' '}
-          <code className="bg-white px-1 rounded">feature_catalog</code> table that drives this panel.
+        <p className="text-xs text-amber-700 leading-relaxed">
+          Run <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-[11px] font-mono">build_feature_catalog</code> (part of the{' '}
+          <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-[11px] font-mono">build_upt</code> bundle job) to populate the{' '}
+          <code className="bg-white px-1.5 py-0.5 rounded border border-amber-200 text-[11px] font-mono">feature_catalog</code> table that drives this panel.
         </p>
         {catalog?.error && <p className="mt-2 text-xs text-amber-600">{catalog.error}</p>}
       </div>
@@ -637,18 +614,16 @@ function FeatureCatalogPanel({ catalog }: {
   const groups = Object.keys(catalog.counts_by_group).sort();
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="px-5 py-3 bg-gray-50 border-b flex items-center justify-between flex-wrap gap-2">
+    <Card>
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <BookOpen className="w-4 h-4 text-emerald-700" />
-          <h3 className="font-semibold text-gray-800 text-sm">Feature catalog</h3>
-          <span className="text-xs text-gray-500">{catalog.total} features · one row per UPT column, with provenance</span>
+          <CardTitle>{catalog.total} features · one row per UPT column, with provenance</CardTitle>
         </div>
         <div className="flex items-center gap-2">
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search feature…"
-            className="px-2 py-1 border border-gray-300 rounded text-xs font-mono w-52" />
+            className="px-3 py-1.5 border border-line rounded-lg text-xs font-mono w-48 focus:outline-none focus:ring-2 focus:ring-brand/50" />
           <select value={filter} onChange={e => setFilter(e.target.value)}
-            className="px-2 py-1 border border-gray-300 rounded text-xs bg-white">
+            className="px-3 py-1.5 border border-line rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-brand/50">
             <option value="all">All groups</option>
             {groups.map(g => (
               <option key={g} value={g}>{g} ({catalog.counts_by_group[g]})</option>
@@ -657,35 +632,37 @@ function FeatureCatalogPanel({ catalog }: {
         </div>
       </div>
 
-      <div className="grid grid-cols-5 divide-x divide-gray-100 text-[10px] font-semibold text-gray-500 uppercase tracking-wide bg-gray-50">
-        <div className="px-3 py-1.5">Feature</div>
-        <div className="px-3 py-1.5">Group</div>
-        <div className="px-3 py-1.5">Source tables</div>
-        <div className="px-3 py-1.5">Owner</div>
-        <div className="px-3 py-1.5">Flags</div>
-      </div>
+      <div className="border border-line rounded-lg overflow-hidden">
+        <div className="grid grid-cols-5 divide-x divide-line text-[10px] font-semibold text-mut uppercase tracking-[0.05em] bg-slate-50 border-b border-line">
+          <div className="px-3 py-2">Feature</div>
+          <div className="px-3 py-2">Group</div>
+          <div className="px-3 py-2">Source tables</div>
+          <div className="px-3 py-2">Owner</div>
+          <div className="px-3 py-2">Flags</div>
+        </div>
 
-      <div className="max-h-[480px] overflow-y-auto divide-y text-xs">
-        {filtered.map(f => (
-          <button key={f.feature_name} onClick={() => setSelected(f)}
-            className="w-full text-left grid grid-cols-5 divide-x divide-gray-100 hover:bg-emerald-50 transition-colors">
-            <div className="px-3 py-1.5 font-mono font-medium text-gray-900">{f.feature_name}</div>
-            <div className="px-3 py-1.5">
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${GROUP_COLORS[f.feature_group] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                {f.feature_group}
-              </span>
-            </div>
-            <div className="px-3 py-1.5 text-gray-600 font-mono truncate">{joinList(f.source_tables) || '—'}</div>
-            <div className="px-3 py-1.5 text-gray-600">{f.owner || '—'}</div>
-            <div className="px-3 py-1.5 flex items-center gap-1">
-              {asBool(f.regulatory_sensitive) && <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-100 text-red-700">reg</span>}
-              {asBool(f.pii) && <span className="px-1.5 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700">pii</span>}
-            </div>
-          </button>
-        ))}
-        {filtered.length === 0 && (
-          <div className="px-3 py-4 text-xs text-gray-400 text-center">No features match.</div>
-        )}
+        <div className="max-h-[480px] overflow-y-auto divide-y divide-line text-xs">
+          {filtered.map(f => (
+            <button key={f.feature_name} onClick={() => setSelected(f)}
+              className="w-full text-left grid grid-cols-5 divide-x divide-line hover:bg-blue-50 transition-colors">
+              <div className="px-3 py-1.5 font-mono font-medium text-ink">{f.feature_name}</div>
+              <div className="px-3 py-1.5">
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${GROUP_COLORS[f.feature_group] || 'bg-slate-100 text-ink border-line'}`}>
+                  {f.feature_group}
+                </span>
+              </div>
+              <div className="px-3 py-1.5 text-ink font-mono truncate">{joinList(f.source_tables) || '—'}</div>
+              <div className="px-3 py-1.5 text-ink">{f.owner || '—'}</div>
+              <div className="px-3 py-1.5 flex items-center gap-1">
+                {asBool(f.regulatory_sensitive) && <Pill tone="red">reg</Pill>}
+                {asBool(f.pii) && <Pill tone="amber">pii</Pill>}
+              </div>
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <div className="px-3 py-4 text-xs text-mut text-center italic">No features match.</div>
+          )}
+        </div>
       </div>
 
       {selected && <FeatureDetailDrawer feature={selected} onClose={() => setSelected(null)} />}
@@ -696,66 +673,65 @@ function FeatureCatalogPanel({ catalog }: {
 function FeatureDetailDrawer({ feature, onClose }: { feature: Feature; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto"
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto border border-line"
         onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-3 border-b flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-line flex items-center justify-between bg-slate-50">
           <div>
-            <div className="text-[10px] uppercase tracking-wide text-gray-500">{feature.feature_group} · {feature.data_type}</div>
-            <h3 className="font-mono font-semibold text-gray-900">{feature.feature_name}</h3>
+            <div className="text-[10px] uppercase tracking-[0.08em] text-brand font-bold">{feature.feature_group} · {feature.data_type}</div>
+            <h3 className="font-mono font-semibold text-ink text-lg mt-1">{feature.feature_name}</h3>
           </div>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700"><XCircle className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-1 text-mut hover:text-ink transition"><XCircle className="w-5 h-5" /></button>
         </div>
-        <div className="p-5 space-y-4 text-sm">
+        <div className="p-6 space-y-5 text-sm">
           <div>
-            <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Description</div>
-            <p className="text-gray-800">{feature.description || '—'}</p>
+            <div className="text-[11px] font-bold text-mut uppercase tracking-[0.05em] mb-2">Description</div>
+            <p className="text-ink leading-relaxed">{feature.description || '—'}</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Source tables</div>
-              <div className="text-gray-800 font-mono text-xs space-y-0.5">
+              <div className="text-[11px] font-bold text-mut uppercase tracking-[0.05em] mb-2">Source tables</div>
+              <div className="text-ink font-mono text-xs space-y-0.5 bg-slate-50 p-2.5 rounded-lg border border-line">
                 {asArr(feature.source_tables).length
                   ? asArr(feature.source_tables).map(t => <div key={t}>{t}</div>)
-                  : <span className="text-gray-400">—</span>}
+                  : <span className="text-mut">—</span>}
               </div>
             </div>
             <div>
-              <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Source columns</div>
-              <div className="text-gray-800 font-mono text-xs space-y-0.5">
+              <div className="text-[11px] font-bold text-mut uppercase tracking-[0.05em] mb-2">Source columns</div>
+              <div className="text-ink font-mono text-xs space-y-0.5 bg-slate-50 p-2.5 rounded-lg border border-line">
                 {asArr(feature.source_columns).length
                   ? asArr(feature.source_columns).map(t => <div key={t}>{t}</div>)
-                  : <span className="text-gray-400">—</span>}
+                  : <span className="text-mut">—</span>}
               </div>
             </div>
           </div>
           <div>
-            <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Transformation</div>
-            <code className="block bg-gray-50 px-3 py-2 rounded text-xs text-gray-800">
+            <div className="text-[11px] font-bold text-mut uppercase tracking-[0.05em] mb-2">Transformation</div>
+            <code className="block bg-slate-50 px-3 py-2 rounded-lg text-xs text-ink font-mono border border-line overflow-x-auto">
               {feature.transformation || '—'}
             </code>
           </div>
           <div className="grid grid-cols-3 gap-3 text-xs">
             <div>
-              <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Owner</div>
-              <div className="text-gray-800">{feature.owner || '—'}</div>
+              <div className="text-[11px] font-bold text-mut uppercase tracking-[0.05em] mb-1">Owner</div>
+              <div className="text-ink">{feature.owner || '—'}</div>
             </div>
             <div>
-              <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">Regulatory</div>
+              <div className="text-[11px] font-bold text-mut uppercase tracking-[0.05em] mb-1">Regulatory</div>
               <div>{asBool(feature.regulatory_sensitive)
                 ? <span className="inline-flex items-center gap-1 text-red-700"><Shield className="w-3 h-3" /> sensitive</span>
-                : <span className="text-gray-500">not flagged</span>}</div>
+                : <span className="text-mut">not flagged</span>}</div>
             </div>
             <div>
-              <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1">PII</div>
+              <div className="text-[11px] font-bold text-mut uppercase tracking-[0.05em] mb-1">PII</div>
               <div>{asBool(feature.pii)
-                ? <span className="text-orange-700">contains PII</span>
-                : <span className="text-gray-500">no PII</span>}</div>
+                ? <span className="text-orange-700 font-medium">contains PII</span>
+                : <span className="text-mut">no PII</span>}</div>
             </div>
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded px-3 py-2 text-xs text-blue-700">
-            <CheckCircle2 className="w-4 h-4 inline mr-1" />
-            This catalog entry is what lets a regulator (or anyone) trace a feature back to its source.
-            Future bolt-ons query this table to answer <em>"if we drop this feature, which models are affected?"</em>
+          <div className="bg-[#eef2ff] border border-[#c7d2fe] rounded-lg px-3.5 py-3 text-xs text-[#3730a3] leading-relaxed flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>This catalog entry is what lets a regulator (or anyone) trace a feature back to its source. Future bolt-ons query this table to answer <em>"if we drop this feature, which models are affected?"</em></span>
           </div>
         </div>
       </div>
@@ -814,7 +790,7 @@ function asBool(v: any): boolean {
 function SourcesPanel({ sources, targetLabel }: { sources: any; targetLabel: string }) {
   if (!sources || !sources.sources) {
     return (
-      <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 text-xs text-amber-800">
+      <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-3.5 text-xs text-amber-800">
         Sources panel unavailable — feature_catalog or dataset_approvals tables are empty.
       </div>
     );
@@ -824,35 +800,22 @@ function SourcesPanel({ sources, targetLabel }: { sources: any; targetLabel: str
   const internal   = list.filter(s => s.kind === 'internal');
   const enrichment = list.filter(s => s.kind === 'enrichment');
   return (
-    <div className="mb-6 bg-white border border-gray-200 rounded-lg overflow-hidden">
-      <div className="px-5 py-3 bg-gray-50 border-b flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <ArrowRight className="w-4 h-4 text-gray-600" />
-          <h3 className="font-semibold text-gray-800 text-sm">Sources → {targetLabel}</h3>
-        </div>
-        <span className="text-[11px] text-gray-500">{list.length} contributing sources</span>
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <CardTitle>Sources → {targetLabel}</CardTitle>
+        <span className="text-[11px] text-mut">{list.length} contributing sources</span>
       </div>
 
-      <div className="p-5 space-y-4">
+      <div className="space-y-4">
         <SourcesColumn title="External vendor feeds (HITL-approved)" subtitle="Data Ingestion tab" icon={FileInput} items={ingested} tone="blue" showApproval />
         <SourcesColumn title="Internal systems of record"            subtitle="Authoritative transactional tables" icon={Briefcase} items={internal} tone="gray" />
         <SourcesColumn title="Reference / enrichment"                 subtitle="Real UK public data + derived factors" icon={Globe2} items={enrichment} tone="indigo" />
 
-        <div className="flex items-center gap-3 pt-3 border-t border-gray-100 text-xs text-gray-600">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-gray-900" />
-            Joined + transformed by <code className="bg-gray-100 px-1.5 rounded">build_upt</code> pipeline
-          </div>
-          <ArrowRight className="w-3 h-3 text-gray-400" />
-          <div className="font-medium text-gray-900">{targetLabel}</div>
-          <span className="text-gray-500">({sources.target_table})</span>
-        </div>
-
-        <p className="text-[11px] text-gray-500 leading-snug">
-          {sources.note}
-        </p>
+        <Prov>
+          Joined + transformed by <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[11px] text-ink font-mono">build_upt</code> pipeline → <strong>{targetLabel}</strong> ({sources.target_table}) · {sources.note}
+        </Prov>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -863,15 +826,15 @@ function SourcesColumn({ title, subtitle, icon: Icon, items, tone, showApproval 
   if (items.length === 0) return null;
   const toneMap = {
     blue:   'bg-blue-50 border-blue-200 text-blue-700',
-    gray:   'bg-gray-50 border-gray-200 text-gray-700',
+    gray:   'bg-slate-50 border-line text-ink',
     indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700',
   } as const;
   return (
     <div>
-      <div className="flex items-center gap-2 mb-1.5">
-        <Icon className="w-4 h-4 text-gray-500" />
-        <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide">{title}</span>
-        <span className="text-[11px] text-gray-400">· {subtitle}</span>
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className="w-4 h-4 text-mut" />
+        <span className="text-[11px] font-bold text-mut uppercase tracking-[0.05em]">{title}</span>
+        <span className="text-[11px] text-mut">· {subtitle}</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {items.map(s => {
@@ -882,28 +845,28 @@ function SourcesColumn({ title, subtitle, icon: Icon, items, tone, showApproval 
           return (
             <div key={s.id} className={`rounded-lg border p-3 ${toneMap[tone]}`}>
               <div className="flex items-center justify-between gap-2 mb-1">
-                <div className="text-xs font-semibold text-gray-900 truncate">{s.title}</div>
+                <div className="text-xs font-semibold text-ink truncate">{s.title}</div>
                 {showApproval && (
                   approved
-                    ? <span className="inline-flex items-center gap-0.5 text-[10px] text-green-700"><CheckCircle2 className="w-3 h-3" /> approved</span>
+                    ? <Pill tone="green">approved</Pill>
                     : rejected
-                      ? <span className="inline-flex items-center gap-0.5 text-[10px] text-red-700"><XCircle className="w-3 h-3" /> rejected</span>
+                      ? <Pill tone="red">rejected</Pill>
                       : pending
-                        ? <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700"><AlertTriangle className="w-3 h-3" /> pending</span>
+                        ? <Pill tone="amber">pending</Pill>
                         : null
                 )}
               </div>
-              <div className="text-[10px] text-gray-500 font-mono truncate">{s.table}</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">
+              <div className="text-[10px] text-ink font-mono truncate">{s.table}</div>
+              <div className="text-[10px] text-mut mt-0.5">
                 {s.row_count != null ? `${s.row_count.toLocaleString()} rows` : 'row count unknown'}
               </div>
               {s.features_feed && s.features_feed.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
+                <div className="mt-2 flex flex-wrap gap-1">
                   {s.features_feed.slice(0, 3).map((f: string) => (
-                    <span key={f} className="px-1.5 py-0.5 text-[9px] bg-white/80 border border-gray-200 rounded text-gray-700 font-mono">{f}</span>
+                    <span key={f} className="px-1.5 py-0.5 text-[9px] bg-white/60 border border-slate-200 rounded text-ink font-mono">{f}</span>
                   ))}
                   {s.features_feed.length > 3 && (
-                    <span className="px-1.5 py-0.5 text-[9px] text-gray-500">+{s.features_feed.length - 3} more</span>
+                    <span className="px-1.5 py-0.5 text-[9px] text-mut">+{s.features_feed.length - 3} more</span>
                   )}
                 </div>
               )}
