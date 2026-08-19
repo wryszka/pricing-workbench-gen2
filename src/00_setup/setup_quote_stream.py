@@ -201,7 +201,10 @@ def pricing_factors(sic_loading, pc_loading, construction, year_built,
 
 # COMMAND ----------
 
-base_time = datetime(2026, 4, 1, 8, 0, tzinfo=timezone.utc)
+# Anchor the quote stream on NOW so a fresh build is always current — quotes
+# span the trailing 365 days ending today (was a fixed 2026-04-01 that aged).
+# demo_reset re-anchors existing rows forward by the same delta on later resets.
+base_time = datetime.now(timezone.utc)
 
 # Pre-compute which quotes get payloads — set membership for O(1) lookup
 payload_tx_ids: set = set(OUTLIER_TRANSACTION_IDS)

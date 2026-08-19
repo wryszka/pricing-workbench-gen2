@@ -30,4 +30,8 @@ resources:
         - environment_key: env
           spec:
             client: "5"
-            dependencies: []
+            # demo_reset inline-runs the rolling release/rating seeds, which use
+            # MlflowClient; pin mlflow + sdk so the reset never fails on a missing dep.
+            dependencies:
+              - mlflow
+              - databricks-sdk

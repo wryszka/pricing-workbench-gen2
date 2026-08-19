@@ -172,6 +172,13 @@ print(f"Reference data: {len(POSTCODES)} postcodes, {len(SIC_CODES)} SIC codes, 
 # Seasonal inception weights: more policies start at quarter boundaries
 MONTH_WEIGHTS = [15, 8, 8, 12, 8, 8, 12, 8, 8, 12, 8, 8]  # Jan heavy, then quarterly
 
+from datetime import date
+# Anchor policy/claims dates on TODAY so a fresh build is always current (was a
+# fixed 2020-2025 inception + hardcoded 2026 renewal that aged). demo_reset
+# re-anchors existing rows forward by the same delta on later resets.
+_TODAY = date.today()
+_THIS_YEAR = _TODAY.year
+
 policy_rows = []
 for i in range(NUM_POLICIES):
     pid = f"POL-{100000 + i}"
@@ -190,12 +197,14 @@ for i in range(NUM_POLICIES):
     claim_prob = 0.45 if SIC_CODES[sic_idx][2] == "High" else (0.35 if SIC_CODES[sic_idx][2] == "Medium" else 0.25)
     claims_5y = round(max(0, random.lognormvariate(8, 2.5)) if random.random() < claim_prob else 0)
 
-    # Temporal: inception with seasonal pattern
-    year = random.choice([2020, 2021, 2022, 2023, 2024, 2025])
+    # Temporal: inception 0-5 years ago (seasonal month); renewal = the next
+    # anniversary of the inception month AFTER today, so months_to_renewal is a
+    # realistic forward window (0,12] relative to the current date.
     month = random.choices(range(1, 13), weights=MONTH_WEIGHTS, k=1)[0]
-    inception = f"{year}-{month:02d}-01"
-    renewal_month = month
-    renewal = f"2026-{renewal_month:02d}-01"
+    inc_year = _THIS_YEAR - random.randint(0, 5)
+    inception = f"{inc_year}-{month:02d}-01"
+    renewal_year = _THIS_YEAR if (month, 1) > (_TODAY.month, _TODAY.day) else _THIS_YEAR + 1
+    renewal = f"{renewal_year}-{month:02d}-01"
 
     premium = round(sum_insured * random.uniform(0.002, 0.015))
 
@@ -253,8 +262,8 @@ for row in policies_with_claims:
         cid = f"CLM-{claim_id:07d}"
         claim_id += 1
 
-        # Seasonal peril selection
-        loss_year = random.randint(2021, 2025)
+        # Seasonal peril selection — loss 1-5 years ago (always in the past).
+        loss_year = _THIS_YEAR - random.randint(1, 5)
         loss_month = random.randint(1, 12)
         peril_weights = [PERIL_SEASON.get(p, [8]*12)[loss_month-1] for p in PERILS]
         peril = random.choices(PERILS, weights=peril_weights, k=1)[0]

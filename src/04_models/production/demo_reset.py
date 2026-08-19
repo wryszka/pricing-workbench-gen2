@@ -9,9 +9,10 @@
 # MAGIC
 # MAGIC | Item | Reset to |
 # MAGIC |---|---|
-# MAGIC | UC champion aliases (4 model families) | freq_glm v53 / sev_glm v48 / demand_gbm v51 / fraud_gbm v53 |
-# MAGIC | `rating_engine_config` table | v2.0 champion, v1.1 previous_champion, v1.0 archived |
-# MAGIC | `pricing_engine_releases` table | apr_2026 champion, mar_2026 previous_champion, others archived |
+# MAGIC | UC champion aliases (4 model families) | re-assert @champion → latest version (kept if already set) |
+# MAGIC | `rating_engine_config` table | re-seeded rolling — v2.0 champion effective ~6 months ago, history rebased to today |
+# MAGIC | `pricing_engine_releases` table | re-seeded rolling — LIVE release = current month, history steps back month-by-month |
+# MAGIC | Dataset dates (quotes, policies, claims, inference, UPT) | uniform shift forward so latest activity = today (no retrain) |
 # MAGIC | `compare_results` table | truncate (transient demo output) |
 # MAGIC | `historical_quote_scores` table | truncate (transient demo output) |
 # MAGIC | `inference_logs` rows where `is_mta = true` | delete (transient MTA simulations) |
@@ -109,36 +110,76 @@ for k, v in alias_results.items(): print(f"  {k}: {v}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2. Reset rating_engine_config statuses
+# MAGIC ## 2. Re-anchor the rolling rate-book to the current month
+# MAGIC
+# MAGIC Re-run the release + rating-config seeds (idempotent CREATE OR REPLACE).
+# MAGIC They rebuild a rolling series anchored on today, so the LIVE release is
+# MAGIC THIS month (champion) and the history steps back month-by-month — never
+# MAGIC a fixed date that ages.
 
 # COMMAND ----------
 
-spark.sql(f"""
-    UPDATE {fqn}.rating_engine_config
-    SET status = CASE version
-        WHEN 'v2.0' THEN 'champion'
-        WHEN 'v1.1' THEN 'previous_champion'
-        ELSE 'archived'
-    END
-""")
-print("rating_engine_config statuses reset.")
+# The seed notebooks are siblings of this notebook (04_models/production/).
+for _nb, _label in [("pricing_engine_releases_seed", "pricing engine releases"),
+                    ("rating_engine_seed",           "rating engine config")]:
+    try:
+        dbutils.notebook.run(_nb, 600, {"catalog_name": catalog, "schema_name": schema})
+        print(f"✓ re-seeded {_label} → rolling, champion = current month")
+    except Exception as _e:
+        print(f"⚠ re-seed {_label} failed (non-fatal): {str(_e)[:160]}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 3. Reset pricing_engine_releases statuses
+# MAGIC ## 3. Re-anchor dataset dates to today (uniform block shift)
+# MAGIC
+# MAGIC Shift every dated fact table forward by the SAME delta so "latest
+# MAGIC activity = today" while preserving all relative gaps (inception→renewal,
+# MAGIC loss timing, quote window). No retrain — dates are labels here, not model
+# MAGIC features. The delta is measured from the newest quote, so a fresh build
+# MAGIC (already current) shifts by 0 and this is a no-op.
 
 # COMMAND ----------
 
-spark.sql(f"""
-    UPDATE {fqn}.pricing_engine_releases
-    SET status = CASE release_id
-        WHEN 'apr_2026' THEN 'champion'
-        WHEN 'mar_2026' THEN 'previous_champion'
-        ELSE 'archived'
-    END
-""")
-print("pricing_engine_releases statuses reset.")
+shift_info = {"delta_days": 0, "shifted": []}
+try:
+    _d = spark.sql(
+        f"SELECT datediff(current_date(), to_date(max(created_at))) AS d FROM {fqn}.quotes"
+    ).collect()
+    delta = int(_d[0]["d"]) if _d and _d[0]["d"] is not None else 0
+except Exception as _e:
+    delta = 0
+    print(f"⚠ could not compute shift delta (defaulting to 0): {str(_e)[:140]}")
+shift_info["delta_days"] = delta
+
+if delta > 0:
+    # (table, column, kind): 'ts' = timestamp column, 'ds' = date-like column
+    # (string 'yyyy-MM-dd' or DATE — the date_format expr casts back either way).
+    _targets = [
+        ("quotes",                        "created_at",     "ts"),
+        ("inference_logs",                "scored_at",      "ts"),
+        ("internal_commercial_policies",  "inception_date", "ds"),
+        ("internal_commercial_policies",  "renewal_date",   "ds"),
+        ("internal_claims_history",       "loss_date",      "ds"),
+        ("unified_pricing_table_live",    "renewal_date",   "ds"),
+        ("unified_pricing_table_live",    "inception_date", "ds"),
+    ]
+    for _t, _c, _k in _targets:
+        try:
+            if _k == "ts":
+                spark.sql(f"UPDATE {fqn}.{_t} SET {_c} = {_c} + INTERVAL {delta} DAYS "
+                          f"WHERE {_c} IS NOT NULL")
+            else:
+                spark.sql(f"UPDATE {fqn}.{_t} SET {_c} = "
+                          f"date_format(date_add(to_date({_c}), {delta}), 'yyyy-MM-dd') "
+                          f"WHERE {_c} IS NOT NULL")
+            shift_info["shifted"].append(f"{_t}.{_c}")
+        except Exception as _e:
+            print(f"  shift {_t}.{_c} skipped: {str(_e)[:120]}")
+    print(f"Shifted {len(shift_info['shifted'])} columns forward by {delta} days: "
+          f"{shift_info['shifted']}")
+else:
+    print(f"Data already current (delta={delta}d) — no shift needed.")
 
 # COMMAND ----------
 
@@ -289,63 +330,28 @@ print("policy_demographics rebuilt — ethnicity_proxy correlates with postcode_
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 7. Re-seed historical governance pack rows
+# MAGIC ## 7. Governance pack history
 # MAGIC
-# MAGIC Feb / March entries so the Governance "by date" tab shows a meaningful
-# MAGIC timeline. PDFs are reused — the demo point is the version timeline.
+# MAGIC No fake history is seeded here. Real, live-dated packs come from the
+# MAGIC `generate_governance_packs` job (one multi-section PDF per champion), so
+# MAGIC the Governance "by date" tab shows genuine, current packs — not rows that
+# MAGIC point at PDF filenames which may not exist (the old cause of "no file"
+# MAGIC errors). We only purge any legacy seed-history rows a prior build left.
 
 # COMMAND ----------
 
-spark.sql(f"""
-    DELETE FROM {fqn}.governance_packs_index
-    WHERE story LIKE '[seed-history]%'
-""")
-seed_rows = [
-    ('GP-20260219094501-freq_glm-v25',   'freq_glm',   '25',
-     '[seed-history] Feb baseline — initial production cut',
-     'gini', 0.1342, 'freq_glm_v41_20260423_162042.pdf', '2026-02-19 09:45:01'),
-    ('GP-20260219102230-sev_glm-v22',    'sev_glm',    '22',
-     '[seed-history] Feb baseline — initial production cut',
-     'gini', 0.0188, 'sev_glm_v36_20260423_170833.pdf',  '2026-02-19 10:22:30'),
-    ('GP-20260219104812-demand_gbm-v25', 'demand_gbm', '25',
-     '[seed-history] Feb baseline — initial production cut',
-     'auc',  0.5102, 'demand_gbm_v39_20260423_170833.pdf','2026-02-19 10:48:12'),
-    ('GP-20260219111545-fraud_gbm-v25',  'fraud_gbm',  '25',
-     '[seed-history] Feb baseline — initial production cut',
-     'auc',  0.6841, 'fraud_gbm_v41_20260423_171945.pdf','2026-02-19 11:15:45'),
-    ('GP-20260317143205-freq_glm-v33',   'freq_glm',   '33',
-     '[seed-history] Mar refit — credit bureau feature added',
-     'gini', 0.1410, 'freq_glm_v41_20260423_162042.pdf', '2026-03-17 14:32:05'),
-    ('GP-20260317150022-sev_glm-v28',    'sev_glm',    '28',
-     '[seed-history] Mar refit — IBNR floor adjustment',
-     'gini', 0.0214, 'sev_glm_v36_20260423_170833.pdf',  '2026-03-17 15:00:22'),
-    ('GP-20260317152715-demand_gbm-v32', 'demand_gbm', '32',
-     '[seed-history] Mar refit — broker-channel features',
-     'auc',  0.5193, 'demand_gbm_v39_20260423_170833.pdf','2026-03-17 15:27:15'),
-    ('GP-20260317155930-fraud_gbm-v34',  'fraud_gbm',  '34',
-     '[seed-history] Mar refit — SIU referral threshold tuning',
-     'auc',  0.7012, 'fraud_gbm_v41_20260423_171945.pdf','2026-03-17 15:59:30'),
-]
-vol_prefix = f"/Volumes/{catalog}/{schema}/governance_packs"
 try:
-    seed_author = w.current_user.me().user_name or "actuarial_pricing_team"
-except Exception:
-    seed_author = "actuarial_pricing_team"
-values_sql = ",\n".join(
-    f"('{pid}', '{fam}', '{ver}', '{fqn}.{fam}', NULL, "
-    f"'{story}', false, '{metric}', {val}, "
-    f"'{vol_prefix}/{pdf}', 180000, '{seed_author}', "
-    f"TIMESTAMP'{ts}')"
-    for pid, fam, ver, story, metric, val, pdf, ts in seed_rows
-)
-spark.sql(f"""
-    INSERT INTO {fqn}.governance_packs_index
-      (pack_id, model_family, model_version, model_uc_name, mlflow_run_id,
-       story, simulated, primary_metric, primary_value, pdf_path, size_bytes,
-       generated_by, generated_at)
-    VALUES {values_sql}
-""")
-print(f"Pack history re-seeded: {len(seed_rows)} historical rows.")
+    _n = spark.sql(
+        f"SELECT COUNT(*) AS n FROM {fqn}.governance_packs_index "
+        f"WHERE story LIKE '[seed-history]%'"
+    ).collect()[0]["n"]
+    if _n:
+        spark.sql(f"DELETE FROM {fqn}.governance_packs_index WHERE story LIKE '[seed-history]%'")
+        print(f"Purged {_n} legacy seed-history pack rows.")
+    else:
+        print("No legacy seed-history pack rows to purge.")
+except Exception as _e:
+    print(f"⚠ governance pack purge skipped (non-fatal): {str(_e)[:140]}")
 
 # COMMAND ----------
 
@@ -412,10 +418,17 @@ try:
 except Exception:
     user = "system"
 
+try:
+    active_release = spark.sql(
+        f"SELECT release_id FROM {fqn}.pricing_engine_releases WHERE status='champion' LIMIT 1"
+    ).collect()[0]["release_id"]
+except Exception:
+    active_release = "current"
 det = json.dumps({
     "champion_aliases":  alias_results,
     "rating_engine":     "v2.0 champion",
-    "active_release":    "apr_2026",
+    "active_release":    active_release,
+    "date_shift_days":   shift_info.get("delta_days", 0),
     "tables_truncated":  list(cleanup_counts.keys()),
 }).replace("'", "''")
 spark.sql(f"""
@@ -468,6 +481,8 @@ except Exception as _e:
 
 dbutils.notebook.exit(json.dumps({
     "champion_aliases": alias_results,
+    "active_release":   active_release,
+    "date_shift":       shift_info,
     "cleanup":          cleanup_counts,
     "geospatial_rows":  n,
     "motor_reset":      motor_reset,

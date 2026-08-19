@@ -29,12 +29,14 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
-dbutils.widgets.text("schema_name",  "pricing_workbench_gen2")
+dbutils.widgets.text("catalog_name",          "lr_pricing_v2_aws_us_catalog")
+dbutils.widgets.text("schema_name",           "pricing_workbench_gen2")
+dbutils.widgets.text("rating_v2_months_back", "6")   # months ago v2.0 took effect (match releases seed)
 
-catalog = dbutils.widgets.get("catalog_name")
-schema  = dbutils.widgets.get("schema_name")
-fqn     = f"{catalog}.{schema}"
+catalog        = dbutils.widgets.get("catalog_name")
+schema         = dbutils.widgets.get("schema_name")
+rating_v2_back = int(dbutils.widgets.get("rating_v2_months_back"))
+fqn            = f"{catalog}.{schema}"
 
 # COMMAND ----------
 
@@ -43,12 +45,30 @@ from pyspark.sql.types import (
     StructType, StructField, StringType, DoubleType, IntegerType, DateType
 )
 
+# Rebase the version history onto the CURRENT calendar so the champion config is
+# always recent (never a fixed 2026 date that ages). v2.0 takes effect
+# `rating_v2_back` months ago — matching the pricing_engine_releases series so
+# every release in that window resolves to v2.0. Only the DATES move; the config
+# values (expense/commission/fraud/demand) are unchanged.
+_anchor = date.today().replace(day=1)
+
+
+def _mback(k: int) -> date:
+    m = _anchor.month - 1 - k
+    y = _anchor.year + (m // 12)
+    return date(y, (m % 12) + 1, 1)
+
+
+_v20_eff = _mback(rating_v2_back)        # champion, ~6 months ago
+_v11_eff = _mback(rating_v2_back + 12)   # previous champion, a year before v2.0
+_v10_eff = _mback(rating_v2_back + 27)   # launch, ~2.25y before v2.0
+
 # Three real versions — tells a governance story: baseline, expense review,
 # fraud-loading tightening.
 versions = [
     {
         "version":                  "v1.0",
-        "effective_date":           date(2024, 1, 1),
+        "effective_date":           _v10_eff,
         "status":                   "archived",
         "expense_loading_pct":      22.0,
         "commission_bp":            1750,        # 17.5 %
@@ -64,7 +84,7 @@ versions = [
     },
     {
         "version":                  "v1.1",
-        "effective_date":           date(2025, 4, 1),
+        "effective_date":           _v11_eff,
         "status":                   "previous_champion",
         "expense_loading_pct":      19.5,
         "commission_bp":            1750,
@@ -76,11 +96,11 @@ versions = [
         "min_premium":              120.0,
         "max_premium":              250_000.0,
         "approved_by":              "pricing_committee@bricksurance.com",
-        "narrative":                "Expense loading review — benchmarked vs peer quarterly survey, reduced from 22% to 19.5% effective 1 April 2025. No other changes. Effect: approximately -2.5% across the entire book.",
+        "narrative":                "Expense loading review — benchmarked vs peer quarterly survey, reduced from 22% to 19.5% at a prior quarterly review. No other changes. Effect: approximately -2.5% across the entire book.",
     },
     {
         "version":                  "v2.0",
-        "effective_date":           date(2026, 1, 1),
+        "effective_date":           _v20_eff,
         "status":                   "champion",
         "expense_loading_pct":      19.5,
         "commission_bp":            1500,        # 15.0 % (post broker-deal renegotiation)
@@ -92,7 +112,7 @@ versions = [
         "min_premium":              150.0,       # raised floor
         "max_premium":              250_000.0,
         "approved_by":              "pricing_committee@bricksurance.com",
-        "narrative":                "Post-renegotiation broker deal dropped commission from 17.5% to 15%. Fraud loading tightened (6% at 0.20 trigger) following 2025 fraud-book review. Demand elasticity widened to capture more of the low-conversion tail. Min premium raised to £150 to cover acquisition cost on smallest SMEs.",
+        "narrative":                "Post-renegotiation broker deal dropped commission from 17.5% to 15%. Fraud loading tightened (6% at 0.20 trigger) following the most recent fraud-book review. Demand elasticity widened to capture more of the low-conversion tail. Min premium raised to £150 to cover acquisition cost on smallest SMEs.",
     },
 ]
 
