@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Target, ChevronDown, ChevronUp, ShieldCheck, Info, SlidersHorizontal } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Target, ChevronDown, ChevronUp, ShieldCheck, Info, SlidersHorizontal,
+         Cpu, Database, Layers, GitBranch, LineChart } from 'lucide-react';
 import { api } from '../lib/api';
 
 // Price Optimisation — an INTERACTIVE optimizer, not a dashboard. The demand +
@@ -52,6 +53,7 @@ export default function PriceOptimisation() {
   const [err, setErr] = useState<string | null>(null);
   const [seg, setSeg] = useState<string>('');
   const [showHelp, setShowHelp] = useState(false);
+  const [tab, setTab] = useState<'optimise' | 'how'>('optimise');
   const [objective, setObjective] = useState<'profit' | 'volume' | 'blend'>('profit');
   const [alpha, setAlpha] = useState(0.6);
   const [rateCap, setRateCap] = useState(0.15);
@@ -156,6 +158,18 @@ export default function PriceOptimisation() {
         across the book — live. Your models, transparent, constraint-aware.
       </p>
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200 mb-4">
+        <TabBtn active={tab === 'optimise'} onClick={() => setTab('optimise')} icon={SlidersHorizontal} label="Optimiser" />
+        <TabBtn active={tab === 'how'} onClick={() => setTab('how')} icon={Cpu} label="How it works" />
+      </div>
+
+      {tab === 'how' && (
+        <HowItWorks cfg={cfg} segCount={segments.length}
+          totalQuotes={segments.reduce((a, s) => a + (s.n_quotes || 0), 0)} />
+      )}
+
+      {tab === 'optimise' && (<>
       <button onClick={() => setShowHelp(!showHelp)} className="text-xs text-teal-700 flex items-center gap-1 mb-3">
         <Info className="w-3.5 h-3.5" /> What am I looking at?
         {showHelp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -296,6 +310,159 @@ export default function PriceOptimisation() {
           </p>
         </div>
       )}
+      </>)}
+    </div>
+  );
+}
+
+function TabBtn({ active, onClick, icon: Icon, label }: {
+  active: boolean; onClick: () => void; icon: any; label: string;
+}) {
+  return (
+    <button onClick={onClick}
+      className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1.5 ${active
+        ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+      <Icon className="w-4 h-4" /> {label}
+    </button>
+  );
+}
+
+function InfoCard({ icon: Icon, title, children }: { icon: any; title: string; children: ReactNode }) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700">
+        <Icon className="w-4 h-4 text-teal-600" /> {title}
+      </div>
+      <ul className="list-disc pl-4 space-y-1.5 text-[13px] text-gray-600 leading-snug">{children}</ul>
+    </div>
+  );
+}
+
+function KV({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-gray-400">{label}</div>
+      <div className="text-gray-700 break-words">{value}</div>
+    </div>
+  );
+}
+
+// "How it works" — the behind-the-scenes tab. Answers "what's actually running?"
+// for a demo audience: the data, the model/method, and the Databricks tech. Kept
+// faithful to src/04_models/production/price_optimiser.py.
+function HowItWorks({ cfg, segCount, totalQuotes }: { cfg: any; segCount: number; totalQuotes: number }) {
+  const steps = [
+    { icon: Database, t: 'Quote stream', d: 'Every priced commercial quote — offered price, market reference, convert / no-convert.' },
+    { icon: LineChart, t: 'Demand curve', d: 'Per segment: a logistic fit of conversion vs price-to-market. Slope = elasticity.' },
+    { icon: Cpu, t: 'Cost + solve', d: 'Lay a cost line, grid-search the price that maximises d(p)·(p−c) under the guardrails.' },
+    { icon: ShieldCheck, t: 'Governed tables', d: 'Curve, summary and a versioned config row land in Unity Catalog.' },
+    { icon: SlidersHorizontal, t: 'This app', d: 'The Optimiser tab re-solves the decision live in your browser over those curves.' },
+  ];
+  return (
+    <div className="space-y-5">
+      <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 text-sm text-teal-900">
+        <b>No black box.</b> Every number on the Optimiser tab is readable code over three governed
+        Delta tables. Below is the whole pipeline — here running over {segCount} segments and{' '}
+        {totalQuotes.toLocaleString()} priced quotes.
+      </div>
+
+      {/* Pipeline strip */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">The pipeline, end to end</h2>
+        <div className="flex flex-col md:flex-row md:items-stretch gap-2">
+          {steps.map((s, i) => (
+            <div key={s.t} className="flex-1 flex items-center gap-2">
+              <div className="flex-1 rounded-lg border border-gray-200 bg-gray-50 p-3 h-full">
+                <s.icon className="w-4 h-4 text-teal-600 mb-1" />
+                <div className="text-xs font-semibold text-gray-800">{s.t}</div>
+                <div className="text-[11px] text-gray-500 leading-snug mt-0.5">{s.d}</div>
+              </div>
+              {i < steps.length - 1 && <div className="hidden md:block text-gray-300 shrink-0">→</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Data / Model / Tech */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <InfoCard icon={Database} title="Data">
+          <li><b>Source:</b> <code>quotes</code> — priced commercial quotes with the offered premium,
+            the market reference, and whether the quote converted (bound). That convert / no-convert
+            outcome is the elasticity signal.</li>
+          <li><b>Filter:</b> price-to-market between 0.5× and 2.0×, non-outlier, premium present.</li>
+          <li><b>Segments:</b> by account size — Micro (&lt;£10k), SME (£10–50k), Mid (£50–250k),
+            Large (£250k+). Bigger accounts are more price-sensitive, so each gets a genuinely
+            different curve and optimal move.</li>
+          <li><b>Governed output (Unity Catalog):</b> <code>optimisation_curve</code>,{' '}
+            <code>optimisation_summary</code>, <code>optimisation_config</code>.</li>
+        </InfoCard>
+
+        <InfoCard icon={Cpu} title="Model &amp; method">
+          <li><b>Demand:</b> a per-segment <b>logistic regression</b> of conversion on price-to-market
+            (scikit-learn). The slope is the segment's price elasticity — negative, so demand falls as
+            price rises.</li>
+          <li><b>Cost line:</b> illustrative expected claims = segment loss ratio × market premium
+            (0.54 Micro → 0.80 Large). The floor optimisation cannot cross.</li>
+          <li><b>Objective:</b> expected profit per quote <code>d(p)·(p−c)</code>, swept over a price
+            grid (0.80×–1.30× market, 0.02 steps).</li>
+          <li><b>Constraints:</b> a rate-change cap around today's book price (±15% default) and a
+            margin floor (5%); the binding one is recorded per segment.</li>
+          <li><b>MLflow</b> logs each run — params and total profit uplift.</li>
+        </InfoCard>
+
+        <InfoCard icon={Layers} title="Underlying tech">
+          <li><b>Job:</b> <code>price_optimiser.py</code> — a serverless notebook (Spark → pandas /
+            scikit-learn), part of Full Build.</li>
+          <li><b>Storage &amp; governance:</b> Delta tables in <b>Unity Catalog</b>; a scale-to-zero
+            SQL warehouse serves the app's reads.</li>
+          <li><b>App:</b> Databricks Apps (FastAPI) exposes <code>/api/optimisation/summary</code>; this
+            React page re-solves the objective + constraints <b>client-side</b>, so the levers move the
+            whole book instantly.</li>
+          <li><b>Why it matters:</b> the maths is deterministic and inspectable — the wedge against a
+            closed, black-box optimiser.</li>
+        </InfoCard>
+      </div>
+
+      {/* The decision, formalised */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <h2 className="text-sm font-semibold text-gray-700 mb-2">The decision, in one line</h2>
+        <div className="bg-gray-900 text-gray-100 rounded-lg px-4 py-3 font-mono text-sm overflow-x-auto whitespace-nowrap">
+          maximise <span className="text-teal-300">d(p)·(p − c)</span> over p&nbsp;&nbsp; s.t.&nbsp;&nbsp;
+          |p − p₀| ≤ cap&nbsp;&nbsp; and&nbsp;&nbsp; (p − c)/p ≥ floor
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-xs text-gray-600">
+          <div><code>d(p)</code> — expected conversion at price p (fitted demand curve)</div>
+          <div><code>p</code> — offered price = multiplier × market reference</div>
+          <div><code>c</code> — cost line (expected claims)</div>
+          <div><code>p₀</code> — today's book price for the segment</div>
+        </div>
+      </div>
+
+      {/* Governed config row */}
+      {cfg && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h2 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+            <GitBranch className="w-4 h-4 text-teal-600" /> Governed config — the audited "why"
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+            <KV label="Objective" value={cfg.objective || '—'} />
+            <KV label="Demand source" value={cfg.demand_source || '—'} />
+            <KV label="Cost source" value={cfg.cost_source || '—'} />
+            <KV label="Rate-change cap" value={cfg.rate_change_cap != null ? `±${fmtPct(Number(cfg.rate_change_cap))}` : '—'} />
+            <KV label="Margin floor" value={cfg.margin_floor != null ? fmtPct(Number(cfg.margin_floor)) : '—'} />
+            <KV label="Version" value={cfg.version || '—'} />
+          </div>
+          <p className="text-xs text-gray-500 mt-3">
+            This config row is versioned and audited in <code>optimisation_config</code> — the "why" of
+            every recommended price is a diffable governed artefact a closed optimiser can't evidence.
+          </p>
+        </div>
+      )}
+
+      <p className="text-xs text-gray-500">
+        Bricksurance SE is fictional; data synthetic. The cost line and method are illustrative, not a
+        certified rate — the point is the mechanism and its governance, not the numbers.
+      </p>
     </div>
   );
 }
