@@ -5,11 +5,20 @@ resources:
   jobs:
     price_optimiser:
       name: "Price optimisation — worked example (new-business profit) (gen2)"
+      # Job parameters — the app's "run it live" trigger overrides the tuning
+      # levers via run-now job_parameters; they flow to the notebook widgets
+      # through {{job.parameters.*}} in base_parameters below.
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}
         - name: schema_name
           default: ${var.schema_name}
+        - name: rate_change_cap
+          default: "0.15"
+        - name: target_loss_ratio
+          default: "0.62"
+        - name: margin_floor
+          default: "0.05"
       permissions:
         - service_principal_name: ${var.app_service_principal_id}
           level: CAN_MANAGE_RUN
@@ -18,8 +27,11 @@ resources:
           notebook_task:
             notebook_path: ../src/04_models/production/price_optimiser.py
             base_parameters:
-              catalog_name: ${var.catalog_name}
-              schema_name:  ${var.schema_name}
+              catalog_name:      "{{job.parameters.catalog_name}}"
+              schema_name:       "{{job.parameters.schema_name}}"
+              rate_change_cap:   "{{job.parameters.rate_change_cap}}"
+              target_loss_ratio: "{{job.parameters.target_loss_ratio}}"
+              margin_floor:      "{{job.parameters.margin_floor}}"
           environment_key: env
       environments:
         - environment_key: env

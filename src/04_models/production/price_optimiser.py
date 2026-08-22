@@ -20,6 +20,9 @@
 
 dbutils.widgets.text("catalog_name", "lr_pricing_v2_aws_us_catalog")
 dbutils.widgets.text("schema_name", "pricing_workbench_gen2")
+# Tuning levers — job parameters flow in here via {{job.parameters.*}} so the app
+# (or an operator) can trigger a run with a new rate cap / margin floor for the
+# "market event → change the optimisation to X → run it" story.
 dbutils.widgets.text("rate_change_cap", "0.15")     # ±15% vs current book
 dbutils.widgets.text("target_loss_ratio", "0.62")   # cost line = LR × market (illustrative)
 dbutils.widgets.text("margin_floor", "0.05")        # min (p−c)/p
@@ -84,6 +87,7 @@ SEGMENT_LR = {
     "4 Large (£250k+)":  0.80,
 }
 curve_rows, summary_rows = [], []
+seg_models = {}   # segment -> fitted demand model, retained for the monitoring step
 
 for seg, g in q.groupby("segment"):
     if len(g) < 200 or g["converted"].nunique() < 2:
@@ -95,6 +99,7 @@ for seg, g in q.groupby("segment"):
     demand = lr.predict_proba(MULT_GRID.reshape(-1, 1))[:, 1]
 
     market_ref = float(g["market_premium"].median())
+    seg_models[seg] = lr
     seg_lr = SEGMENT_LR.get(seg, TARGET_LR)
     cost = seg_lr * market_ref          # illustrative expected-claims cost line
     price = MULT_GRID * market_ref
@@ -165,6 +170,62 @@ cfg = spark.createDataFrame(pd.DataFrame([{
     "created_at": datetime.utcnow().isoformat(),
 }]))
 cfg.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.optimisation_config")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 4. Monitoring — is the demand model still calibrated?
+# MAGIC Monthly **actual** conversion vs what the fitted per-segment demand curves
+# MAGIC **expect** at that month's realised price-to-market (volume-weighted across
+# MAGIC segments). The gap is model drift — the governance signal that says a curve
+# MAGIC needs a refit. Moves with the rolling-month timeline.
+
+# COMMAND ----------
+
+mq = spark.sql(f"""
+    SELECT date_trunc('month', created_at) AS month,
+           CASE WHEN converted IN ('Y','1','true','True') THEN 1 ELSE 0 END AS converted,
+           vs_market_rate,
+           CASE
+             WHEN gross_premium < 10000  THEN '1 Micro (<£10k)'
+             WHEN gross_premium < 50000  THEN '2 SME (£10–50k)'
+             WHEN gross_premium < 250000 THEN '3 Mid (£50–250k)'
+             ELSE '4 Large (£250k+)'
+           END AS segment
+    FROM {fqn}.quotes
+    WHERE created_at IS NOT NULL AND gross_premium IS NOT NULL AND vs_market_rate IS NOT NULL
+      AND vs_market_rate BETWEEN 0.5 AND 2.0 AND is_outlier = false
+""").toPandas()
+
+mon_rows = []
+if len(mq):
+    mq["month"] = pd.to_datetime(mq["month"])
+    for month, mg in mq.groupby("month"):
+        actual = float(mg["converted"].mean())
+        avg_mult = float(mg["vs_market_rate"].mean())
+        # Volume-weighted expected conversion from the fitted per-segment curves.
+        exp_num, exp_den = 0.0, 0
+        for seg, sg in mg.groupby("segment"):
+            m = seg_models.get(seg)
+            if m is None:
+                continue
+            p = float(m.predict_proba(sg[["vs_market_rate"]].values)[:, 1].mean())
+            exp_num += p * len(sg); exp_den += len(sg)
+        expected = (exp_num / exp_den) if exp_den else None
+        drift = (actual - expected) if expected is not None else None
+        mon_rows.append((
+            month.to_pydatetime(), int(len(mg)), int(mg["converted"].sum()),
+            round(actual, 4), round(avg_mult, 4),
+            round(expected, 4) if expected is not None else None,
+            round(drift, 4) if drift is not None else None))
+
+mon_df = spark.createDataFrame(pd.DataFrame(mon_rows, columns=[
+    "month", "quotes", "converted", "actual_conversion", "avg_vs_market",
+    "expected_conversion", "drift"]))
+mon_df.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{fqn}.optimisation_monitoring")
+print(f"✓ optimisation_monitoring: {len(mon_rows)} months")
+
+# COMMAND ----------
 
 with mlflow.start_run(run_name="price_optimisation"):
     mlflow.log_params({"rate_change_cap": RATE_CAP, "target_loss_ratio": TARGET_LR,

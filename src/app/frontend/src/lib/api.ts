@@ -321,4 +321,10 @@ export const api = {
 
   // Price optimisation (worked example)
   optimisationSummary: () => fetchJson<any>('/optimisation/summary'),
+  optAssets:      () => fetchJson<any>('/optimisation/assets'),
+  optMonitoring:  () => fetchJson<any>('/optimisation/monitoring'),
+  optRun: (body: { rate_change_cap?: number; target_loss_ratio?: number; margin_floor?: number }) =>
+    fetchJson<any>('/optimisation/run', { method: 'POST', body: JSON.stringify(body) }),
+  optRunStatus: (runId: number | string) =>
+    fetchJson<any>(`/optimisation/run/${encodeURIComponent(String(runId))}`),
 };

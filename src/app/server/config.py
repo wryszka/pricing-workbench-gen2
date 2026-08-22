@@ -178,6 +178,30 @@ def resolve_genie_space_by_title(title: str) -> str:
     return ""
 
 
+def resolve_job_by_name(name: str) -> str:
+    """Look up a Job id by its exact name (cached, TTL'd). Lets the app
+    deep-link to / trigger a bundle job without hardcoding an id that changes
+    per workspace. Misses aren't cached."""
+    if not name:
+        return ""
+    key = f"job::{name}"
+    cached = _asset_cache_get(key)
+    if cached:
+        return cached
+    try:
+        resp = get_workspace_client().api_client.do(
+            "GET", "/api/2.1/jobs/list", query={"name": name, "limit": 25})
+        for j in (resp.get("jobs") or []):
+            if (j.get("settings") or {}).get("name") == name:
+                jid = str(j.get("job_id") or "")
+                if jid:
+                    _asset_cache[key] = (jid, _time.monotonic())
+                return jid
+    except Exception as e:
+        logger.info("job name resolve failed for %r: %s", name, e)
+    return ""
+
+
 def resolve_dashboard_by_title(name: str) -> str:
     """Look up a Lakeview dashboard id by display_name (cached, TTL'd). Misses
     aren't cached."""
