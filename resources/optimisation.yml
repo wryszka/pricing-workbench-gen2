@@ -24,6 +24,8 @@ resources:
           default: "6.0"
         - name: base_ret_elasticity
           default: "9.0"
+        - name: technical_source
+          default: "champion"   # GATE-1: champion-scored via inner-model load (rung c)
       permissions:
         - service_principal_name: ${var.app_service_principal_id}
           level: CAN_MANAGE_RUN
@@ -39,12 +41,16 @@ resources:
               max_policies:         "{{job.parameters.max_policies}}"
               base_conv_elasticity: "{{job.parameters.base_conv_elasticity}}"
               base_ret_elasticity:  "{{job.parameters.base_ret_elasticity}}"
+              technical_source:     "{{job.parameters.technical_source}}"
           environment_key: env
       environments:
         - environment_key: env
           spec:
             client: "5"
             dependencies:
+              - mlflow
+              - scikit-learn
+              - statsmodels
               - pandas
               - numpy
               - python-dateutil

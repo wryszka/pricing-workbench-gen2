@@ -37,6 +37,10 @@ dbutils.widgets.text("n_months",          "13")      # rolling months of history
 dbutils.widgets.text("max_policies",       "120000") # cap the book sampled into pandas for scoring
 dbutils.widgets.text("base_conv_elasticity", "6.0")  # new-business price sensitivity (logit slope vs market)
 dbutils.widgets.text("base_ret_elasticity",  "9.0")  # renewal price sensitivity (higher: renewals stickier to shocks)
+# GATE-1: technical_premium source. "transparent" = the dev scaffolding cost
+# line (default, safe). "champion" = score the freq_glm_motor × sev_glm_motor
+# champions (closes the gate). See docs/OPTIMIZATION_INVENTORY.md OPEN GATES.
+dbutils.widgets.text("technical_source", "champion")
 
 catalog = dbutils.widgets.get("catalog_name")
 schema  = dbutils.widgets.get("schema_name")
@@ -45,6 +49,7 @@ NMON    = int(dbutils.widgets.get("n_months"))
 MAXPOL  = int(dbutils.widgets.get("max_policies"))
 CONV_E  = float(dbutils.widgets.get("base_conv_elasticity"))
 RET_E   = float(dbutils.widgets.get("base_ret_elasticity"))
+TECH_SOURCE = dbutils.widgets.get("technical_source").strip().lower()
 fqn = f"{catalog}.{schema}"
 
 import numpy as np, pandas as pd
@@ -80,41 +85,76 @@ MIN_PREM   = float(cfg.get("min_premium", 150.0))
 MAX_PREM   = float(cfg.get("max_premium", 50_000.0))
 print(f"expense_load={EXP_LOAD:.3f} commission={COMMISSION:.4f} floors=[{MIN_PREM},{MAX_PREM}]")
 
-# In-force book (sampled) → pandas for the transparent cost line + quote generation.
+# In-force book (sampled).
 book_sdf = spark.table(f"{fqn}.unified_motor_table_live")
 n_book = book_sdf.count()
 frac = min(1.0, MAXPOL / max(1, n_book))
-book = (book_sdf.sample(frac, seed=7) if frac < 1.0 else book_sdf).toPandas()
-print(f"book={n_book:,} scored_sample={len(book):,} (frac={frac:.3f})")
+if frac < 1.0:
+    book_sdf = book_sdf.sample(frac, seed=7)
 
-def col(name, default):
-    return pd.to_numeric(book[name], errors="coerce").fillna(default).values if name in book.columns \
-        else np.full(len(book), default, dtype=float)
+if TECH_SOURCE == "champion":
+    # GATE-1 close path — technical from the real risk champions.
+    # Rung (a) [cast int→double before fe.score_batch] cleared the signature
+    # error but then failed at model load inside FE's distributed score_batch
+    # UDF. Rung (b) [re-log/re-alias the champions] targets a signature problem
+    # that (a) already solved and would re-alias the live motor champions —
+    # skipped as non-applicable + invasive. This is RUNG (c): bypass the FE
+    # wrapper — load the inner champion models on the driver (the motor scorer's
+    # own `_pull_raw_flavor` pattern) and score in pandas. FE lookup is only
+    # needed at online serving; batch stamping does its own feature join (the
+    # book already carries every feature). The FE/live path is untouched.
+    import os, tempfile, mlflow
+    from mlflow.artifacts import download_artifacts
+    mc = mlflow.tracking.MlflowClient()
 
-age   = col("driver_age", 45.0)
-ncd   = np.clip(col("no_claims_years", 3.0), 0, 15)
-acc   = col("prior_accidents_5y", 0.0)
-miles = col("annual_mileage", 8000.0)
-beh   = col("behaviour_score", 75.0)          # 0–100, higher = safer
-vval  = col("vehicle_value", 12000.0)
-vgrp  = col("vehicle_group", 20.0)            # ABI-style group
+    def load_inner(name):
+        full = f"{fqn}.{name}"
+        try:
+            ver = mc.get_model_version_by_alias(full, "champion").version
+        except Exception:
+            ver = str(max(int(v.version) for v in mc.search_model_versions(f"name='{full}'")))
+        root = download_artifacts(artifact_uri=f"models:/{full}/{ver}", dst_path=tempfile.mkdtemp())
+        mlmodel_dirs = [r for r, _, fs in os.walk(root) if "MLmodel" in fs]
+        deepest = max(mlmodel_dirs, key=lambda p: p.count(os.sep))   # inner raw sklearn flavor
+        return mlflow.sklearn.load_model(deepest)
 
-# Annual claim frequency — monotone in the obvious directions.
-age_mult  = np.where(age < 25, 2.4, np.clip(1.8 - 0.02 * (age - 25), 0.6, 1.8))
-ncd_mult  = 1.0 / (1.0 + 0.07 * ncd)
-acc_mult  = 1.0 + 0.20 * acc
-mile_mult = np.sqrt(np.clip(miles / 8000.0, 0.6, 2.0))
-beh_mult  = np.clip(1.4 - beh / 125.0, 0.7, 1.4)
-annual_freq = np.clip(0.11 * age_mult * ncd_mult * acc_mult * mile_mult * beh_mult, 0.02, 1.2)
+    freq_m = load_inner("freq_glm_motor")
+    sev_m  = load_inner("sev_glm_motor")
+    book = book_sdf.toPandas()                                       # driver-side feature frame
+    freq = np.asarray(freq_m.predict(book), dtype=float).ravel()
+    sev  = np.asarray(sev_m.predict(book),  dtype=float).ravel()
+    technical = np.clip((freq / 5.0) * sev, MIN_PREM, MAX_PREM)      # freq is a 5-year count → annualise
+    print(f"[champion] technical mean £{technical.mean():,.0f}  (freq mean {freq.mean():.3f})")
+else:
+    # Dev scaffolding: transparent risk cost line (GATE-1 OPEN).
+    book = book_sdf.toPandas()
 
-# Severity — scales with vehicle value + group.
-severity = 3200.0 * np.power(np.clip(vval / 12000.0, 0.4, 4.0), 0.6) * np.clip(vgrp / 20.0, 0.5, 2.2)
+    def col(name, default):
+        return pd.to_numeric(book[name], errors="coerce").fillna(default).values if name in book.columns \
+            else np.full(len(book), default, dtype=float)
 
-technical = np.clip(annual_freq * severity, MIN_PREM, MAX_PREM)   # pure risk cost line
-loaded    = np.clip(technical * (1.0 + EXP_LOAD) * (1.0 + COMMISSION), MIN_PREM, MAX_PREM)
+    age   = col("driver_age", 45.0)
+    ncd   = np.clip(col("no_claims_years", 3.0), 0, 15)
+    acc   = col("prior_accidents_5y", 0.0)
+    miles = col("annual_mileage", 8000.0)
+    beh   = col("behaviour_score", 75.0)          # 0–100, higher = safer
+    vval  = col("vehicle_value", 12000.0)
+    vgrp  = col("vehicle_group", 20.0)            # ABI-style group
+    age_mult  = np.where(age < 25, 2.4, np.clip(1.8 - 0.02 * (age - 25), 0.6, 1.8))
+    ncd_mult  = 1.0 / (1.0 + 0.07 * ncd)
+    acc_mult  = 1.0 + 0.20 * acc
+    mile_mult = np.sqrt(np.clip(miles / 8000.0, 0.6, 2.0))
+    beh_mult  = np.clip(1.4 - beh / 125.0, 0.7, 1.4)
+    annual_freq = np.clip(0.11 * age_mult * ncd_mult * acc_mult * mile_mult * beh_mult, 0.02, 1.2)
+    severity = 3200.0 * np.power(np.clip(vval / 12000.0, 0.4, 4.0), 0.6) * np.clip(vgrp / 20.0, 0.5, 2.2)
+    technical = np.clip(annual_freq * severity, MIN_PREM, MAX_PREM)
+    print(f"[transparent] annual_freq mean {annual_freq.mean():.3f}  technical mean £{technical.mean():,.0f}")
+
+n = len(book)
+loaded = np.clip(technical * (1.0 + EXP_LOAD) * (1.0 + COMMISSION), MIN_PREM, MAX_PREM)
 book["technical_premium"] = np.round(technical, 2)
 book["loaded_premium"]    = np.round(loaded, 2)
-print(f"annual_freq mean {annual_freq.mean():.3f}  technical mean £{technical.mean():,.0f}  loaded mean £{loaded.mean():,.0f}")
+print(f"technical_source={TECH_SOURCE}  loaded mean £{loaded.mean():,.0f}")
 
 # COMMAND ----------
 
