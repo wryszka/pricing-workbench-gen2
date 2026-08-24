@@ -1,0 +1,50 @@
+# Price Optimization module jobs (motor, §3–§8). Serverless, idempotent.
+# Naming: British `optimisation_*` / `optimisation` — evolved in place (this
+# module keeps the existing prefix rather than the spec's `opt_*`, per decision).
+# Jobs are defined here and chained by the `optimisation_full` orchestrator;
+# they join Full Build only when `enable_optimization` is true (added at §12).
+resources:
+  jobs:
+
+    # --- §3 data: motor quote-response + renewal + portfolio snapshot ----------
+    optimisation_data:
+      name: "Price optimisation — motor quote/renewal data (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: price_variation_sd
+          default: "0.12"
+        - name: n_months
+          default: "13"
+        - name: max_policies
+          default: "120000"
+        - name: base_conv_elasticity
+          default: "6.0"
+        - name: base_ret_elasticity
+          default: "9.0"
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: generate
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_motor_data.py
+            base_parameters:
+              catalog_name:         "{{job.parameters.catalog_name}}"
+              schema_name:          "{{job.parameters.schema_name}}"
+              price_variation_sd:   "{{job.parameters.price_variation_sd}}"
+              n_months:             "{{job.parameters.n_months}}"
+              max_policies:         "{{job.parameters.max_policies}}"
+              base_conv_elasticity: "{{job.parameters.base_conv_elasticity}}"
+              base_ret_elasticity:  "{{job.parameters.base_ret_elasticity}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies:
+              - pandas
+              - numpy
+              - python-dateutil
