@@ -123,9 +123,14 @@ export default function PriceOptimisation() {
   const doResolve = async () => {
     setBusy(true); setRun({ state: 'PENDING' });
     try {
-      const r = await api.optRun({ objective, grid_points: grid, full: true });
+      // Solver-only (full:false) — re-solves the factor table under the chosen
+      // objective in ~1 min, safe for a live room. (The full data→elasticity→
+      // simulation rebuild is the standalone `optimisation_full` job, run offline.)
+      const r = await api.optRun({ objective, grid_points: grid, full: false });
       if (!r?.ok) { setRun({ error: r?.error || 'run failed' }); setBusy(false); return; }
+      let polls = 0;
       const poll = async () => {
+        if (++polls > 80) { setRun({ state: 'TIMEOUT', url: run?.url }); setBusy(false); return; }
         const s = await api.optRunStatus(r.run_id);
         setRun({ state: s.result_state || s.life_cycle_state, url: s.run_page_url });
         if (s.life_cycle_state && !['TERMINATED', 'SKIPPED', 'INTERNAL_ERROR'].includes(s.life_cycle_state)) {

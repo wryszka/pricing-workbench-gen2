@@ -311,22 +311,31 @@ async def deploy(req: DeployRequest):
         return {"ok": False, "gated": True,
                 "error": f"deploy blocked: {len(breaches)} segment(s) outside the "
                          f"±{CORRIDOR_PCT:.0f}% corridor: {', '.join(breaches[:5])}"}
-    cver = rows[0].get("constraint_version") or "v1"
-    approver = (req.approver or "app_user").replace("'", "''")
-    note = (req.note or "approved in app").replace("'", "''")
+    # Escape every interpolated value for a Spark SQL string literal: BACKSLASH
+    # first (Spark interprets \x in literals), then single-quote doubling. The
+    # audit `details` JSON is built by SQL's own to_json(named_struct(...)), so the
+    # note's quotes/braces are JSON-encoded correctly instead of hand-embedded
+    # (a raw " or \ in the note previously corrupted the JSON). cver comes from a
+    # table but is escaped for defence-in-depth.
+    def _q(s: object) -> str:
+        return str(s).replace("\\", "\\\\").replace("'", "''")
+    cver = _q(rows[0].get("constraint_version") or "v1")
+    approver = _q(req.approver or "app_user")
+    note = _q(req.note or "approved in app")
+    n = len(rows)
     # Stamp the deployment ledger + the immutable audit log (append — the history
     # of deployments IS the record). The table is pre-created by the solver notebook,
     # so the app SP only needs INSERT (MODIFY), never CREATE. Surface write failures.
     dep_ok = await _safe(f"""
         INSERT INTO {fqn('optimisation_deployment')}
-        SELECT uuid(), '{cver}', {len(rows)}, '{approver}', '{note}', current_timestamp()
+        SELECT uuid(), '{cver}', {n}, '{approver}', '{note}', current_timestamp()
     """)
     aud_ok = await _safe(f"""
         INSERT INTO {fqn('audit_log')} (event_id, event_type, entity_type, entity_id,
                entity_version, user_id, timestamp, details, source)
         SELECT uuid(), 'optimisation_deploy_approved', 'factor_table', '{cver}', '{cver}',
                '{approver}', current_timestamp(),
-               '{{"segments": {len(rows)}, "note": "{note}"}}', 'optimisation_app'
+               to_json(named_struct('segments', {n}, 'note', '{note}')), 'optimisation_app'
     """)
     if dep_ok is None or aud_ok is None:
         return {"ok": False, "constraint_version": cver, "segments": len(rows),
