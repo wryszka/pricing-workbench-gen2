@@ -359,7 +359,7 @@ async def generate_pack(run_id: str, variant_id: str) -> dict:
     rows = await execute_query(f"""
         SELECT name, category, config_json, metrics_json
         FROM {fqn('factory_variants')}
-        WHERE run_id = '{run_id}' AND variant_id = '{variant_id}' LIMIT 1
+        WHERE run_id = '{run_id.replace("'", "''")}' AND variant_id = '{variant_id.replace("'", "''")}' LIMIT 1
     """)
     if not rows:
         raise HTTPException(404, f"variant {variant_id} not found in run {run_id}")

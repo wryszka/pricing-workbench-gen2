@@ -941,8 +941,8 @@ async def approve_dataset(dataset_id: str, req: ApprovalRequest):
         INSERT INTO {fqn('dataset_approvals')} VALUES (
             '{approval_id}',
             '{dataset_id}',
-            '{req.decision}',
-            '{reviewer}',
+            '{req.decision.replace("'", "''")}',
+            '{reviewer.replace("'", "''")}',
             '{req.reviewer_notes.replace("'", "''")}',
             current_timestamp(),
             {raw_count},

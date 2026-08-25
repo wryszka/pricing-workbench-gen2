@@ -377,9 +377,9 @@ async def _materialise_variants_background(run_id: str, family: str, plan: list[
             variant_rows.append(
                 "SELECT "
                 f"'{run_id}' AS run_id, "
-                f"'{v['variant_id']}' AS variant_id, "
+                f"'{v['variant_id'].replace(chr(39), chr(39)+chr(39))}' AS variant_id, "
                 f"'{v['name'].replace(chr(39), chr(39)+chr(39))}' AS name, "
-                f"'{v['category']}' AS category, "
+                f"'{v['category'].replace(chr(39), chr(39)+chr(39))}' AS category, "
                 f"'{json.dumps(v_with_metrics).replace(chr(39), chr(39)+chr(39))}' AS config_json, "
                 f"'{json.dumps(m).replace(chr(39), chr(39)+chr(39))}' AS metrics_json, "
                 f"{len(v.get('features', []))} AS n_features, "

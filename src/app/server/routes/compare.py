@@ -105,9 +105,9 @@ async def _find_cached_compare(family: str, versions: list, scenario: str,
         rows = await execute_query(f"""
             SELECT cache_key, requested_by, generated_at
             FROM {fqn('compare_results')}
-            WHERE family = '{family}'
-              AND versions = '{version_str}'
-              AND scenario = '{scenario}'
+            WHERE family = '{family.replace("'", "''")}'
+              AND versions = '{version_str.replace("'", "''")}'
+              AND scenario = '{scenario.replace("'", "''")}'
               AND portfolio_size = {int(portfolio_size)}
             ORDER BY generated_at DESC
             LIMIT 1

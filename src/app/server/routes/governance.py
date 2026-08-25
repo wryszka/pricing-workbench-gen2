@@ -193,7 +193,7 @@ async def packs_on_date(date: str) -> dict:
                 SELECT *, row_number() OVER (PARTITION BY model_family
                                              ORDER BY generated_at DESC) AS rn
                 FROM {fqn('governance_packs_index')}
-                WHERE CAST(generated_at AS DATE) <= DATE('{date}')
+                WHERE CAST(generated_at AS DATE) <= DATE('{date.replace("'", "''")}')
             )
             WHERE rn = 1
             ORDER BY model_family
@@ -223,7 +223,7 @@ async def pack_detail(pack_id: str) -> dict:
                mlflow_run_id, story, simulated, primary_metric, primary_value,
                pdf_path, size_bytes, generated_by, generated_at
         FROM {fqn('governance_packs_index')}
-        WHERE pack_id = '{pack_id}'
+        WHERE pack_id = '{pack_id.replace("'", "''")}'
         LIMIT 1
     """)
     if not rows:
