@@ -1,5 +1,13 @@
 # Optimization Inventory — pricing-workbench-gen2
 
+> **⚠️ SUPERSEDED 2026-08-25 — Phase 1 (offline spine, motor) SHIPPED.** This file
+> describes the *pre-build* state (the commercial worked-example). The motor spine
+> now replaces it: data → monotone elasticity (price ÷ technical) → simulation →
+> constrained solver (versioned YAML) → monitoring → app (frontier, waterfall,
+> objective front door, approve→deploy HITL, red-team panels). The commercial
+> `price_optimiser.py` + its job were removed. **See `docs/optimisation_runbook.md`
+> for the current state.** GATE-1 (below) remains the one open item.
+
 Read-only inventory of what the repo **actually contains and runs today** (not intent),
 to reconcile against `OPTIMIZATION_MODULE_SPEC.md`. Produced 2026-08-24.
 

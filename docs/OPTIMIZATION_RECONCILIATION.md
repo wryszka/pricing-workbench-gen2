@@ -1,5 +1,13 @@
 # Optimization Module — Spec ↔ Reality Reconciliation
 
+> **✅ Phase 1 built 2026-08-25.** The recommended Phase-1 offline spine (§3 data →
+> §4 elasticity → §5 simulation → §6 solver+constraints → §8 monitoring → §9 app +
+> HITL → §13 red-team → §12 gating → §15 docs) is shipped and verified live on
+> pricingv2. Decisions D1=replace, D2=evolve `optimisation_*` in place, D3=fresh
+> build on motor+technical-price, D4=Phase-1 offline spine. Current-state doc:
+> `docs/optimisation_runbook.md`. Phases 2–3 (agents/MCP, real-time, closed loop,
+> FiDA) remain deferred.
+
 Reconciles `OPTIMIZATION_MODULE_SPEC.md` (intent) against `OPTIMIZATION_INVENTORY.md`
 (reality, verified live 2026-08-24). Purpose: decide what to reuse, recover, rework,
 or build new — and surface the decisions that gate the build.

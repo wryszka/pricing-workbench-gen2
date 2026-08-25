@@ -54,3 +54,154 @@ resources:
               - pandas
               - numpy
               - python-dateutil
+
+    # --- §4 elasticity: monotone conversion + retention + curve + red-team ------
+    optimisation_elasticity:
+      name: "Price optimisation — elasticity models (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: train
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_elasticity.py
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              schema_name:  "{{job.parameters.schema_name}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [mlflow, lightgbm, scikit-learn, pandas, numpy]
+
+    # --- §5 simulation: N candidate price sets → scenarios + frontier ----------
+    optimisation_simulation:
+      name: "Price optimisation — simulation (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: grid_points
+          default: "3000"
+        - name: corridor_pct
+          default: "15"
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: simulate
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_simulation.py
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              schema_name:  "{{job.parameters.schema_name}}"
+              grid_points:  "{{job.parameters.grid_points}}"
+              corridor_pct: "{{job.parameters.corridor_pct}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [pandas, numpy]
+
+    # --- §6 solver: constrained arg-max under the versioned YAML → factor table -
+    optimisation_solver:
+      name: "Price optimisation — constrained solver (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: constraint_version
+          default: "v1"
+        - name: objective
+          default: ""      # blank = use the YAML objective
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: solve
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_solver.py
+            base_parameters:
+              catalog_name:       "{{job.parameters.catalog_name}}"
+              schema_name:        "{{job.parameters.schema_name}}"
+              constraint_version: "{{job.parameters.constraint_version}}"
+              objective:          "{{job.parameters.objective}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [scipy, pyyaml, pandas, numpy]
+
+    # --- §8 monitoring: actual-vs-expected drift + deviation + breaches --------
+    optimisation_monitoring:
+      name: "Price optimisation — monitoring (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: corridor_pct
+          default: "15"
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: monitor
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_monitoring.py
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              schema_name:  "{{job.parameters.schema_name}}"
+              corridor_pct: "{{job.parameters.corridor_pct}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [mlflow, lightgbm, scikit-learn, pandas, numpy]
+
+    # --- orchestrator: the whole offline spine as one governed DAG -------------
+    # data → elasticity → simulation → solver → monitoring. This is what the
+    # Walkthrough triggers and what Full Build chains (behind enable_optimization).
+    optimisation_full:
+      name: "Price optimisation — full build (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: grid_points
+          default: "3000"
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: data
+          run_job_task:
+            job_id: ${resources.jobs.optimisation_data.id}
+        - task_key: elasticity
+          depends_on: [{task_key: data}]
+          run_job_task:
+            job_id: ${resources.jobs.optimisation_elasticity.id}
+        - task_key: simulation
+          depends_on: [{task_key: elasticity}]
+          run_job_task:
+            job_id: ${resources.jobs.optimisation_simulation.id}
+        - task_key: solver
+          depends_on: [{task_key: elasticity}]
+          run_job_task:
+            job_id: ${resources.jobs.optimisation_solver.id}
+        - task_key: monitoring
+          depends_on: [{task_key: elasticity}]
+          run_job_task:
+            job_id: ${resources.jobs.optimisation_monitoring.id}

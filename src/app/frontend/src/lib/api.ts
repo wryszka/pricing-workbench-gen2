@@ -319,12 +319,18 @@ export const api = {
   distributionTelemetry: (hours = 24) =>
     fetchJson<any>(`/distribution/telemetry?hours=${encodeURIComponent(hours)}`),
 
-  // Price optimisation (worked example)
+  // Price optimisation (motor offline spine)
   optimisationSummary: () => fetchJson<any>('/optimisation/summary'),
-  optAssets:      () => fetchJson<any>('/optimisation/assets'),
+  optScenarios:   () => fetchJson<any>('/optimisation/scenarios'),
+  optElasticity:  () => fetchJson<any>('/optimisation/elasticity'),
   optMonitoring:  () => fetchJson<any>('/optimisation/monitoring'),
-  optRun: (body: { rate_change_cap?: number; target_loss_ratio?: number; margin_floor?: number }) =>
+  optRedteam:     () => fetchJson<any>('/optimisation/redteam'),
+  optConstraints: () => fetchJson<any>('/optimisation/constraints'),
+  optAssets:      () => fetchJson<any>('/optimisation/assets'),
+  optRun: (body: { grid_points?: number; objective?: string; full?: boolean }) =>
     fetchJson<any>('/optimisation/run', { method: 'POST', body: JSON.stringify(body) }),
   optRunStatus: (runId: number | string) =>
     fetchJson<any>(`/optimisation/run/${encodeURIComponent(String(runId))}`),
+  optDeploy: (body: { approver?: string; note?: string }) =>
+    fetchJson<any>('/optimisation/deploy', { method: 'POST', body: JSON.stringify(body) }),
 };

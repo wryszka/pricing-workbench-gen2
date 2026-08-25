@@ -18,6 +18,12 @@ resources:
           default: ${var.catalog_name}
         - name: schema_name
           default: ${var.schema_name}
+        # §12 gate: the price-optimisation spine is chained in but DORMANT by
+        # default (same "defined, armed on demand" spirit as the live-serving
+        # tier). Populate it in one shot with:
+        #   databricks bundle run full_build -t <t> --params enable_optimization=true
+        - name: enable_optimization
+          default: ${var.enable_optimization}
 
       tasks:
         # --- foundation (parallel) ---
@@ -119,11 +125,24 @@ resources:
             job_parameters:
               deploy_mode: "direct_only"
 
-        # --- price optimisation worked example (needs the elasticity-bearing quotes) ---
-        - task_key: price_optimiser
-          depends_on: [{ task_key: setup }]
+        # --- price optimisation (motor offline spine), §12-gated -----------------
+        # Runs the whole spine (data → elasticity → simulate → solve → monitor)
+        # only when enable_optimization=true. Needs the motor risk champions
+        # (Block 1 stamps technical premium from freq_glm_motor × sev_glm_motor)
+        # and the rating-engine config (expense/commission loadings).
+        - task_key: optimisation_gate
+          depends_on:
+            - { task_key: motor_train }
+            - { task_key: aliases }
+            - { task_key: rating_seed }
+          condition_task:
+            op: "EQUAL_TO"
+            left: "{{job.parameters.enable_optimization}}"
+            right: "true"
+        - task_key: optimisation
+          depends_on: [{ task_key: optimisation_gate, outcome: "true" }]
           run_job_task:
-            job_id: ${resources.jobs.price_optimiser.id}
+            job_id: ${resources.jobs.optimisation_full.id}
 
         # --- AI/BI assets: Genie spaces + mart dashboard (scripted from JSON) ---
         - task_key: ai_assets
@@ -160,6 +179,5 @@ resources:
           depends_on:
             - { task_key: metadata }
             - { task_key: motor_scorer }
-            - { task_key: price_optimiser }
           run_job_task:
             job_id: ${resources.jobs.apply_tags.id}

@@ -38,6 +38,11 @@ for stmt in [
     f"GRANT EXECUTE ON SCHEMA {catalog}.{schema} TO `{app_sp}`",
     # READ VOLUME so the app can stream governance-pack PDFs + saved payloads.
     f"GRANT READ VOLUME ON SCHEMA {catalog}.{schema} TO `{app_sp}`",
+    # MODIFY on just the two writeback tables: the Price-Optimisation approve→deploy
+    # gate stamps optimisation_deployment + the immutable audit_log (governed
+    # writeback). Least-privilege — INSERT rights on these tables only, not the schema.
+    f"GRANT MODIFY ON TABLE {catalog}.{schema}.audit_log TO `{app_sp}`",
+    f"GRANT MODIFY ON TABLE {catalog}.{schema}.optimisation_deployment TO `{app_sp}`",
 ]:
     try:
         spark.sql(stmt)

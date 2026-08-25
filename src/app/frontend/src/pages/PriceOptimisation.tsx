@@ -1,836 +1,493 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Target, ChevronDown, ChevronUp, ShieldCheck, Info, SlidersHorizontal,
-         Cpu, Database, Layers, GitBranch, LineChart, Route, ExternalLink,
-         Play, Loader2, CheckCircle2, Bot, Activity, Zap } from 'lucide-react';
+import { Target, ChevronDown, ChevronUp, ShieldCheck, Info, Cpu, Database,
+         Layers, GitBranch, LineChart, ExternalLink, Play, Loader2, CheckCircle2,
+         Activity, Zap, AlertTriangle, ScrollText, TrendingUp, Gauge } from 'lucide-react';
 import { api } from '../lib/api';
 
-// Price Optimisation — an INTERACTIVE optimizer, not a dashboard. The demand +
-// profit curves per segment are precomputed and governed by the optimiser job;
-// the optimisation DECISION (objective + constraints) runs live in the browser
-// against those governed curves, with a portfolio roll-up and efficient frontier.
-// This is what a pricing practitioner needs to believe the platform replaces a
-// closed optimiser: turn the levers, watch the whole book move.
+// Price Optimisation — the motor offline spine (§3–§9, §13). Every surface reads
+// a governed table the notebooks wrote; the numbers trace to open code and a
+// versioned constraint YAML. Objective front door → efficient frontier →
+// per-segment waterfall → approve-and-deploy (HITL, corridor enforced server-side),
+// plus the demand curves, the two red-team validity panels, and live monitoring.
 
-type Seg = {
-  segment: string; n_quotes: number; elasticity: number; market_ref: number;
-  cost_line: number; current_multiplier: number; current_conversion: number;
-  current_profit_per_quote: number; optimal_multiplier: number;
-  optimal_conversion: number; optimal_profit_per_quote: number;
-  profit_uplift_per_quote: number; profit_uplift_pct: number; binding_constraint: string;
-};
-type CurvePt = {
-  segment: string; price_multiplier: number; expected_conversion: number;
-  price: number; expected_profit_per_quote: number; within_rate_cap: boolean;
-};
-type Levers = { alpha: number; rateCap: number; marginFloor: number };
+const gbp = (v: any, dp = 0) =>
+  v === null || v === undefined ? '—' : `£${Number(v).toLocaleString('en-GB', { maximumFractionDigits: dp })}`;
+const gbpM = (v: any) => (v === null || v === undefined ? '—' : `£${(Number(v) / 1e6).toFixed(2)}m`);
+const pct = (v: any, dp = 1) => (v === null || v === undefined ? '—' : `${(Number(v) * 100).toFixed(dp)}%`);
+const signPct = (v: any) => (v === null || v === undefined ? '—' : `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`);
 
-const fmtPct = (v: number) => `${(v * 100).toFixed(0)}%`;
-const fmtMult = (v: number) => `${v.toFixed(2)}×`;
-const gbpM = (v: number) => `£${(v / 1e6).toFixed(2)}m`;
-const num = (v: any) => (v === null || v === undefined || v === '' ? v : Number(v));
-
-// Pick the objective-optimal curve point for a segment under the current levers.
-function choose(seg: Seg, pts: CurvePt[], L: Levers): CurvePt | null {
-  const within = pts.filter((p) => Math.abs(p.price_multiplier - seg.current_multiplier) <= L.rateCap + 1e-9);
-  const ok = within.filter((p) => p.price > 0 && (p.price - seg.cost_line) / p.price >= L.marginFloor - 1e-9);
-  const pool = ok.length ? ok : within;
-  if (!pool.length) return null;
-  const maxProfit = Math.max(...pts.map((p) => p.expected_profit_per_quote), 1e-9);
-  let best = pool[0], bestVal = -Infinity;
-  for (const p of pool) {
-    const val = L.alpha * (p.expected_profit_per_quote / maxProfit) + (1 - L.alpha) * p.expected_conversion;
-    if (val > bestVal) { bestVal = val; best = p; }
-  }
-  return best;
-}
-function nearestCurrent(seg: Seg, pts: CurvePt[]): CurvePt | null {
-  if (!pts.length) return null;
-  return pts.reduce((a, b) =>
-    Math.abs(b.price_multiplier - seg.current_multiplier) < Math.abs(a.price_multiplier - seg.current_multiplier) ? b : a);
-}
-
-export default function PriceOptimisation() {
-  const [data, setData] = useState<any>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [seg, setSeg] = useState<string>('');
-  const [showHelp, setShowHelp] = useState(false);
-  const [tab, setTab] = useState<'optimise' | 'how' | 'story'>('optimise');
-  const [objective, setObjective] = useState<'profit' | 'volume' | 'blend'>('profit');
-  const [alpha, setAlpha] = useState(0.6);
-  const [rateCap, setRateCap] = useState(0.15);
-  const [marginFloor, setMarginFloor] = useState(0.05);
-  const [assets, setAssets] = useState<any>(null);
-
-  const load = () => {
-    const numify = (r: any) => {
-      const o = { ...r };
-      for (const k of ['n_quotes', 'elasticity', 'market_ref', 'cost_line', 'current_multiplier',
-        'current_conversion', 'current_profit_per_quote', 'optimal_multiplier', 'optimal_conversion',
-        'optimal_profit_per_quote', 'profit_uplift_per_quote', 'profit_uplift_pct',
-        'price_multiplier', 'expected_conversion', 'price', 'expected_profit_per_quote']) {
-        if (k in o) o[k] = num(o[k]);
-      }
-      return o;
-    };
-    return api.optimisationSummary()
-      .then((d) => {
-        if (d?.segments) d.segments = d.segments.map(numify);
-        if (d?.curve) d.curve = d.curve.map(numify);
-        setData(d);
-        if (d?.segments?.length) setSeg((prev) => prev || d.segments[0].segment);
-      })
-      .catch((e) => setErr(String(e)));
-  };
-
-  useEffect(() => {
-    load();
-    api.optAssets().then(setAssets).catch(() => {});
-  }, []);
-
-  const segments: Seg[] = data?.segments || [];
-  const curve: CurvePt[] = data?.curve || [];
-  const cfg = data?.config;
-  const effAlpha = objective === 'profit' ? 1 : objective === 'volume' ? 0 : alpha;
-  const levers: Levers = { alpha: effAlpha, rateCap, marginFloor };
-
-  const ptsBySeg = useMemo(() => {
-    const m: Record<string, CurvePt[]> = {};
-    for (const c of curve) (m[c.segment] ||= []).push(c);
-    for (const k in m) m[k].sort((a, b) => a.price_multiplier - b.price_multiplier);
-    return m;
-  }, [curve]);
-
-  // Live per-segment choice + portfolio roll-up under the current levers.
-  const roll = useMemo(() => {
-    let curProfit = 0, optProfit = 0, curPol = 0, optPol = 0, gwp = 0, wRate = 0, pool = 0;
-    const perSeg: Record<string, { chosen: CurvePt | null; cur: CurvePt | null }> = {};
-    for (const s of segments) {
-      const pts = ptsBySeg[s.segment] || [];
-      const chosen = choose(s, pts, levers);
-      const cur = nearestCurrent(s, pts);
-      perSeg[s.segment] = { chosen, cur };
-      const n = s.n_quotes || 0; pool += n;
-      if (cur) { curProfit += cur.expected_profit_per_quote * n; curPol += cur.expected_conversion * n; }
-      if (chosen) {
-        optProfit += chosen.expected_profit_per_quote * n;
-        optPol += chosen.expected_conversion * n;
-        gwp += chosen.price * chosen.expected_conversion * n;
-        wRate += chosen.price_multiplier * n;
-      }
-    }
-    return { curProfit, optProfit, curPol, optPol, gwp, avgRate: pool ? wRate / pool : 1, perSeg };
-  }, [segments, ptsBySeg, levers]);
-
-  // Efficient frontier: sweep the profit/volume blend, plot (policies, profit).
-  const frontier = useMemo(() => {
-    const out: { alpha: number; pol: number; profit: number }[] = [];
-    for (let a = 0; a <= 1.0001; a += 0.1) {
-      let profit = 0, pol = 0;
-      for (const s of segments) {
-        const c = choose(s, ptsBySeg[s.segment] || [], { alpha: a, rateCap, marginFloor });
-        if (c) { profit += c.expected_profit_per_quote * s.n_quotes; pol += c.expected_conversion * s.n_quotes; }
-      }
-      out.push({ alpha: a, pol, profit });
-    }
-    return out;
-  }, [segments, ptsBySeg, rateCap, marginFloor]);
-
-  if (err) return <div className="p-8 text-red-600">Failed to load: {err}</div>;
-  if (!data) return <div className="p-8 text-gray-500">Loading…</div>;
-  if (!data.available)
-    return (
-      <div className="max-w-3xl mx-auto p-8">
-        <h1 className="text-2xl font-bold mb-3 flex items-center gap-2">
-          <Target className="w-6 h-6 text-teal-600" /> Price Optimisation
-        </h1>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">{data.message}</div>
-      </div>
-    );
-
-  const active = segments.find((s) => s.segment === seg);
-  const segChoice = roll.perSeg[seg];
-  const profitDelta = roll.optProfit - roll.curProfit;
-  const polDelta = roll.optPol - roll.curPol;
-
+function Section({ title, icon, children, sub }: { title: string; icon?: ReactNode; children: ReactNode; sub?: string }) {
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="flex items-center gap-2 mb-1">
-        <Target className="w-6 h-6 text-teal-600" />
-        <h1 className="text-2xl font-bold">Price Optimisation</h1>
-        <span className="ml-2 text-[11px] uppercase tracking-wide bg-teal-100 text-teal-800 px-2 py-0.5 rounded">interactive</span>
-      </div>
-      <p className="text-gray-600 text-sm mb-4 max-w-3xl">
-        Set the objective and the guardrails; the optimiser re-solves the profit-optimal
-        price per segment against the governed demand curves and rolls the impact up
-        across the book — live. Your models, transparent, constraint-aware.
-      </p>
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 mb-4">
-        <TabBtn active={tab === 'optimise'} onClick={() => setTab('optimise')} icon={SlidersHorizontal} label="Optimiser" />
-        <TabBtn active={tab === 'story'} onClick={() => setTab('story')} icon={Route} label="Walkthrough" />
-        <TabBtn active={tab === 'how'} onClick={() => setTab('how')} icon={Cpu} label="How it works" />
-      </div>
-
-      {tab === 'how' && (
-        <HowItWorks cfg={cfg} assets={assets} segCount={segments.length}
-          totalQuotes={segments.reduce((a, s) => a + (s.n_quotes || 0), 0)} />
-      )}
-
-      {tab === 'story' && (
-        <Walkthrough assets={assets} segments={segments} roll={roll}
-          levers={{ rateCap, marginFloor }}
-          setObjective={setObjective} setRateCap={setRateCap} setSeg={setSeg}
-          reload={load} goOptimiser={() => setTab('optimise')} />
-      )}
-
-      {tab === 'optimise' && (<>
-      <button onClick={() => setShowHelp(!showHelp)} className="text-xs text-teal-700 flex items-center gap-1 mb-3">
-        <Info className="w-3.5 h-3.5" /> What am I looking at?
-        {showHelp ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-      </button>
-      {showHelp && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700 mb-4 space-y-2 max-w-3xl">
-          <p><b>Objective</b> — maximise profit, volume, or a blend. <b>Guardrails</b> — a
-            rate-change cap around today's book price and a margin floor, enforced as
-            first-class constraints. Move any lever and every number below re-solves.</p>
-          <p><b>Portfolio impact</b> — the whole-book roll-up of the chosen strategy vs the
-            current book. <b>Efficient frontier</b> — the profit↔volume trade-off; each dot is
-            a blend weight, the ring is where you are now.</p>
-          <p className="text-gray-500">Bricksurance SE is fictional; data synthetic; the cost
-            line + method are illustrative, not a certified rate.</p>
-        </div>
-      )}
-
-      {/* Levers */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3 text-sm font-semibold text-gray-700">
-          <SlidersHorizontal className="w-4 h-4 text-teal-600" /> Objective &amp; guardrails
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">Objective</div>
-            <div className="flex gap-1">
-              {(['profit', 'volume', 'blend'] as const).map((o) => (
-                <button key={o} onClick={() => setObjective(o)}
-                  className={`px-2.5 py-1 rounded text-xs border capitalize ${objective === o
-                    ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-300 hover:border-teal-400'}`}>{o}</button>
-              ))}
-            </div>
-            {objective === 'blend' && (
-              <div className="mt-2">
-                <input type="range" min={0} max={1} step={0.05} value={alpha}
-                  onChange={(e) => setAlpha(Number(e.target.value))} className="w-full accent-teal-600" />
-                <div className="text-[11px] text-gray-500">{fmtPct(alpha)} profit / {fmtPct(1 - alpha)} volume</div>
-              </div>
-            )}
-          </div>
-          <Slider label="Rate-change cap" value={rateCap} min={0} max={0.3} step={0.01}
-            onChange={setRateCap} display={`±${fmtPct(rateCap)}`} />
-          <Slider label="Margin floor" value={marginFloor} min={0} max={0.25} step={0.01}
-            onChange={setMarginFloor} display={fmtPct(marginFloor)} />
-          <div className="text-[11px] text-gray-500 self-end">
-            Every lever re-solves the optimiser client-side against the governed curves —
-            no black box.
-          </div>
-        </div>
-      </div>
-
-      {/* Portfolio roll-up */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <Kpi label="Expected profit (book)" value={gbpM(roll.optProfit)}
-          delta={`${profitDelta >= 0 ? '+' : ''}${gbpM(profitDelta)} vs current`} up={profitDelta >= 0} big />
-        <Kpi label="Policies bound (book)" value={Math.round(roll.optPol).toLocaleString()}
-          delta={`${polDelta >= 0 ? '+' : ''}${Math.round(polDelta).toLocaleString()} vs current`} up={polDelta >= 0} big />
-        <Kpi label="Avg rate change" value={`${roll.avgRate >= 1 ? '+' : ''}${fmtPct(roll.avgRate - 1)}`}
-          delta="vs today's book" />
-        <Kpi label="Gross written premium" value={gbpM(roll.gwp)} delta="at the optimised prices" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {/* Efficient frontier */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2">Efficient frontier — volume vs profit</h2>
-          <FrontierChart frontier={frontier} alpha={effAlpha} />
-        </div>
-        {/* Per-segment curve */}
-        <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-gray-700">Demand &amp; profit — {seg}</h2>
-            <div className="flex gap-1 flex-wrap">
-              {segments.map((s) => (
-                <button key={s.segment} onClick={() => setSeg(s.segment)}
-                  className={`px-2 py-0.5 rounded text-[11px] border ${seg === s.segment
-                    ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-300'}`}>
-                  {s.segment.replace(/^\d+ /, '')}</button>
-              ))}
-            </div>
-          </div>
-          {active && segChoice && (
-            <CurveChart pts={ptsBySeg[seg] || []} current={segChoice.cur} chosen={segChoice.chosen}
-              currentMult={active.current_multiplier} rateCap={rateCap} />
-          )}
-        </div>
-      </div>
-
-      {/* Per-segment table (live under levers) */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
-        <div className="px-4 py-2 border-b border-gray-200 text-sm font-semibold text-gray-700">
-          Per-segment recommendation — under the current levers
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-              <tr>{['Segment', 'Quotes', 'Elasticity', 'Current', 'Optimal', 'Conversion →', 'Profit/quote →'].map((h) => (
-                <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">{h}</th>))}</tr>
-            </thead>
-            <tbody>
-              {segments.map((s) => {
-                const ch = roll.perSeg[s.segment]?.chosen; const cu = roll.perSeg[s.segment]?.cur;
-                return (
-                  <tr key={s.segment} className={`border-t border-gray-100 ${seg === s.segment ? 'bg-teal-50/40' : ''}`}>
-                    <td className="px-3 py-2 font-medium">{s.segment}</td>
-                    <td className="px-3 py-2 text-gray-500">{s.n_quotes.toLocaleString()}</td>
-                    <td className="px-3 py-2">{s.elasticity.toFixed(1)}</td>
-                    <td className="px-3 py-2">{fmtMult(s.current_multiplier)}</td>
-                    <td className="px-3 py-2 font-semibold text-teal-700">{ch ? fmtMult(ch.price_multiplier) : '—'}</td>
-                    <td className="px-3 py-2 text-gray-600">{cu ? fmtPct(cu.expected_conversion) : '—'} → {ch ? fmtPct(ch.expected_conversion) : '—'}</td>
-                    <td className="px-3 py-2 text-gray-600">£{cu ? Math.round(cu.expected_profit_per_quote).toLocaleString() : '—'} → £{ch ? Math.round(ch.expected_profit_per_quote).toLocaleString() : '—'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Governed scenario */}
-      {cfg && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-            <ShieldCheck className="w-4 h-4 text-teal-600" /> This scenario, governed
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <Cfg label="Objective" value={objective === 'blend' ? `blend ${fmtPct(alpha)} profit` : objective} />
-            <Cfg label="Rate-change cap" value={`±${fmtPct(rateCap)}`} />
-            <Cfg label="Margin floor" value={fmtPct(marginFloor)} />
-            <Cfg label="Demand source" value={cfg.demand_source} />
-          </div>
-          <p className="text-xs text-gray-500 mt-3">
-            In production this lever set is saved as a versioned, audited config (like the
-            baseline in <code>optimisation_config</code>) — the "why" of every price is a
-            diffable governed artefact a closed optimiser can't evidence. A fair-value /
-            no-price-walking rule plugs in as another constraint, and the accepted strategy
-            becomes a rate release.
-          </p>
-        </div>
-      )}
-      </>)}
+    <div className="bg-white rounded-lg border border-gray-200 p-5 mb-5">
+      <div className="flex items-center gap-2 mb-1">{icon}<h3 className="font-semibold text-gray-900">{title}</h3></div>
+      {sub && <p className="text-xs text-gray-500 mb-3">{sub}</p>}
+      <div className={sub ? '' : 'mt-3'}>{children}</div>
     </div>
   );
 }
 
-function TabBtn({ active, onClick, icon: Icon, label }: {
-  active: boolean; onClick: () => void; icon: any; label: string;
-}) {
+function Kpi({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'good' | 'warn' }) {
+  const c = tone === 'good' ? 'text-emerald-700' : tone === 'warn' ? 'text-amber-700' : 'text-gray-900';
   return (
-    <button onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1.5 ${active
-        ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-      <Icon className="w-4 h-4" /> {label}
-    </button>
-  );
-}
-
-function InfoCard({ icon: Icon, title, children }: { icon: any; title: string; children: ReactNode }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700">
-        <Icon className="w-4 h-4 text-teal-600" /> {title}
-      </div>
-      <ul className="list-disc pl-4 space-y-1.5 text-[13px] text-gray-600 leading-snug">{children}</ul>
+    <div className="bg-gray-50 rounded-lg border border-gray-200 px-4 py-3">
+      <div className="text-[11px] uppercase tracking-wide text-gray-500">{label}</div>
+      <div className={`text-xl font-semibold ${c}`}>{value}</div>
+      {hint && <div className="text-[11px] text-gray-500 mt-0.5">{hint}</div>}
     </div>
   );
 }
 
-function KV({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wide text-gray-400">{label}</div>
-      <div className="text-gray-700 break-words">{value}</div>
-    </div>
-  );
-}
-
-// A deep-link chip → opens a real platform asset in a new tab. Renders nothing
-// until the assets resolve, so it never shows a dead link.
-function LinkChip({ href, icon: Icon, label }: { href?: string | null; icon: any; label: string }) {
+function LinkChip({ href, children }: { href?: string | null; children: ReactNode }) {
   if (!href) return null;
   return (
     <a href={href} target="_blank" rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100">
-      <Icon className="w-3 h-3" /> {label} <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+       className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-900 hover:underline bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+      {children}<ExternalLink className="w-3 h-3" />
     </a>
   );
 }
 
-// "How it works" — the behind-the-scenes tab. Answers "what's actually running?"
-// for a demo audience: the data, the model/method, and the Databricks tech. Kept
-// faithful to src/04_models/production/price_optimiser.py. Cards deep-link to the
-// real assets via /api/optimisation/assets.
-function HowItWorks({ cfg, assets, segCount, totalQuotes }:
-  { cfg: any; assets: any; segCount: number; totalQuotes: number }) {
-  const t = assets?.tables || {};
-  const steps = [
-    { icon: Database, t: 'Quote stream', d: 'Every priced commercial quote — offered price, market reference, convert / no-convert.' },
-    { icon: LineChart, t: 'Demand curve', d: 'Per segment: a logistic fit of conversion vs price-to-market. Slope = elasticity.' },
-    { icon: Cpu, t: 'Cost + solve', d: 'Lay a cost line, grid-search the price that maximises d(p)·(p−c) under the guardrails.' },
-    { icon: ShieldCheck, t: 'Governed tables', d: 'Curve, summary and a versioned config row land in Unity Catalog.' },
-    { icon: SlidersHorizontal, t: 'This app', d: 'The Optimiser tab re-solves the decision live in your browser over those curves.' },
-  ];
+// --- tiny SVG chart helpers (no external libs) ------------------------------
+function LineChartSvg({ series, w = 560, h = 200, xlab, ylab, yFmt }: {
+  series: { name: string; color: string; pts: [number, number][] }[];
+  w?: number; h?: number; xlab?: string; ylab?: string; yFmt?: (v: number) => string;
+}) {
+  const all = series.flatMap((s) => s.pts);
+  if (!all.length) return <div className="text-sm text-gray-400">No data.</div>;
+  const xs = all.map((p) => p[0]), ys = all.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const pad = 38, sx = (x: number) => pad + ((x - x0) / (x1 - x0 || 1)) * (w - pad - 12);
+  const sy = (y: number) => h - 26 - ((y - y0) / (y1 - y0 || 1)) * (h - 26 - 12);
   return (
-    <div className="space-y-5">
-      <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 text-sm text-teal-900">
-        <b>No black box.</b> Every number on the Optimiser tab is readable code over three governed
-        Delta tables. Below is the whole pipeline — here running over {segCount} segments and{' '}
-        {totalQuotes.toLocaleString()} priced quotes.
-      </div>
-
-      {/* Pipeline strip */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">The pipeline, end to end</h2>
-        <div className="flex flex-col md:flex-row md:items-stretch gap-2">
-          {steps.map((s, i) => (
-            <div key={s.t} className="flex-1 flex items-center gap-2">
-              <div className="flex-1 rounded-lg border border-gray-200 bg-gray-50 p-3 h-full">
-                <s.icon className="w-4 h-4 text-teal-600 mb-1" />
-                <div className="text-xs font-semibold text-gray-800">{s.t}</div>
-                <div className="text-[11px] text-gray-500 leading-snug mt-0.5">{s.d}</div>
-              </div>
-              {i < steps.length - 1 && <div className="hidden md:block text-gray-300 shrink-0">→</div>}
-            </div>
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ maxHeight: h }}>
+      <line x1={pad} y1={h - 26} x2={w - 12} y2={h - 26} stroke="#e5e7eb" />
+      <line x1={pad} y1={12} x2={pad} y2={h - 26} stroke="#e5e7eb" />
+      <text x={pad} y={h - 8} className="fill-gray-400" fontSize="10">{yFmt ? yFmt(y0) : x0.toFixed(2)}</text>
+      <text x={w - 40} y={h - 8} className="fill-gray-400" fontSize="10">{x1.toFixed(2)}{xlab ? ` ${xlab}` : ''}</text>
+      <text x={6} y={16} className="fill-gray-400" fontSize="10">{yFmt ? yFmt(y1) : y1.toFixed(2)}</text>
+      {ylab && <text x={6} y={h - 30} className="fill-gray-400" fontSize="10">{ylab}</text>}
+      {series.map((s) => (
+        <polyline key={s.name} fill="none" stroke={s.color} strokeWidth={2}
+          points={s.pts.map((p) => `${sx(p[0])},${sy(p[1])}`).join(' ')} />
+      ))}
+      {series.length > 1 && (
+        <g>
+          {series.map((s, i) => (
+            <g key={s.name} transform={`translate(${pad + 8},${18 + i * 15})`}>
+              <rect width="10" height="3" y="-3" fill={s.color} />
+              <text x="14" y="1" fontSize="10" className="fill-gray-600">{s.name}</text>
+            </g>
           ))}
+        </g>
+      )}
+    </svg>
+  );
+}
+
+export default function PriceOptimisation() {
+  const [tab, setTab] = useState<'optimise' | 'demand' | 'monitor' | 'how'>('optimise');
+  const [showHelp, setShowHelp] = useState(false);
+  const [summary, setSummary] = useState<any>(null);
+  const [scen, setScen] = useState<any>(null);
+  const [elast, setElast] = useState<any>(null);
+  const [mon, setMon] = useState<any>(null);
+  const [redteam, setRedteam] = useState<any>(null);
+  const [constraints, setConstraints] = useState<any>(null);
+  const [assets, setAssets] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  // objective front door + live re-solve
+  const [objective, setObjective] = useState('expected_profit');
+  const [grid, setGrid] = useState(3000);
+  const [run, setRun] = useState<{ state?: string; url?: string; error?: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  // HITL deploy
+  const [deployMsg, setDeployMsg] = useState<{ ok?: boolean; text: string } | null>(null);
+  const [segSel, setSegSel] = useState('');
+
+  const loadAll = () => {
+    api.optimisationSummary().then(setSummary).catch((e) => setErr(String(e)));
+    api.optScenarios().then(setScen).catch(() => {});
+    api.optElasticity().then((d) => { setElast(d); if (d?.curves?.length) setSegSel((p) => p || d.curves[0].segment); }).catch(() => {});
+    api.optMonitoring().then(setMon).catch(() => {});
+    api.optRedteam().then(setRedteam).catch(() => {});
+    api.optConstraints().then(setConstraints).catch(() => {});
+    api.optAssets().then(setAssets).catch(() => {});
+  };
+  useEffect(loadAll, []);
+
+  const factors: any[] = summary?.factors || [];
+  const rollup = summary?.rollup;
+  const meta = scen?.meta || summary?.scenario_meta;
+
+  const doResolve = async () => {
+    setBusy(true); setRun({ state: 'PENDING' });
+    try {
+      const r = await api.optRun({ objective, grid_points: grid, full: true });
+      if (!r?.ok) { setRun({ error: r?.error || 'run failed' }); setBusy(false); return; }
+      const poll = async () => {
+        const s = await api.optRunStatus(r.run_id);
+        setRun({ state: s.result_state || s.life_cycle_state, url: s.run_page_url });
+        if (s.life_cycle_state && !['TERMINATED', 'SKIPPED', 'INTERNAL_ERROR'].includes(s.life_cycle_state)) {
+          setTimeout(poll, 5000);
+        } else { setBusy(false); loadAll(); }
+      };
+      setTimeout(poll, 5000);
+    } catch (e) { setRun({ error: String(e) }); setBusy(false); }
+  };
+
+  const doDeploy = async () => {
+    setDeployMsg(null);
+    const r = await api.optDeploy({ approver: 'app_user', note: `objective=${objective}` });
+    setDeployMsg({ ok: r?.ok, text: r?.ok ? r.message : (r?.error || 'deploy failed') });
+  };
+
+  const TabBtn = ({ id, label }: { id: typeof tab; label: string }) => (
+    <button onClick={() => setTab(id)}
+      className={`px-4 py-2 text-sm font-medium rounded-md ${tab === id ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}>
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Target className="w-6 h-6 text-emerald-600" /> Price Optimisation
+          </h1>
+          <p className="text-gray-600 mt-1">Personal motor · open code, versioned constraints, governed deploy — the offline spine.</p>
         </div>
+        <button onClick={() => setShowHelp((v) => !v)} className="text-sm text-emerald-700 inline-flex items-center gap-1">
+          <Info className="w-4 h-4" /> What am I seeing?{showHelp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
       </div>
 
-      {/* Data / Model / Tech */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <InfoCard icon={Database} title="Data">
-          <li><b>Source:</b> <code>quotes</code> — priced commercial quotes with the offered premium,
-            the market reference, and whether the quote converted (bound). That convert / no-convert
-            outcome is the elasticity signal.</li>
-          <li><b>Filter:</b> price-to-market between 0.5× and 2.0×, non-outlier, premium present.</li>
-          <li><b>Segments:</b> by account size — Micro (&lt;£10k), SME (£10–50k), Mid (£50–250k),
-            Large (£250k+). Bigger accounts are more price-sensitive, so each gets a genuinely
-            different curve and optimal move.</li>
-          <li><b>Governed output (Unity Catalog):</b> <code>optimisation_curve</code>,{' '}
-            <code>optimisation_summary</code>, <code>optimisation_config</code>.</li>
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            <LinkChip href={t.quotes} icon={Database} label="quotes" />
-            <LinkChip href={t.optimisation_summary} icon={Database} label="optimisation_summary" />
-            <LinkChip href={t.optimisation_curve} icon={Database} label="optimisation_curve" />
-          </div>
-        </InfoCard>
-
-        <InfoCard icon={Cpu} title="Model &amp; method">
-          <li><b>Demand:</b> a per-segment <b>logistic regression</b> of conversion on price-to-market
-            (scikit-learn). The slope is the segment's price elasticity — negative, so demand falls as
-            price rises.</li>
-          <li><b>Cost line:</b> illustrative expected claims = segment loss ratio × market premium
-            (0.54 Micro → 0.80 Large). The floor optimisation cannot cross.</li>
-          <li><b>Objective:</b> expected profit per quote <code>d(p)·(p−c)</code>, swept over a price
-            grid (0.80×–1.30× market, 0.02 steps).</li>
-          <li><b>Constraints:</b> a rate-change cap around today's book price (±15% default) and a
-            margin floor (5%); the binding one is recorded per segment.</li>
-          <li><b>MLflow</b> logs each run — params and total profit uplift.</li>
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            <LinkChip href={assets?.notebook_url} icon={Cpu} label="open the notebook" />
-            <LinkChip href={assets?.experiment_url} icon={LineChart} label="MLflow" />
-          </div>
-        </InfoCard>
-
-        <InfoCard icon={Layers} title="Underlying tech">
-          <li><b>Job:</b> <code>price_optimiser.py</code> — a serverless notebook (Spark → pandas /
-            scikit-learn), part of Full Build.</li>
-          <li><b>Storage &amp; governance:</b> Delta tables in <b>Unity Catalog</b>; a scale-to-zero
-            SQL warehouse serves the app's reads.</li>
-          <li><b>App:</b> Databricks Apps (FastAPI) exposes <code>/api/optimisation/summary</code>; this
-            React page re-solves the objective + constraints <b>client-side</b>, so the levers move the
-            whole book instantly.</li>
-          <li><b>Why it matters:</b> the maths is deterministic and inspectable — the wedge against a
-            closed, black-box optimiser.</li>
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            <LinkChip href={assets?.job_url} icon={Play} label="the job" />
-            <LinkChip href={assets?.agent_url} icon={Bot} label="the agent endpoint" />
-          </div>
-        </InfoCard>
-      </div>
-
-      {/* The decision, formalised */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h2 className="text-sm font-semibold text-gray-700 mb-2">The decision, in one line</h2>
-        <div className="bg-gray-900 text-gray-100 rounded-lg px-4 py-3 font-mono text-sm overflow-x-auto whitespace-nowrap">
-          maximise <span className="text-teal-300">d(p)·(p − c)</span> over p&nbsp;&nbsp; s.t.&nbsp;&nbsp;
-          |p − p₀| ≤ cap&nbsp;&nbsp; and&nbsp;&nbsp; (p − c)/p ≥ floor
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-xs text-gray-600">
-          <div><code>d(p)</code> — expected conversion at price p (fitted demand curve)</div>
-          <div><code>p</code> — offered price = multiplier × market reference</div>
-          <div><code>c</code> — cost line (expected claims)</div>
-          <div><code>p₀</code> — today's book price for the segment</div>
-        </div>
-      </div>
-
-      {/* Governed config row */}
-      {cfg && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-            <GitBranch className="w-4 h-4 text-teal-600" /> Governed config — the audited "why"
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-            <KV label="Objective" value={cfg.objective || '—'} />
-            <KV label="Demand source" value={cfg.demand_source || '—'} />
-            <KV label="Cost source" value={cfg.cost_source || '—'} />
-            <KV label="Rate-change cap" value={cfg.rate_change_cap != null ? `±${fmtPct(Number(cfg.rate_change_cap))}` : '—'} />
-            <KV label="Margin floor" value={cfg.margin_floor != null ? fmtPct(Number(cfg.margin_floor)) : '—'} />
-            <KV label="Version" value={cfg.version || '—'} />
-          </div>
-          <p className="text-xs text-gray-500 mt-3">
-            This config row is versioned and audited in <code>optimisation_config</code> — the "why" of
-            every recommended price is a diffable governed artefact a closed optimiser can't evidence.
-          </p>
+      {showHelp && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-gray-700 mb-4 space-y-2">
+          <p><b>The wedge against a black-box optimiser:</b> demand is a governed, monotone model; price enters as a
+            ratio to the technically-correct (break-even) price, never raw; the solver is boring scipy bound by a
+            constraint file you can open and <code>git log</code>; and nothing deploys without passing a corridor check
+            server-side. Turn the objective, run the real governed DAG, watch the whole book move, then approve.</p>
+          <p className="text-xs text-emerald-800"><b>About this demo:</b> synthetic, illustrative motor data in a
+            Databricks sandbox — it demonstrates the end-to-end capability, not a real book.</p>
         </div>
       )}
 
-      <p className="text-xs text-gray-500">
-        Bricksurance SE is fictional; data synthetic. The cost line and method are illustrative, not a
-        certified rate — the point is the mechanism and its governance, not the numbers.
-      </p>
-    </div>
-  );
-}
-
-const btnCls = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60';
-const btnGhost = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-gray-300 text-gray-600 hover:border-teal-400';
-
-function Step({ n, icon: Icon, title, children }: { n: number; icon: any; title: string; children: ReactNode }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 flex gap-3">
-      <div className="shrink-0 w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center text-sm font-bold">{n}</div>
-      <div className="flex-1 space-y-2 min-w-0">
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-800"><Icon className="w-4 h-4 text-teal-600" /> {title}</div>
-        <div className="text-[13px] text-gray-600 leading-snug space-y-2">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function MiniKpi({ label, value, tone }: { label: string; value: string; tone?: 'up' | 'down' }) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-2">
-      <div className="text-[10px] uppercase tracking-wide text-gray-400">{label}</div>
-      <div className={`text-sm font-semibold ${tone === 'up' ? 'text-emerald-600' : tone === 'down' ? 'text-rose-600' : 'text-gray-800'}`}>{value}</div>
-    </div>
-  );
-}
-
-// Actual vs model-expected conversion by month; the gap is drift.
-function MonitorChart({ months }: { months: any[] }) {
-  const pts = months
-    .map((m) => ({ month: String(m.month).slice(0, 7), a: Number(m.actual_conversion), e: Number(m.expected_conversion), d: Number(m.drift) }))
-    .filter((p) => isFinite(p.a));
-  if (!pts.length) return null;
-  const W = 640, H = 180, padL = 36, padR = 12, padT = 12, padB = 26;
-  const ys = pts.flatMap((p) => [p.a, p.e]).filter((v) => isFinite(v));
-  const y0 = Math.min(...ys) * 0.9, y1 = Math.max(...ys) * 1.05;
-  const x = (i: number) => padL + (pts.length <= 1 ? 0 : i / (pts.length - 1)) * (W - padL - padR);
-  const y = (v: number) => padT + (1 - (v - y0) / (y1 - y0 || 1)) * (H - padT - padB);
-  const line = (key: 'a' | 'e') => pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ');
-  const last = pts[pts.length - 1];
-  return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-        <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#e5e7eb" />
-        <path d={line('e')} fill="none" stroke="#9ca3af" strokeWidth={2} strokeDasharray="4 3" />
-        <path d={line('a')} fill="none" stroke="#0d9488" strokeWidth={2.5} />
-        {pts.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.a)} r={2} fill="#0d9488" />)}
-        <text x={padL} y={H - 8} fontSize="9" fill="#9ca3af">{pts[0].month}</text>
-        <text x={W - padR} y={H - 8} fontSize="9" fill="#9ca3af" textAnchor="end">{last.month}</text>
-        <g fontSize="10">
-          <rect x={W - 160} y={padT} width={10} height={3} fill="#0d9488" /><text x={W - 145} y={padT + 4} fill="#374151">actual</text>
-          <rect x={W - 90} y={padT} width={10} height={3} fill="#9ca3af" /><text x={W - 75} y={padT + 4} fill="#374151">expected</text>
-        </g>
-      </svg>
-      <div className="text-xs text-gray-600">
-        Latest-month drift:{' '}
-        <b className={last.d >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{last.d >= 0 ? '+' : ''}{(last.d * 100).toFixed(1)}pp</b>{' '}
-        (actual − model-expected conversion) — the signal to refit the curve.
-      </div>
-    </div>
-  );
-}
-
-// The driven demo story: market event → change → run → result → monitor → govern → agent.
-// Every beat touches a real asset (levers, the governed job, the monitor table, the agent).
-function Walkthrough({ assets, segments, roll, levers, setObjective, setRateCap, setSeg, reload, goOptimiser }: {
-  assets: any; segments: Seg[]; roll: any; levers: { rateCap: number; marginFloor: number };
-  setObjective: (o: 'profit' | 'volume' | 'blend') => void; setRateCap: (v: number) => void;
-  setSeg: (s: string) => void; reload: () => Promise<any>; goOptimiser: () => void;
-}) {
-  const t = assets?.tables || {};
-  const smeSeg = segments.find((s) => /SME/i.test(s.segment))?.segment
-    || segments.find((s) => /Mid/i.test(s.segment))?.segment || segments[0]?.segment || '';
-
-  const [applied, setApplied] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [runState, setRunState] = useState<any>(null);
-  const [monitor, setMonitor] = useState<any[] | null>(null);
-  const [monBusy, setMonBusy] = useState(false);
-  const [agentQ, setAgentQ] = useState(
-    'Under the defend-SME-volume strategy, who wins and who loses, what is the retention risk, and is any segment outside the corridor?');
-  const [agentAns, setAgentAns] = useState<string | null>(null);
-  const [agentBusy, setAgentBusy] = useState(false);
-
-  const applyStrategy = () => { setSeg(smeSeg); setObjective('volume'); setRateCap(0.10); setApplied(true); };
-
-  const triggerRun = async () => {
-    setRunning(true); setRunState({ life_cycle_state: 'PENDING' });
-    try {
-      const r = await api.optRun({ rate_change_cap: levers.rateCap, margin_floor: levers.marginFloor });
-      if (!r.ok) { setRunState({ error: r.error || 'run failed' }); setRunning(false); return; }
-      const rid = r.run_id;
-      setRunState({ run_id: rid, life_cycle_state: 'RUNNING' });
-      for (let i = 0; i < 120; i++) {
-        await new Promise((res) => setTimeout(res, 3000));
-        const s = await api.optRunStatus(rid);
-        setRunState(s);
-        const done = !!s.result_state || ['TERMINATED', 'SKIPPED', 'INTERNAL_ERROR'].includes(s.life_cycle_state);
-        if (done) { if (s.result_state === 'SUCCESS') await reload(); break; }
-      }
-    } catch (e: any) { setRunState({ error: String(e) }); }
-    setRunning(false);
-  };
-
-  const loadMonitor = async () => {
-    setMonBusy(true);
-    try { const d = await api.optMonitoring(); setMonitor(d?.months || []); } catch { setMonitor([]); }
-    setMonBusy(false);
-  };
-
-  const askAgent = async () => {
-    setAgentBusy(true); setAgentAns(null);
-    try { const r = await api.agentLead({ persona: 'rate_change', question: agentQ }); setAgentAns(r?.answer || r?.error || 'No answer.'); }
-    catch (e: any) { setAgentAns('Agent unavailable: ' + String(e)); }
-    setAgentBusy(false);
-  };
-
-  const profitDelta = roll ? roll.optProfit - roll.curProfit : 0;
-  const polDelta = roll ? roll.optPol - roll.curPol : 0;
-  const runOk = runState?.result_state === 'SUCCESS';
-
-  return (
-    <div className="space-y-3">
-      <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 text-sm text-teal-900">
-        <b>A day in the life.</b> A market event hits; you change the optimisation, run it on the real
-        platform, read the result, monitor it, govern it — and an agent helps. Drive it top to bottom.
+      <div className="bg-gray-100 rounded-lg p-1 inline-flex gap-1 mb-5">
+        <TabBtn id="optimise" label="Optimiser" />
+        <TabBtn id="demand" label="Demand & red-team" />
+        <TabBtn id="monitor" label="Monitoring" />
+        <TabBtn id="how" label="How it works" />
       </div>
 
-      <Step n={1} icon={Zap} title="A market event">
-        <p>A competitor has just cut <b>SME</b> rates ~8%. Conversion there will slip unless you respond —
-          let's defend it without over-correcting the rest of the book.</p>
-        <button onClick={() => setSeg(smeSeg)} className={btnGhost}>Focus on {smeSeg.replace(/^\d+ /, '') || 'SME'}</button>
-      </Step>
-
-      <Step n={2} icon={SlidersHorizontal} title="Change the optimisation to X">
-        <p>Strategy — <b>defend SME volume</b>: steer the objective toward volume and tighten the
-          rate-change cap to ±10% (hold the margin floor). One click sets the levers on the Optimiser tab.</p>
-        <div className="flex flex-wrap gap-2 items-center">
-          <button onClick={applyStrategy} className={btnCls}><Zap className="w-3.5 h-3.5" /> Apply strategy</button>
-          <button onClick={goOptimiser} className={btnGhost}>See it on the Optimiser →</button>
+      {err && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm mb-4">{err}</div>}
+      {summary && !summary.available && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-4 text-sm mb-4">
+          {summary.message || 'Optimisation not solved yet on this workspace.'}
         </div>
-        {applied && roll && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-1">
-            <MiniKpi label="Strategy" value="volume · ±10% cap" />
-            <MiniKpi label="Book profit vs now" value={`${profitDelta >= 0 ? '+' : ''}${gbpM(profitDelta)}`} tone={profitDelta >= 0 ? 'up' : 'down'} />
-            <MiniKpi label="Policies vs now" value={`${polDelta >= 0 ? '+' : ''}${Math.round(polDelta).toLocaleString()}`} tone={polDelta >= 0 ? 'up' : 'down'} />
-          </div>
-        )}
-      </Step>
+      )}
 
-      <Step n={3} icon={GitBranch} title="This is how I do it">
-        <p>The levers aren't a black box — they're a governed, versioned config. In production this
-          strategy is written to <code>optimisation_config</code>, and the maths lives in one readable
-          notebook. Straight to the real artefacts:</p>
-        <div className="flex flex-wrap gap-1.5">
-          <LinkChip href={t.optimisation_config} icon={Database} label="optimisation_config" />
-          <LinkChip href={assets?.notebook_url} icon={Cpu} label="price_optimiser notebook" />
-        </div>
-      </Step>
+      {/* ------------------------------------------------------- OPTIMISER */}
+      {tab === 'optimise' && summary?.available && (
+        <>
+          <Section title="Objective front door" icon={<Gauge className="w-4 h-4 text-emerald-600" />}
+            sub="Pick what the book should maximise and how many candidate price sets to explore, then run the real governed DAG (data → elasticity → simulate → solve → monitor). The solver is bound by the versioned constraint set.">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Objective</div>
+                <div className="inline-flex rounded-md border border-gray-200 overflow-hidden">
+                  {[['expected_profit', 'Expected profit'], ['expected_gwp', 'Expected GWP'], ['retention_weighted_profit', 'Retention-weighted']].map(([v, l]) => (
+                    <button key={v} onClick={() => setObjective(v)}
+                      className={`px-3 py-1.5 text-sm ${objective === v ? 'bg-emerald-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Candidate price sets (N)</div>
+                <select value={grid} onChange={(e) => setGrid(Number(e.target.value))}
+                  className="border border-gray-200 rounded-md px-3 py-1.5 text-sm">
+                  <option value={1000}>1,000</option><option value={3000}>3,000</option><option value={10000}>10,000</option>
+                </select>
+              </div>
+              <button onClick={doResolve} disabled={busy}
+                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-md px-4 py-2">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                {busy ? 'Running governed DAG…' : 'Re-solve (live job)'}
+              </button>
+              {run?.state && <span className="text-xs text-gray-500">run: <b>{run.state}</b>{run.url && <> · <a className="text-emerald-700 underline" href={run.url} target="_blank" rel="noreferrer">open</a></>}</span>}
+              {run?.error && <span className="text-xs text-red-600">{run.error}</span>}
+            </div>
+            {meta && (
+              <p className="text-xs text-gray-500 mt-3">
+                <b>{Number(meta.grid_points || meta.candidates || 0).toLocaleString()}</b> candidate price sets evaluated in
+                <b> {Number(meta.wallclock_s || 0).toFixed(1)}s</b> — N is your choice, not a licence tier.
+              </p>
+            )}
+          </Section>
 
-      <Step n={4} icon={Play} title="This is how it runs">
-        <p>Commit it: run the <b>real governed job</b> with the new rate cap (±{fmtPct(levers.rateCap)}).
-          It refits the demand curves on the latest quotes and rewrites the governed tables + a new config
-          version — a real Databricks job, not a client-side illusion.</p>
-        <div className="flex flex-wrap gap-2 items-center">
-          <button onClick={triggerRun} disabled={running} className={btnCls}>
-            {running ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Running…</> : <><Play className="w-3.5 h-3.5" /> Run the job</>}
-          </button>
-          {runState && !runState.error && (
-            <span className="text-xs text-gray-600 inline-flex items-center gap-1">
-              {runOk ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Loader2 className="w-3.5 h-3.5 animate-spin text-teal-600" />}
-              {runOk ? 'Succeeded' : `${runState.life_cycle_state || 'starting'}…`}
-            </span>
+          {rollup && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <Kpi label="Expected profit (opt)" value={gbpM(rollup.expected_profit_opt)} hint={`hold ${gbpM(rollup.expected_profit_hold)}`} tone="good" />
+              <Kpi label="Profit uplift" value={gbpM(rollup.profit_uplift)} hint={signPct(rollup.profit_uplift_pct)} tone="good" />
+              <Kpi label="Book" value={`${Number(rollup.policies).toLocaleString()}`} hint={`${rollup.segments} segments · ${gbpM(rollup.gwp_current)} GWP`} />
+              <Kpi label="Constraint corridor" value={rollup.all_within_corridor ? 'All within' : 'Breach!'}
+                hint={`policy set ${summary?.constraint?.version || 'v1'}`} tone={rollup.all_within_corridor ? 'good' : 'warn'} />
+            </div>
           )}
-          {runState?.run_page_url && <LinkChip href={runState.run_page_url} icon={ExternalLink} label="open the run" />}
-          <LinkChip href={assets?.job_url} icon={Play} label="the job" />
-        </div>
-        {runState?.error && <p className="text-xs text-rose-600">Run error: {runState.error}</p>}
-      </Step>
 
-      <Step n={5} icon={Target} title="This is the result">
-        <p>{runOk ? 'Governed tables refreshed. ' : ''}The re-solve moves the whole book — explore it on the
-          Optimiser tab; these are the current strategy vs today.</p>
-        {roll && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <MiniKpi label="Expected profit (book)" value={gbpM(roll.optProfit)} />
-            <MiniKpi label="Δ profit vs now" value={`${profitDelta >= 0 ? '+' : ''}${gbpM(profitDelta)}`} tone={profitDelta >= 0 ? 'up' : 'down'} />
-            <MiniKpi label="Policies bound" value={Math.round(roll.optPol).toLocaleString()} />
-            <MiniKpi label="Avg rate change" value={`${roll.avgRate >= 1 ? '+' : ''}${fmtPct(roll.avgRate - 1)}`} />
+          <Section title="Efficient frontier" icon={<TrendingUp className="w-4 h-4 text-emerald-600" />}
+            sub="Every Pareto-optimal candidate (expected volume vs expected profit). Hold = today's book. The solver picks the objective-optimal point within the constraint corridor.">
+            <FrontierChart frontier={scen?.frontier || []} />
+          </Section>
+
+          <Section title="Per-segment decision (waterfall)" icon={<Layers className="w-4 h-4 text-emerald-600" />}
+            sub="What the solver did to each age·vehicle segment and why it stopped there (interior optimum, segment cap, or corridor edge).">
+            <Waterfall factors={factors} />
+          </Section>
+
+          <Section title="Solved factor table" icon={<ScrollText className="w-4 h-4 text-emerald-600" />}
+            sub="The deployable artifact — the per-segment factor the rating config consumes.">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-gray-500 border-b">
+                  <th className="py-1.5 pr-3">Segment</th><th className="pr-3">Policies</th><th className="pr-3">Factor</th>
+                  <th className="pr-3">Conv hold→opt</th><th className="pr-3">Profit uplift</th><th className="pr-3">Binding</th><th>Corridor</th>
+                </tr></thead>
+                <tbody>
+                  {factors.map((f) => (
+                    <tr key={f.segment} className="border-b border-gray-100">
+                      <td className="py-1.5 pr-3 font-medium text-gray-800">{f.segment}</td>
+                      <td className="pr-3">{Number(f.policies).toLocaleString()}</td>
+                      <td className={`pr-3 font-medium ${f.factor_pct >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{signPct(f.factor_pct)}</td>
+                      <td className="pr-3 text-gray-600">{pct(f.conversion_hold, 0)} → {pct(f.conversion_opt, 0)}</td>
+                      <td className="pr-3">{gbp(f.profit_uplift)}</td>
+                      <td className="pr-3"><span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{f.binding}</span></td>
+                      <td>{f.within_corridor ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-amber-600" />}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+
+          <Section title="Approve → deploy" icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />}
+            sub="The human sets policy; the gate enforces it. On approve, the corridor is re-checked SERVER-SIDE (a future agent cannot bypass it), then the factor set is stamped to optimisation_deployment + the immutable audit log.">
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={doDeploy}
+                className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black text-white text-sm font-medium rounded-md px-4 py-2">
+                <CheckCircle2 className="w-4 h-4" /> Approve &amp; deploy factor set {summary?.constraint?.version || 'v1'}
+              </button>
+              {deployMsg && (
+                <span className={`text-sm ${deployMsg.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {deployMsg.ok ? <CheckCircle2 className="w-4 h-4 inline mr-1" /> : <AlertTriangle className="w-4 h-4 inline mr-1" />}
+                  {deployMsg.text}
+                </span>
+              )}
+            </div>
+          </Section>
+        </>
+      )}
+
+      {/* -------------------------------------------------- DEMAND & RED-TEAM */}
+      {tab === 'demand' && (
+        <>
+          <Section title="Elasticity curves (monotone demand)" icon={<LineChart className="w-4 h-4 text-emerald-600" />}
+            sub="Per-segment price→conversion, read off the governed conversion_elasticity_motor champion. Monotonicity in price is ENFORCED (monotone_constraints) — conversion can only fall as price rises, so the solver can't exploit a spurious wrinkle.">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs text-gray-500">Segment</span>
+              <select value={segSel} onChange={(e) => setSegSel(e.target.value)} className="border border-gray-200 rounded-md px-3 py-1.5 text-sm">
+                {[...new Set((elast?.curves || []).map((c: any) => c.segment))].map((s: any) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <LineChartSvg xlab="× price" ylab="P(convert)" yFmt={(v) => `${(v * 100).toFixed(0)}%`}
+              series={[{ name: 'conversion', color: '#059669',
+                pts: (elast?.curves || []).filter((c: any) => c.segment === segSel).map((c: any) => [c.price_multiplier, c.conversion_prob]) }]} />
+          </Section>
+
+          <Section title="Red-team A — why raw price gives the WRONG elasticity" icon={<AlertTriangle className="w-4 h-4 text-amber-600" />}
+            sub="Naive model: conversion ~ raw price. Correct model: conversion ~ price ÷ technical. Expensive risks carry a high price AND a high market benchmark, so raw price barely tracks competitiveness — the naive model reads demand as nearly price-insensitive. That's the dangerous, over-flat elasticity a black box can hide.">
+            <LineChartSvg xlab="% price" ylab="P(convert)" yFmt={(v) => `${(v * 100).toFixed(0)}%`}
+              series={[
+                { name: 'naive (raw price)', color: '#d97706', pts: (redteam?.endogeneity || []).map((r: any) => [r.price_change_pct, r.naive_rawprice_conversion]) },
+                { name: 'correct (÷ technical)', color: '#059669', pts: (redteam?.endogeneity || []).map((r: any) => [r.price_change_pct, r.correct_vs_technical_conversion]) },
+              ]} />
+            <EndoHeadline rows={redteam?.endogeneity || []} />
+          </Section>
+
+          <Section title="Red-team B — parameter recovery" icon={<CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+            sub="The generator injected a known month-by-month elasticity; the pipeline should recover it. True vs recovered slope, per month — the standard 'get back what you put in' validity check on synthetic data.">
+            <LineChartSvg xlab="month" ylab="slope"
+              series={[
+                { name: 'true (injected)', color: '#6b7280', pts: (redteam?.param_recovery || []).map((r: any) => [r.month_idx, r.true_slope]) },
+                { name: 'recovered (fit)', color: '#059669', pts: (redteam?.param_recovery || []).map((r: any) => [r.month_idx, r.recovered_slope]) },
+              ]} />
+          </Section>
+        </>
+      )}
+
+      {/* -------------------------------------------------------- MONITORING */}
+      {tab === 'monitor' && (
+        <>
+          <Section title="Conversion drift" icon={<Activity className="w-4 h-4 text-emerald-600" />}
+            sub="Actual vs model-expected conversion over the rolling months — the elasticity-drift sentinel's signal. Small, moving drift = a calibrated model that still needs watching.">
+            <LineChartSvg xlab="month idx" ylab="P(convert)" yFmt={(v) => `${(v * 100).toFixed(0)}%`}
+              series={[
+                { name: 'actual', color: '#059669', pts: (mon?.months || []).map((m: any, i: number) => [i, m.actual_conversion]) },
+                { name: 'expected', color: '#6b7280', pts: (mon?.months || []).map((m: any, i: number) => [i, m.expected_conversion]) },
+              ]} />
+          </Section>
+
+          <Section title="Deviation from the technical price" icon={<Gauge className="w-4 h-4 text-emerald-600" />}
+            sub="Distribution of price ÷ technically-correct price across the book. Bands outside the ±15% corridor are flagged.">
+            <DeviationBars rows={mon?.deviation || []} />
+          </Section>
+
+          <Section title="Constraint & fair-value tile" icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />}
+            sub="Corridor breaches and the UK GIPP check (renewal never above equivalent new business).">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {(mon?.breaches || []).map((b: any) => (
+                <div key={b.check} className="bg-gray-50 rounded-lg border border-gray-200 p-3">
+                  <div className="text-xs text-gray-500">{b.note}</div>
+                  <div className="text-lg font-semibold text-gray-900">{pct(b.rate)}</div>
+                  <div className="text-[11px] text-gray-500">{Number(b.breaches).toLocaleString()} / {Number(b.total).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </>
+      )}
+
+      {/* --------------------------------------------------------- HOW IT WORKS */}
+      {tab === 'how' && (
+        <>
+          <Section title="The governed loop" icon={<GitBranch className="w-4 h-4 text-emerald-600" />}>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {['Quote & renewal data', 'Monotone elasticity', 'Simulation (N sets)', 'Constrained solver', 'Factor table', 'Monitoring'].map((s, i, a) => (
+                <span key={s} className="inline-flex items-center gap-2">
+                  <span className="bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1 text-emerald-800">{s}</span>
+                  {i < a.length - 1 && <span className="text-gray-300">→</span>}
+                </span>
+              ))}
+            </div>
+          </Section>
+
+          <Section title="The constraint set IS the pricing policy" icon={<ScrollText className="w-4 h-4 text-emerald-600" />}
+            sub="Versioned in the repo; the solver is bound by it; its git history is the auditable record of how the policy evolved. Open it live in the room.">
+            {constraints?.available
+              ? <pre className="bg-gray-900 text-gray-100 text-[11px] rounded-lg p-3 overflow-x-auto max-h-96">{constraints.yaml}</pre>
+              : <p className="text-sm text-gray-400">Constraint file not reachable in this workspace.</p>}
+          </Section>
+
+          <Section title="Open the real assets" icon={<Database className="w-4 h-4 text-emerald-600" />}>
+            <div className="flex flex-wrap gap-2">
+              {assets?.tables && Object.entries(assets.tables).map(([t, u]: any) => <LinkChip key={t} href={u}>{t}</LinkChip>)}
+              {assets?.models && Object.entries(assets.models).map(([m, u]: any) => <LinkChip key={m} href={u}>{m}</LinkChip>)}
+              <LinkChip href={assets?.notebook_url}>solver notebook</LinkChip>
+              <LinkChip href={assets?.job_url}>governed job</LinkChip>
+              <LinkChip href={assets?.agent_url}>rate-change agent</LinkChip>
+            </div>
+          </Section>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Section title="Data" icon={<Database className="w-4 h-4 text-gray-500" />}>
+              <p className="text-sm text-gray-600">Motor quote-response + renewal events manufactured on the real risk models, with injected price variation and month-over-month elasticity drift so demand is learnable and monitoring moves.</p>
+            </Section>
+            <Section title="Model & method" icon={<Cpu className="w-4 h-4 text-gray-500" />}>
+              <p className="text-sm text-gray-600">Monotone LightGBM conversion + retention (price as a ratio to technical, never raw). scipy solver, arg-max within the corridor ∩ segment caps. Everything open code.</p>
+            </Section>
+            <Section title="Platform" icon={<Zap className="w-4 h-4 text-gray-500" />}>
+              <p className="text-sm text-gray-600">Serverless jobs (scale-to-zero), UC-governed tables + registered @champion models, run-now via the app service principal (no PAT), immutable audit log.</p>
+            </Section>
           </div>
-        )}
-        <div className="flex flex-wrap gap-1.5">
-          <LinkChip href={t.optimisation_summary} icon={Database} label="optimisation_summary" />
-          <LinkChip href={assets?.experiment_url} icon={LineChart} label="MLflow" />
-        </div>
-      </Step>
-
-      <Step n={6} icon={Activity} title="This is how I monitor it">
-        <p>Is the demand model still right? Monthly <b>actual</b> conversion vs what the fitted curves
-          <b> expect</b> at the realised price — the gap is drift.</p>
-        <button onClick={loadMonitor} disabled={monBusy} className={btnCls}>
-          {monBusy ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</> : <><Activity className="w-3.5 h-3.5" /> Load the monitor</>}
-        </button>
-        {monitor && monitor.length > 0 && <MonitorChart months={monitor} />}
-        {monitor && monitor.length === 0 && <p className="text-xs text-gray-500">No monitoring rows yet — run the job first.</p>}
-        <div className="flex flex-wrap gap-1.5"><LinkChip href={t.optimisation_monitoring} icon={Database} label="optimisation_monitoring" /></div>
-      </Step>
-
-      <Step n={7} icon={Bot} title="This is how I govern it — and the agent that helps">
-        <p>Every strategy is a versioned <code>optimisation_config</code> row (a diffable audit trail), and
-          a fair-value / no-price-walking rule plugs in as another constraint. Ask the <b>rate-change
-          agent</b> to pressure-test the move:</p>
-        <div className="flex flex-col gap-2">
-          <textarea value={agentQ} onChange={(e) => setAgentQ(e.target.value)} rows={2}
-            className="w-full text-sm border border-gray-300 rounded-lg p-2" />
-          <div className="flex flex-wrap gap-2 items-center">
-            <button onClick={askAgent} disabled={agentBusy} className={btnCls}>
-              {agentBusy ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Asking…</> : <><Bot className="w-3.5 h-3.5" /> Ask the agent</>}
-            </button>
-            <LinkChip href={assets?.agent_url} icon={Bot} label="the agent endpoint" />
-          </div>
-          {agentAns && <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-wrap">{agentAns}</div>}
-        </div>
-      </Step>
-
-      <p className="text-xs text-gray-500 pt-1">
-        Bricksurance SE is fictional; data synthetic. Every step above touches a real platform asset — the
-        tables, the job, the MLflow run and the agent endpoint are live in this workspace.
-      </p>
+        </>
+      )}
     </div>
   );
 }
 
-function Slider({ label, value, min, max, step, onChange, display }: {
-  label: string; value: number; min: number; max: number; step: number;
-  onChange: (v: number) => void; display: string;
-}) {
+// --- frontier scatter -------------------------------------------------------
+function FrontierChart({ frontier }: { frontier: any[] }) {
+  if (!frontier.length) return <div className="text-sm text-gray-400">Run the simulation to see the frontier.</div>;
+  const w = 560, h = 240, pad = 44;
+  const xs = frontier.map((f) => Number(f.expected_volume)), ys = frontier.map((f) => Number(f.expected_profit));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const sx = (x: number) => pad + ((x - x0) / (x1 - x0 || 1)) * (w - pad - 12);
+  const sy = (y: number) => h - 28 - ((y - y0) / (y1 - y0 || 1)) * (h - 28 - 12);
+  const line = frontier.filter((f) => f.scenario_id !== 'hold').sort((a, b) => a.expected_volume - b.expected_volume);
   return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wide text-gray-400 mb-1 flex justify-between">
-        <span>{label}</span><span className="text-teal-700 font-semibold">{display}</span>
-      </div>
-      <input type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-teal-600" />
-    </div>
-  );
-}
-
-function Kpi({ label, value, delta, up, big }: { label: string; value: string; delta?: string; up?: boolean; big?: boolean }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-3">
-      <div className="text-[11px] uppercase tracking-wide text-gray-400">{label}</div>
-      <div className={`font-bold ${big ? 'text-xl' : 'text-lg'} text-gray-800`}>{value}</div>
-      {delta && <div className={`text-xs ${up === undefined ? 'text-gray-500' : up ? 'text-emerald-600' : 'text-rose-600'}`}>{delta}</div>}
-    </div>
-  );
-}
-function Cfg({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wide text-gray-400">{label}</div>
-      <div className="text-gray-700 capitalize">{value}</div>
-    </div>
-  );
-}
-
-function FrontierChart({ frontier, alpha }: { frontier: { alpha: number; pol: number; profit: number }[]; alpha: number }) {
-  if (frontier.length < 2) return <div className="text-sm text-gray-400">No frontier.</div>;
-  const W = 300, H = 240, pad = 40;
-  const pols = frontier.map((f) => f.pol), profits = frontier.map((f) => f.profit);
-  const minX = Math.min(...pols), maxX = Math.max(...pols), minY = Math.min(...profits), maxY = Math.max(...profits);
-  const x = (v: number) => pad + (maxX === minX ? 0.5 : (v - minX) / (maxX - minX)) * (W - pad - 12);
-  const y = (v: number) => H - pad - (maxY === minY ? 0.5 : (v - minY) / (maxY - minY)) * (H - pad - 12);
-  const path = frontier.map((f, i) => `${i ? 'L' : 'M'}${x(f.pol).toFixed(1)},${y(f.profit).toFixed(1)}`).join(' ');
-  const here = frontier.reduce((a, b) => Math.abs(b.alpha - alpha) < Math.abs(a.alpha - alpha) ? b : a);
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-      <line x1={pad} y1={H - pad} x2={W - 12} y2={H - pad} stroke="#d1d5db" />
-      <line x1={pad} y1={12} x2={pad} y2={H - pad} stroke="#d1d5db" />
-      <text x={(pad + W) / 2} y={H - 8} textAnchor="middle" fontSize="10" fill="#6b7280">policies bound →</text>
-      <text x={12} y={H / 2} textAnchor="middle" fontSize="10" fill="#6b7280" transform={`rotate(-90 12 ${H / 2})`}>expected profit →</text>
-      <path d={path} fill="none" stroke="#0d9488" strokeWidth={2} />
-      {frontier.map((f, i) => <circle key={i} cx={x(f.pol)} cy={y(f.profit)} r={2.5} fill="#0d9488" opacity={0.6} />)}
-      <circle cx={x(here.pol)} cy={y(here.profit)} r={6} fill="none" stroke="#0d9488" strokeWidth={2.5} />
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ maxHeight: h }}>
+      <line x1={pad} y1={h - 28} x2={w - 12} y2={h - 28} stroke="#e5e7eb" />
+      <line x1={pad} y1={12} x2={pad} y2={h - 28} stroke="#e5e7eb" />
+      <text x={pad} y={h - 10} fontSize="10" className="fill-gray-400">expected volume →</text>
+      <text x={6} y={16} fontSize="10" className="fill-gray-400">profit ↑</text>
+      <polyline fill="none" stroke="#a7f3d0" strokeWidth={2} points={line.map((f) => `${sx(f.expected_volume)},${sy(f.expected_profit)}`).join(' ')} />
+      {frontier.map((f) => {
+        const hold = f.scenario_id === 'hold';
+        return <circle key={f.scenario_id} cx={sx(f.expected_volume)} cy={sy(f.expected_profit)} r={hold ? 5 : 3}
+          fill={hold ? '#111827' : '#059669'} />;
+      })}
+      <text x={sx(frontier.find((f) => f.scenario_id === 'hold')?.expected_volume ?? x0) + 7}
+            y={sy(frontier.find((f) => f.scenario_id === 'hold')?.expected_profit ?? y0)} fontSize="10" className="fill-gray-700">hold</text>
     </svg>
   );
 }
 
-function CurveChart({ pts, current, chosen, currentMult, rateCap }: {
-  pts: CurvePt[]; current: CurvePt | null; chosen: CurvePt | null; currentMult: number; rateCap: number;
-}) {
-  if (!pts.length) return <div className="text-sm text-gray-400">No curve.</div>;
-  const W = 620, H = 300, padL = 44, padR = 44, padT = 16, padB = 34;
-  const xs = pts.map((c) => c.price_multiplier);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const profits = pts.map((c) => c.expected_profit_per_quote);
-  const maxProfit = Math.max(...profits), minProfit = Math.min(0, ...profits);
-  const x = (m: number) => padL + ((m - minX) / (maxX - minX)) * (W - padL - padR);
-  const yC = (c: number) => padT + (1 - c) * (H - padT - padB);
-  const yP = (p: number) => padT + (1 - (p - minProfit) / (maxProfit - minProfit)) * (H - padT - padB);
-  const capX0 = x(Math.max(minX, currentMult - rateCap)), capX1 = x(Math.min(maxX, currentMult + rateCap));
-  const dPath = pts.map((c, i) => `${i ? 'L' : 'M'}${x(c.price_multiplier).toFixed(1)},${yC(c.expected_conversion).toFixed(1)}`).join(' ');
-  const pPath = pts.map((c, i) => `${i ? 'L' : 'M'}${x(c.price_multiplier).toFixed(1)},${yP(c.expected_profit_per_quote).toFixed(1)}`).join(' ');
+// --- per-segment waterfall --------------------------------------------------
+function Waterfall({ factors }: { factors: any[] }) {
+  if (!factors.length) return <div className="text-sm text-gray-400">No solved factors.</div>;
+  const max = Math.max(...factors.map((f) => Math.abs(Number(f.factor_pct))), 1);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-      <rect x={capX0} y={padT} width={Math.max(0, capX1 - capX0)} height={H - padT - padB} fill="#14b8a6" opacity={0.08} />
-      <text x={(capX0 + capX1) / 2} y={padT + 12} textAnchor="middle" fontSize="10" fill="#0d9488">within rate cap</text>
-      <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#d1d5db" />
-      <text x={(padL + W - padR) / 2} y={H - 6} textAnchor="middle" fontSize="11" fill="#6b7280">price vs market</text>
-      <path d={pPath} fill="none" stroke="#0d9488" strokeWidth={2.5} />
-      <path d={dPath} fill="none" stroke="#6366f1" strokeWidth={2} strokeDasharray="4 3" />
-      {current && (<>
-        <line x1={x(current.price_multiplier)} y1={padT} x2={x(current.price_multiplier)} y2={H - padB} stroke="#9ca3af" strokeDasharray="3 3" />
-        <text x={x(current.price_multiplier)} y={H - padB + 14} textAnchor="middle" fontSize="10" fill="#6b7280">current {current.price_multiplier.toFixed(2)}×</text>
-      </>)}
-      {chosen && (<>
-        <line x1={x(chosen.price_multiplier)} y1={padT} x2={x(chosen.price_multiplier)} y2={H - padB} stroke="#0d9488" strokeWidth={1.5} />
-        <text x={x(chosen.price_multiplier)} y={padT - 4} textAnchor="middle" fontSize="10" fill="#0d9488" fontWeight="bold">optimal {chosen.price_multiplier.toFixed(2)}×</text>
-        <circle cx={x(chosen.price_multiplier)} cy={yP(chosen.expected_profit_per_quote)} r={4} fill="#0d9488" />
-      </>)}
-      <g fontSize="10">
-        <rect x={W - padR - 150} y={padT} width={10} height={3} fill="#0d9488" /><text x={W - padR - 135} y={padT + 4} fill="#374151">expected profit</text>
-        <rect x={W - padR - 150} y={padT + 14} width={10} height={3} fill="#6366f1" /><text x={W - padR - 135} y={padT + 18} fill="#374151">conversion</text>
-      </g>
-    </svg>
+    <div className="space-y-1.5">
+      {factors.map((f) => {
+        const up = Number(f.factor_pct) >= 0;
+        const wpc = (Math.abs(Number(f.factor_pct)) / max) * 46;
+        return (
+          <div key={f.segment} className="flex items-center gap-2 text-xs">
+            <div className="w-28 text-gray-700 truncate">{f.segment}</div>
+            <div className="flex-1 flex items-center">
+              <div className="w-1/2 flex justify-end">{!up && <div className="h-4 rounded-l bg-amber-400" style={{ width: `${wpc}%` }} />}</div>
+              <div className="w-px h-5 bg-gray-300" />
+              <div className="w-1/2">{up && <div className="h-4 rounded-r bg-emerald-500" style={{ width: `${wpc}%` }} />}</div>
+            </div>
+            <div className={`w-14 text-right font-medium ${up ? 'text-emerald-700' : 'text-amber-700'}`}>{signPct(f.factor_pct)}</div>
+            <div className="w-24 text-right text-gray-500">{gbp(f.profit_uplift)}</div>
+            <div className="w-24 text-[11px] text-gray-400">{f.binding}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function EndoHeadline({ rows }: { rows: any[] }) {
+  if (!rows.length) return null;
+  const base = rows.find((r) => Number(r.price_change_pct) === 0);
+  const hi = rows.find((r) => Math.abs(Number(r.price_change_pct) - 10) < 0.01);
+  if (!base || !hi) return null;
+  const naive = (Number(base.naive_rawprice_conversion) - Number(hi.naive_rawprice_conversion)) * 100;
+  const correct = (Number(base.correct_vs_technical_conversion) - Number(hi.correct_vs_technical_conversion)) * 100;
+  return (
+    <p className="text-xs text-gray-600 mt-2">
+      At <b>+10%</b> price: the naive raw-price model predicts only a <b>{naive.toFixed(1)}pp</b> conversion drop;
+      the correct ratio model predicts <b>{correct.toFixed(1)}pp</b>. Price the book on the naive model and you'd
+      systematically over-raise.
+    </p>
+  );
+}
+
+function DeviationBars({ rows }: { rows: any[] }) {
+  if (!rows.length) return <div className="text-sm text-gray-400">No distribution.</div>;
+  const max = Math.max(...rows.map((r) => Number(r.count)), 1);
+  return (
+    <div className="flex items-end gap-1 h-40">
+      {rows.map((r) => (
+        <div key={r.vs_technical_band} className="flex-1 flex flex-col items-center justify-end">
+          <div className={`w-full rounded-t ${r.outside_corridor ? 'bg-amber-400' : 'bg-emerald-500'}`}
+            style={{ height: `${(Number(r.count) / max) * 100}%` }} title={`${r.vs_technical_band}: ${Number(r.count).toLocaleString()}`} />
+          <div className="text-[9px] text-gray-400 mt-1 rotate-45 origin-left whitespace-nowrap">{r.vs_technical_band}</div>
+        </div>
+      ))}
+    </div>
   );
 }

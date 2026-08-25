@@ -179,7 +179,12 @@ market_noise = np.random.lognormal(mean=0.0, sigma=0.10, size=n)      # competit
 
 offered = np.clip(loaded * offer_noise, MIN_PREM, MAX_PREM)
 market  = np.clip(loaded * market_noise, MIN_PREM, MAX_PREM)
-vs_technical = offered / technical                                    # THE price variable for §4
+# vs_technical = deviation from the TECHNICALLY-CORRECT (break-even) price = the
+# loaded premium (pure risk cost + expense + commission). This is the actuarial
+# "technical price", NOT the pure risk cost — a real charged premium sits ~1.0×
+# loaded, so the ±15% corridor is coherent. The pure risk cost (`technical`) stays
+# the margin floor for profit. THE price variable for §4.
+vs_technical = offered / loaded
 vs_market    = offered / market                                      # competitiveness (drives bind)
 
 # Elasticity drifts subtly month to month (±20% sinusoid) so monitoring moves and
@@ -234,11 +239,16 @@ print(f"optimisation_quote_response: {n:,} quotes, bind rate {bound.mean():.1%}"
 
 # COMMAND ----------
 
-_cur = pd.to_numeric(book.get("current_premium", pd.Series([np.nan] * n)), errors="coerce").values
-prior = np.clip(np.where(np.isnan(_cur), loaded, _cur), MIN_PREM, MAX_PREM)
+# In-force renewal base = the break-even (loaded) price with mild in-force scatter,
+# ~2% below on average (in-force books run a touch under a fresh quote). The stale
+# `current_premium` field sits ~40% below technical and would make every renewal
+# read as a corridor breach — the in-force book is treated as repriced to technical.
+prior = np.clip(loaded * np.random.lognormal(mean=-0.05, sigma=0.05, size=n), MIN_PREM, MAX_PREM)
 # Renewals move MODESTLY off the prior (anchored, not re-quoted from scratch) —
-# a small inflation-ish change with scatter — so rate_change is realistic.
-ren_change  = np.random.lognormal(mean=0.03, sigma=0.06, size=n)     # ~+3% ± 6%
+# a small change with scatter. Mean kept near flat so the offered renewal lands
+# slightly BELOW equivalent new business (GIPP-compliant for most of the book; a
+# realistic minority still breach and the monitoring tile catches them).
+ren_change  = np.random.lognormal(mean=0.02, sigma=0.05, size=n)     # ~+2% ± 5%
 offered_ren = np.clip(prior * ren_change, MIN_PREM, MAX_PREM)
 rate_change = offered_ren / prior
 equiv_new_business = loaded                                          # fresh new-business price, same risk
@@ -261,7 +271,7 @@ rr = pd.DataFrame({
     "offered_premium":   np.round(offered_ren, 2),
     "equiv_new_business_premium": np.round(equiv_new_business, 2),
     "rate_change":       np.round(rate_change, 4),
-    "vs_technical":      np.round(offered_ren / technical, 4),
+    "vs_technical":      np.round(offered_ren / loaded, 4),   # deviation from break-even price
     "gipp_breach":       gipp_breach,
     "month_idx":         ren_month.astype(int),
     "outcome":           np.where(retained == 1, "retained", "lapsed"),
