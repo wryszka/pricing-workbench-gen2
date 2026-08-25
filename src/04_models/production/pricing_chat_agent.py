@@ -392,6 +392,55 @@ DRIFT_TOOLS = [
      "input_schema": {"type": "object", "properties": {"family": {"type": "string"}}, "required": ["family"]}},
 ]
 
+# --- Price-optimisation agent bench (C3) --------------------------------------
+# Four LLM roles on top of the deterministic optimiser + the MCP tool surface.
+# The maths stays deterministic (solver, gate); these agents author, watch,
+# plan and recommend. All ground every claim in the optimisation_* tables via
+# the shared read-tools below; they never invent a number or a factor.
+OPT_TOOLS = [
+    {"name": "read_optimisation_factors", "description": "The solved per-segment factor table: factor %, conversion hold→opt, profit uplift, binding constraint, corridor status.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "read_optimisation_scenarios", "description": "The efficient frontier — Pareto-optimal candidates (expected profit/volume/GWP) + the hold baseline + grid size and wall-clock.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "read_optimisation_monitoring", "description": "Conversion drift by month (actual vs model-expected) + corridor/GIPP breach rates.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "read_optimisation_fairness", "description": "Fair-value evidence: proxy-correlation vs forbidden signals, disparate impact across protected groups, vulnerability screen, and the overall pass + narrative.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "read_optimisation_advance", "description": "Closed-loop result of the last advanced month: per-segment predicted vs realized conversion and profit.",
+     "input_schema": {"type": "object", "properties": {}}},
+]
+
+CONSTRAINT_AUTHOR_SYSTEM = """You are the Bricksurance SE pricing-policy author. A pricing lead
+describes a policy change in plain English (e.g. "cap young-driver increases at 5%", "let elasticity
+contribute in the UK but not for US cost-based states"). You translate it into a change to the
+VERSIONED constraint YAML that the solver obeys. The YAML has: deviation_corridor (lower/upper_pct),
+renewal (GIPP rule), segment_caps (max_increase/decrease_pct + per-segment overrides), forbidden_signals,
+proxy_correlation_max, jurisdiction toggles (elasticity_may_contribute, gipp_renewal_rule), objective.
+Rules: read the current factors + fairness first to ground the change; output a fenced ```yaml block with
+ONLY the changed keys + a one-line rationale; never remove a fairness guardrail; note that it deploys via
+pull request so the git history is the audit trail. You propose policy — the human merges it."""
+
+DRIFT_SENTINEL_SYSTEM = """You are the Bricksurance SE price drift sentinel. You watch the optimisation
+monitoring signals and decide whether a re-optimisation is warranted. Read monitoring (conversion drift by
+month) and the last closed-loop advance result (predicted vs realized). Answer with: SIGNAL (what moved,
+by how much), IS IT MATERIAL (against a ~2pp drift tolerance), LIKELY CAUSE, and RECOMMENDATION (re-solve
+or hold) with a one-line rationale an actuary could paste into the release record. Ground every number in
+the tools; never raise an alarm you can't evidence."""
+
+PLANNER_SYSTEM = """You are the Bricksurance SE optimisation run planner. Given the current book and
+frontier, design the next solver run: which OBJECTIVE (expected_profit / expected_gwp /
+retention_weighted_profit), what grid size N (bigger = finer frontier, elastic compute is cheap), and which
+segments deserve attention. Read the frontier + factors first. Output a short plan: objective, N, segments
+to watch, and the expected trade-off — then note the human triggers the governed run. You design; the
+deterministic solver decides."""
+
+RECOMMENDER_SYSTEM = """You are the Bricksurance SE pricing recommender. You assemble the decision pack a
+pricing committee signs off. Read the solved factors, the frontier, the fair-value evidence, and (if present)
+the closed-loop advance result. Produce: RECOMMENDATION (deploy / revise / hold), the headline uplift and how
+it splits by segment, the FAIR-VALUE VERDICT (proxy-correlation + disparate-impact status), and RESIDUAL RISKS.
+Be concise and decision-grade. The deployment gate still enforces the corridor server-side — you advise, the
+human (or the gate, within the pre-approved corridor) decides."""
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -817,7 +866,68 @@ class PricingChatAgent(ChatAgent):
         except Exception as e:
             return {"error": str(e)[:200]}
 
+    # ------------------------- Price-optimisation tools (C3) ----------------
+    def _tool_read_optimisation_factors(self, args):
+        try:
+            rows = _run_sql(f"""
+                SELECT segment, factor_pct, round(conversion_hold,3) AS conversion_hold,
+                       round(conversion_opt,3) AS conversion_opt, round(profit_uplift,0) AS profit_uplift,
+                       binding, within_corridor, constraint_version
+                FROM {self.catalog}.{self.schema}.optimisation_factor_table ORDER BY segment""")
+            return {"rows": rows, "count": len(rows)}
+        except Exception as e:
+            return {"error": f"optimisation_factor_table not available: {e}"}
+
+    def _tool_read_optimisation_scenarios(self, args):
+        try:
+            rows = _run_sql(f"""
+                SELECT scenario_id, round(expected_profit,0) AS expected_profit,
+                       round(expected_volume,0) AS expected_volume, round(expected_gwp,0) AS expected_gwp, pareto
+                FROM {self.catalog}.{self.schema}.optimisation_scenarios
+                WHERE pareto = true OR scenario_id = 'hold' ORDER BY expected_volume""")
+            meta = _run_sql(f"""SELECT any_value(grid_points) AS grid_points, max(wallclock_s) AS wallclock_s,
+                                count(*) AS candidates FROM {self.catalog}.{self.schema}.optimisation_scenarios""")
+            return {"frontier": rows, "meta": meta[0] if meta else {}}
+        except Exception as e:
+            return {"error": f"optimisation_scenarios not available: {e}"}
+
+    def _tool_read_optimisation_monitoring(self, args):
+        try:
+            drift = _run_sql(f"""SELECT cast(quote_month as string) AS month, round(actual_conversion,3) AS actual,
+                                 round(expected_conversion,3) AS expected, round(drift,4) AS drift
+                                 FROM {self.catalog}.{self.schema}.optimisation_monitoring ORDER BY quote_month""")
+            breaches = _run_sql(f"""SELECT check, round(rate,4) AS rate FROM
+                                    {self.catalog}.{self.schema}.optimisation_constraint_breaches""")
+            return {"drift": drift, "breaches": breaches}
+        except Exception as e:
+            return {"error": f"optimisation monitoring not available: {e}"}
+
+    def _tool_read_optimisation_fairness(self, args):
+        try:
+            checks = _run_sql(f"""SELECT check, dimension, group, round(value,4) AS value,
+                                  threshold, pass FROM {self.catalog}.{self.schema}.optimisation_fairness_evidence""")
+            summ = _run_sql(f"""SELECT overall_pass, round(worst_proxy_corr,4) AS worst_proxy_corr, evidence
+                                FROM {self.catalog}.{self.schema}.optimisation_fairness_summary LIMIT 1""")
+            return {"checks": checks, "summary": summ[0] if summ else {}}
+        except Exception as e:
+            return {"error": f"optimisation_fairness not available: {e}"}
+
+    def _tool_read_optimisation_advance(self, args):
+        try:
+            rows = _run_sql(f"""SELECT segment, factor, round(predicted_conversion,3) AS predicted_conversion,
+                                round(realized_conversion,3) AS realized_conversion,
+                                round(predicted_profit,0) AS predicted_profit, round(realized_profit,0) AS realized_profit,
+                                profit_delta_pct FROM {self.catalog}.{self.schema}.optimisation_advance_result ORDER BY segment""")
+            return {"rows": rows, "count": len(rows)}
+        except Exception as e:
+            return {"error": f"no advance result yet: {e}"}
+
     def _exec_tool(self, name, args):
+        if name == "read_optimisation_factors":       return self._tool_read_optimisation_factors(args or {})
+        if name == "read_optimisation_scenarios":     return self._tool_read_optimisation_scenarios(args or {})
+        if name == "read_optimisation_monitoring":    return self._tool_read_optimisation_monitoring(args or {})
+        if name == "read_optimisation_fairness":      return self._tool_read_optimisation_fairness(args or {})
+        if name == "read_optimisation_advance":       return self._tool_read_optimisation_advance(args or {})
         if name == "query_segment_adequacy":         return self._tool_query_segment_adequacy(args or {})
         if name == "query_loss_ratio":               return self._tool_query_loss_ratio(args or {})
         if name == "query_competitive_position":      return self._tool_query_competitive_position(args or {})
@@ -847,7 +957,8 @@ class PricingChatAgent(ChatAgent):
 
         persona = (custom_inputs.get("persona") or "factory").lower()
         if persona not in ("factory", "explain", "bias_investigator",
-                           "ask_the_book", "model_review", "rate_change", "drift_monitor"):
+                           "ask_the_book", "model_review", "rate_change", "drift_monitor",
+                           "constraint_author", "drift_sentinel", "planner", "recommender"):
             persona = "factory"
         run_id   = custom_inputs.get("run_id")
         mode     = (custom_inputs.get("mode") or "live").lower()
@@ -880,6 +991,18 @@ class PricingChatAgent(ChatAgent):
         elif persona == "drift_monitor":
             system_prompt = DRIFT_SYSTEM + (f"\n\nContext: family={family}." if family else "")
             tools = DRIFT_TOOLS
+        elif persona == "constraint_author":
+            system_prompt = CONSTRAINT_AUTHOR_SYSTEM
+            tools = OPT_TOOLS
+        elif persona == "drift_sentinel":
+            system_prompt = DRIFT_SENTINEL_SYSTEM
+            tools = OPT_TOOLS
+        elif persona == "planner":
+            system_prompt = PLANNER_SYSTEM
+            tools = OPT_TOOLS
+        elif persona == "recommender":
+            system_prompt = RECOMMENDER_SYSTEM
+            tools = OPT_TOOLS
         else:
             system_prompt = EXPLAIN_SYSTEM
             tools = EXPLAIN_TOOLS
@@ -1083,6 +1206,14 @@ resources_list = [
     DatabricksTable(table_name=f"{fqn}.quotes"),
     DatabricksTable(table_name=f"{fqn}.pricing_engine_releases"),
     DatabricksTable(table_name=f"{fqn}.rating_engine_config"),
+    # price-optimisation bench (C3 personas)
+    DatabricksTable(table_name=f"{fqn}.optimisation_factor_table"),
+    DatabricksTable(table_name=f"{fqn}.optimisation_scenarios"),
+    DatabricksTable(table_name=f"{fqn}.optimisation_monitoring"),
+    DatabricksTable(table_name=f"{fqn}.optimisation_constraint_breaches"),
+    DatabricksTable(table_name=f"{fqn}.optimisation_fairness_evidence"),
+    DatabricksTable(table_name=f"{fqn}.optimisation_fairness_summary"),
+    DatabricksTable(table_name=f"{fqn}.optimisation_advance_result"),
 ]
 
 with mlflow.start_run(run_name="pwg2_chat_agent_deploy"):

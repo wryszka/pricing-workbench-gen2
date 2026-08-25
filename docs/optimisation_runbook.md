@@ -97,9 +97,28 @@ a real governed run, not a client-side illusion.
 6. *"Human sets the policy; the gate enforces it."* Approve → deploy; the corridor is
    re-checked server-side and the deploy is audited.
 
-## Deferred (phases 2–3, not built)
-MCP tool surface + the 8 agents (§10), real-time `pwg2_elasticity_scorer` (§7B),
-closed-loop `pwg2_advance_month` (§3 tail), FiDA (§17).
+## Phase 2–3 (now BUILT — 2026-08-25)
+- **Closed loop (§3 tail, Principle 6):** `optimisation_advance_month` job + `/advance`
+  endpoint + Monitoring "Advance one month" button — rolls the book forward under the
+  deployed prices, writes predicted-vs-realized, appends the month to monitoring + the
+  quote stream. Verified: predicted £8.79m → realized £8.77m (−0.2%).
+- **Real-time serving (§7B):** `pwg2_elasticity_scorer` — defined-but-dormant, arm/teardown
+  jobs (`src/07_serving/optimisation_elasticity_serve/`), scale-to-zero.
+- **MCP surface (§8/§10):** 10 `opt_*` tools on the JSON-RPC MCP server (stages + reads;
+  `opt_deploy_factors` stays server-side gated). App, notebook and agent share one surface.
+- **Fairness / fair-value (§11):** `optimisation_fairness` job → proxy-correlation /
+  disparate-impact / vulnerability evidence + pack; chained into `optimisation_full`;
+  `/fairness` endpoint + Monitoring panel.
+- **Agent bench (§10):** four LLM personas on the managed `pwg2_chat_agent` framework over
+  the MCP/tables — `constraint_author`, `drift_sentinel`, `planner`, `recommender`. The
+  other spec roles are deterministic components already present: execution = the
+  `optimisation_full` DAG, gate = the server-side deploy gate, fairness reviewer = the
+  fairness job, interrogator = Genie.
+- **Reactive second act (§14):** the "Aggregator squeeze" Walkthrough tab drives it end to
+  end — detect → plan → re-solve → recommend → gate → deploy → did-it-work.
+
+**Still deferred:** commercial-lines optimiser wiring `demand_gbm` (net-new LOB surface),
+FiDA (§17, one slide).
 
 ## Open gate
 **GATE-1 lineage edge** — technical premium is champion-*scored* (Block 1 loads the

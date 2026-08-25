@@ -85,7 +85,7 @@ function LineChartSvg({ series, w = 560, h = 200, xlab, ylab, yFmt }: {
 }
 
 export default function PriceOptimisation() {
-  const [tab, setTab] = useState<'optimise' | 'demand' | 'monitor' | 'how'>('optimise');
+  const [tab, setTab] = useState<'optimise' | 'demand' | 'monitor' | 'act2' | 'how'>('optimise');
   const [showHelp, setShowHelp] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const [scen, setScen] = useState<any>(null);
@@ -211,6 +211,7 @@ export default function PriceOptimisation() {
         <TabBtn id="optimise" label="Optimiser" />
         <TabBtn id="demand" label="Demand & red-team" />
         <TabBtn id="monitor" label="Monitoring" />
+        <TabBtn id="act2" label="Aggregator squeeze" />
         <TabBtn id="how" label="How it works" />
       </div>
 
@@ -465,6 +466,9 @@ export default function PriceOptimisation() {
         </>
       )}
 
+      {/* ------------------------------------------------- ACT 2 (aggregator) */}
+      {tab === 'act2' && <AggregatorSqueeze />}
+
       {/* --------------------------------------------------------- HOW IT WORKS */}
       {tab === 'how' && (
         <>
@@ -591,6 +595,110 @@ function EndoHeadline({ rows }: { rows: any[] }) {
       the correct ratio model predicts <b>{correct.toFixed(1)}pp</b>. Price the book on the naive model and you'd
       systematically over-raise.
     </p>
+  );
+}
+
+// --- Act 2: the reactive aggregator-squeeze walkthrough ---------------------
+// Drives the real agents + governed jobs end to end: an external event → the
+// drift sentinel detects → the planner designs → the solver decides → the
+// recommender assembles the pack → the gate routes → deploy → did-it-work.
+function AggregatorSqueeze() {
+  const [res, setRes] = useState<Record<string, any>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const set = (k: string, v: any) => setRes((p) => ({ ...p, [k]: v }));
+
+  const pollRun = (runId: any): Promise<string> => new Promise((resolve) => {
+    let n = 0;
+    const t = async () => {
+      if (++n > 80) return resolve('TIMEOUT');
+      const s = await api.optRunStatus(runId);
+      if (s.life_cycle_state && !['TERMINATED', 'SKIPPED', 'INTERNAL_ERROR'].includes(s.life_cycle_state)) {
+        setTimeout(t, 5000);
+      } else resolve(s.result_state || s.life_cycle_state || 'done');
+    };
+    setTimeout(t, 4000);
+  });
+
+  const agent = async (k: string, persona: string, question: string) => {
+    setBusy(k);
+    try { const r = await api.agentLead({ persona, question }); set(k, r?.answer || r?.error || '(no answer)'); }
+    catch (e) { set(k, String(e)); } finally { setBusy(null); }
+  };
+  const solve = async () => {
+    setBusy('solve'); set('solve', 'running the governed solver…');
+    try {
+      const r = await api.optRun({ objective: 'retention_weighted_profit', full: false });
+      if (!r?.ok) { set('solve', 'error: ' + (r?.error || 'failed')); return; }
+      const st = await pollRun(r.run_id); set('solve', `solver ${st} — factors re-solved for retention-weighted profit`);
+    } finally { setBusy(null); }
+  };
+  const deploy = async () => {
+    setBusy('deploy');
+    try { const r = await api.optDeploy({ note: 'aggregator-squeeze response' });
+      set('deploy', r?.ok ? `deployed & audited (${r.segments} segments, ${r.constraint_version})` : (r?.gated ? 'GATED: ' + r.error : r?.error)); }
+    finally { setBusy(null); }
+  };
+  const advance = async () => {
+    setBusy('advance'); set('advance', 'advancing the month…');
+    try {
+      const r = await api.optAdvance();
+      if (!r?.ok) { set('advance', 'error: ' + (r?.error || 'failed')); return; }
+      const st = await pollRun(r.run_id);
+      const ar = await api.optAdvanceResult();
+      const ro = ar?.rollup;
+      set('advance', ro ? `${st} — predicted ${gbpM(ro.predicted_profit)} → realized ${gbpM(ro.realized_profit)} (${signPct(ro.delta_pct)})` : st);
+    } finally { setBusy(null); }
+  };
+
+  const beats: { k: string; n: number; title: string; story: string; label: string; run: () => void }[] = [
+    { k: 'detect', n: 1, title: 'An aggregator undercuts young drivers', label: 'Run the drift sentinel',
+      story: 'A price-comparison site drops young-driver quotes. Our U25 conversion starts slipping. The drift sentinel watches the monitoring signal and decides if it is material.',
+      run: () => agent('detect', 'drift_sentinel', 'Our young-driver conversion is slipping after an aggregator move. Is the drift material and should we re-optimise?') },
+    { k: 'plan', n: 2, title: 'Plan the response', label: 'Run the planner',
+      story: 'The planner designs the next run — objective, grid size, and which segments to watch — using the current book and frontier.',
+      run: () => agent('plan', 'planner', 'Design a re-optimisation run to defend young-driver volume without walking the margin on the rest of the book.') },
+    { k: 'solve', n: 3, title: 'Decide under constraints', label: 'Run the governed solver',
+      story: 'The deterministic solver re-solves within the versioned corridor — retention-weighted this time, to defend volume.',
+      run: solve },
+    { k: 'recommend', n: 4, title: 'Assemble the decision pack', label: 'Run the recommender',
+      story: 'The recommender reads the solved factors, the frontier and the fair-value evidence, and assembles the pack a pricing committee signs off.',
+      run: () => agent('recommend', 'recommender', 'Assemble the decision pack for this re-optimisation: recommendation, uplift by segment, fair-value verdict, residual risks.') },
+    { k: 'deploy', n: 5, title: 'The gate routes it', label: 'Approve & deploy',
+      story: 'The deployment gate re-checks the corridor server-side (RBAC + ±15%). Within the pre-approved corridor it can auto-deploy; outside it needs human sign-off. Either way it is audited.',
+      run: deploy },
+    { k: 'advance', n: 6, title: 'Did it work?', label: 'Advance one month',
+      story: 'Roll the book forward under the deployed prices and compare what the solver predicted to what the book realized.',
+      run: advance },
+  ];
+
+  return (
+    <div>
+      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-gray-700 mb-4">
+        <b>The reactive second act.</b> An external event happens; the system detects it, proposes a
+        response, decides under policy, routes through the gate, deploys, and proves the result — the
+        machine runs the pricing cycle, the human sets the policy for when it may act alone. Every button
+        below fires the <b>real</b> agent or governed job.
+      </div>
+      {beats.map((b) => (
+        <div key={b.k} className="bg-white rounded-lg border border-gray-200 p-5 mb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-semibold">{b.n}</span>
+            <h3 className="font-semibold text-gray-900">{b.title}</h3>
+          </div>
+          <p className="text-xs text-gray-500 mb-3 ml-8">{b.story}</p>
+          <div className="ml-8">
+            <button onClick={b.run} disabled={busy === b.k}
+              className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black disabled:opacity-60 text-white text-sm font-medium rounded-md px-4 py-2">
+              {busy === b.k ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              {b.label}
+            </button>
+            {res[b.k] && (
+              <div className="mt-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap">{String(res[b.k])}</div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -55,8 +55,8 @@ House format (playbook §4): each beat is **GO** (where to click) · **DO** (the
 
 ---
 
-## Act 2 — reactive second act (aggregator squeeze) *(Phase 2/3 — see roadmap)*
-External event → drift sentinel detects → planner designs a run → solver decides under constraints → gate routes (auto in-corridor / human outside) → deploy. Runs live once the agentic layer + `advance_period` ship. Until then: narrate it and end Act 1 on "next cycle we'd re-run and measure the result."
+## Act 2 — reactive second act (aggregator squeeze) — **BUILT** (Optimisation → "Aggregator squeeze" tab)
+Six driven beats, each firing the real agent or governed job: **detect** (drift sentinel) → **plan** (planner) → **decide** (governed solver, retention-weighted) → **recommend** (recommender: uplift by segment + fair-value verdict + residual risks) → **gate** (approve & deploy, corridor re-checked server-side, audited) → **did it work** (advance one month, predicted vs realized). SAY: "An aggregator moved — the system **detected it, proposed a response, decided under policy, and proved the result**; the machine runs the cycle, the human sets when it may act alone." IF FAILS: agent cold-start ~30s (yellow cache warms it), solver ~1 min; keep a pre-run screenshot.
 
 ---
 
