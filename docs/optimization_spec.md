@@ -1,5 +1,13 @@
 # Price Optimization Module — Build Spec (pricing-workbench-gen2)
 
+> **Scope (decided 2026-08-25): personal MOTOR is the sole optimisation LOB.** A
+> commercial-lines optimiser is explicitly **out of scope** — motor proves the capability
+> end to end and a parallel commercial optimiser would duplicate the spine and put two
+> demand-model concepts on screen. Where this spec was originally commercial-framed, read
+> it as motor. `demand_gbm` stays the commercial quote-stream demand model, just not
+> fronted by an optimiser. See `docs/DECISIONS.md`. Build status: Phases 1–3 shipped on
+> motor; see `docs/optimisation_runbook.md`.
+
 Status: ready to build. Written against `wryszka/pricing-workbench-gen2` @ main. Follows gen2 conventions throughout: one schema, `opt_*` table prefix, `pwg2_` global-asset prefix, deploy-profile gating, Full Build orchestration, HITL patterns from the existing app. **This is the canonical spec — build from this, don't re-derive.**
 
 ---

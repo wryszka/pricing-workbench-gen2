@@ -117,8 +117,10 @@ a real governed run, not a client-side illusion.
 - **Reactive second act (§14):** the "Aggregator squeeze" Walkthrough tab drives it end to
   end — detect → plan → re-solve → recommend → gate → deploy → did-it-work.
 
-**Still deferred:** commercial-lines optimiser wiring `demand_gbm` (net-new LOB surface),
-FiDA (§17, one slide).
+**Out of scope (decided 2026-08-25):** a commercial-lines optimiser is **not** being
+built — personal **motor** is the sole optimisation LOB and is sufficient to prove the
+capability. See `docs/DECISIONS.md`.
+**Still deferred:** FiDA (§17, one slide, forward hook only).
 
 ## Open gate
 **GATE-1 lineage edge** — technical premium is champion-*scored* (Block 1 loads the

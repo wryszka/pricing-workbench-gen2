@@ -7,6 +7,18 @@ failure modes). See also `docs/OPTIMIZATION_RECONCILIATION.md` (spec↔reality) 
 
 ---
 
+## 2026-08-25 — Commercial-lines optimiser: NO-GO (motor is the sole LOB)
+
+A commercial-lines optimiser (wiring the governed `demand_gbm` into a second optimisation
+surface, mirroring the motor spine) was on the pipeline as a possible Phase-2 expansion. It
+is **ruled out**. Personal **motor** is the demo's optimisation habitat and is sufficient to
+prove the capability end to end (data → monotone elasticity → simulation → constrained
+solver → monitoring → HITL → closed loop → agents → fair value). A parallel commercial
+optimiser would be a large net-new surface that largely duplicates the motor spine and
+re-introduces a second demand-model concept on screen — which the spec explicitly warns
+against. Removed from the specs/roadmap; `demand_gbm` remains the commercial *quote-stream*
+demand model (unchanged), just not fronted by an optimiser.
+
 ## 2026-08-25 — Price Optimisation: Phase-1 offline spine on motor
 
 - **Replace, don't coexist (D1).** The commercial worked-example optimiser

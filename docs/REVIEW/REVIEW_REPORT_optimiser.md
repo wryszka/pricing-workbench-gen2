@@ -96,7 +96,7 @@
 - **Docs** — `STANDARDS.md` (tier 2 declared), `docs/DECISIONS.md` (incl. gotchas) added.
 
 ## Open / roadmapped
-- **Phase 2:** closed-loop `advance_period` feedback beat; commercial-lines optimiser wiring the governed `demand_gbm`; MCP tool surface + agents; real-time `pwg2_elasticity_scorer`; GIPP/Consumer-Duty evidence pack.
+- **Phase 2 (now BUILT):** closed-loop `advance_month` feedback beat; MCP tool surface + agent bench; real-time `pwg2_elasticity_scorer`; fair-value evidence pack. *(A commercial-lines optimiser was considered and ruled OUT on 2026-08-25 — motor is the sole LOB; see `docs/DECISIONS.md`.)*
 - **GATE-1** lineage edge (model→table) — champion scoring works; lineage edge open.
 - **Hardening:** parameterised SQL across the app; RBAC on `/deploy`; coercion/interp guards; `DEMO_RUNSHEET.md` + `DEMO_QA.md` in house format; verify serverless client "5".
 - **Narrative:** sensitivity line + explicit incumbent contrast + risk-of-inaction opening.
