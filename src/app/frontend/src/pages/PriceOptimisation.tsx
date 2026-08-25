@@ -104,6 +104,10 @@ export default function PriceOptimisation() {
   // HITL deploy
   const [deployMsg, setDeployMsg] = useState<{ ok?: boolean; text: string } | null>(null);
   const [segSel, setSegSel] = useState('');
+  // closed-loop advance-month
+  const [advBusy, setAdvBusy] = useState(false);
+  const [advState, setAdvState] = useState<string | null>(null);
+  const [advResult, setAdvResult] = useState<any>(null);
 
   const loadAll = () => {
     api.optimisationSummary().then(setSummary).catch((e) => setErr(String(e)));
@@ -139,6 +143,28 @@ export default function PriceOptimisation() {
       };
       setTimeout(poll, 5000);
     } catch (e) { setRun({ error: String(e) }); setBusy(false); }
+  };
+
+  const doAdvance = async () => {
+    setAdvBusy(true); setAdvState('PENDING'); setAdvResult(null);
+    try {
+      const r = await api.optAdvance();
+      if (!r?.ok) { setAdvState('error: ' + (r?.error || 'failed')); setAdvBusy(false); return; }
+      let polls = 0;
+      const poll = async () => {
+        if (++polls > 80) { setAdvState('TIMEOUT'); setAdvBusy(false); return; }
+        const s = await api.optRunStatus(r.run_id);
+        setAdvState(s.result_state || s.life_cycle_state);
+        if (s.life_cycle_state && !['TERMINATED', 'SKIPPED', 'INTERNAL_ERROR'].includes(s.life_cycle_state)) {
+          setTimeout(poll, 5000);
+        } else {
+          setAdvBusy(false);
+          api.optAdvanceResult().then(setAdvResult).catch(() => {});
+          api.optMonitoring().then(setMon).catch(() => {});
+        }
+      };
+      setTimeout(poll, 5000);
+    } catch (e) { setAdvState('error: ' + String(e)); setAdvBusy(false); }
   };
 
   const doDeploy = async () => {
@@ -334,6 +360,49 @@ export default function PriceOptimisation() {
       {/* -------------------------------------------------------- MONITORING */}
       {tab === 'monitor' && (
         <>
+          <Section title="Did it work? — advance the month" icon={<Zap className="w-4 h-4 text-emerald-600" />}
+            sub="Close the loop live: roll the synthetic book forward one month under the prices you just deployed, then compare what the solver predicted to what the book realized.">
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={doAdvance} disabled={advBusy}
+                className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-md px-4 py-2">
+                {advBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                {advBusy ? 'Advancing the month…' : 'Advance one month'}
+              </button>
+              {advState && <span className="text-xs text-gray-500">run: <b>{advState}</b></span>}
+              {advResult?.rollup && (
+                <div className="flex gap-3 flex-wrap">
+                  <Kpi label="Predicted profit" value={gbpM(advResult.rollup.predicted_profit)} />
+                  <Kpi label="Realized profit" value={gbpM(advResult.rollup.realized_profit)} tone="good"
+                    hint={advResult.rollup.delta_pct != null ? `${signPct(advResult.rollup.delta_pct)} vs predicted` : undefined} />
+                  <Kpi label="Advanced to" value={String(advResult.rollup.advanced_month || '—')} />
+                </div>
+              )}
+            </div>
+            {advResult?.segments?.length > 0 && (
+              <div className="overflow-x-auto mt-3">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-left text-gray-500 border-b">
+                    <th className="py-1.5 pr-3">Segment</th><th className="pr-3">Factor</th>
+                    <th className="pr-3">Conv pred→real</th><th className="pr-3">Profit pred</th>
+                    <th className="pr-3">Profit real</th><th>Δ</th>
+                  </tr></thead>
+                  <tbody>
+                    {advResult.segments.map((s: any) => (
+                      <tr key={s.segment} className="border-b border-gray-100">
+                        <td className="py-1.5 pr-3 font-medium text-gray-800">{s.segment}</td>
+                        <td className="pr-3">{signPct(s.factor != null ? (s.factor - 1) * 100 : null)}</td>
+                        <td className="pr-3 text-gray-600">{pct(s.predicted_conversion, 0)} → {pct(s.realized_conversion, 0)}</td>
+                        <td className="pr-3">{gbp(s.predicted_profit)}</td>
+                        <td className="pr-3">{gbp(s.realized_profit)}</td>
+                        <td className={s.profit_delta_pct >= 0 ? 'text-emerald-700' : 'text-amber-700'}>{signPct(s.profit_delta_pct)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
+
           <Section title="Conversion drift" icon={<Activity className="w-4 h-4 text-emerald-600" />}
             sub="Actual vs model-expected conversion over the rolling months — the elasticity-drift sentinel's signal. Small, moving drift = a calibrated model that still needs watching.">
             <LineChartSvg xlab="month idx" ylab="P(convert)" yFmt={(v) => `${(v * 100).toFixed(0)}%`}

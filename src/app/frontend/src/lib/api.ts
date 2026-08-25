@@ -333,4 +333,6 @@ export const api = {
     fetchJson<any>(`/optimisation/run/${encodeURIComponent(String(runId))}`),
   optDeploy: (body: { approver?: string; note?: string }) =>
     fetchJson<any>('/optimisation/deploy', { method: 'POST', body: JSON.stringify(body) }),
+  optAdvance: () => fetchJson<any>('/optimisation/advance', { method: 'POST', body: '{}' }),
+  optAdvanceResult: () => fetchJson<any>('/optimisation/advance/result'),
 };

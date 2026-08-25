@@ -28,8 +28,9 @@ router = APIRouter(prefix="/api/optimisation", tags=["optimisation"])
 
 # Job names are stable literals in resources/optimisation.yml (not workspace-derived),
 # so resolve-by-name is portable across targets.
-FULL_JOB_NAME   = "Price optimisation — full build (gen2)"
-SOLVER_JOB_NAME = "Price optimisation — constrained solver (gen2)"
+FULL_JOB_NAME    = "Price optimisation — full build (gen2)"
+SOLVER_JOB_NAME  = "Price optimisation — constrained solver (gen2)"
+ADVANCE_JOB_NAME = "Price optimisation — advance month (did it work?) (gen2)"
 NOTEBOOK_REL    = "04_models/production/optimisation_solver"     # under {bundle_files_base}
 CONSTRAINTS_REL = "04_models/production/optimisation_constraints/default.yaml"
 AGENT_ENDPOINT  = "pwg2_chat_agent"                             # hosts the rate_change persona
@@ -57,6 +58,8 @@ _NUM_COLS = {
     "count", "pct", "breaches", "total", "rate",
     "price_change_pct", "naive_rawprice_conversion", "correct_vs_technical_conversion",
     "month_idx", "true_slope", "recovered_slope", "n_quotes",
+    "predicted_conversion", "realized_conversion", "predicted_profit", "realized_profit",
+    "profit_delta_pct",
 }
 _BOOL_COLS = {"within_corridor", "pareto", "outside_corridor"}
 
@@ -271,6 +274,43 @@ async def run(req: RunRequest):
     except Exception as e:
         logger.warning("optimisation run-now failed: %s", str(e)[:200])
         return {"ok": False, "error": str(e)[:200]}
+
+
+@router.post("/advance")
+async def advance_month():
+    """Closed-loop 'did it work?' — roll the synthetic timeline forward one month
+    under the DEPLOYED prices and realize outcomes. Triggers the governed
+    advance-month job; poll with /run/{id} then read /advance/result."""
+    job_id = resolve_job_by_name(ADVANCE_JOB_NAME)
+    if not job_id:
+        return {"ok": False, "error": f"job '{ADVANCE_JOB_NAME}' not found"}
+    try:
+        resp = get_workspace_client().api_client.do(
+            "POST", "/api/2.1/jobs/run-now", body={"job_id": int(job_id)})
+        return {"ok": True, "run_id": resp.get("run_id"), "job_id": job_id}
+    except Exception as e:
+        logger.warning("advance-month run-now failed: %s", str(e)[:200])
+        return {"ok": False, "error": str(e)[:200]}
+
+
+@router.get("/advance/result")
+async def advance_result():
+    """Per-segment predicted-vs-realized for the most recent advanced month."""
+    rows = await _safe(f"""
+        SELECT cast(advanced_month AS string) AS advanced_month, segment, policies, factor,
+               predicted_conversion, realized_conversion,
+               predicted_profit, realized_profit, profit_delta_pct
+        FROM {fqn('optimisation_advance_result')} ORDER BY segment
+    """)
+    if rows is None:
+        return {"available": False, "segments": [], "rollup": None}
+    rows = _coerce(rows)
+    pp = sum(r.get("predicted_profit", 0) or 0 for r in rows)
+    rp = sum(r.get("realized_profit", 0) or 0 for r in rows)
+    return {"available": True, "segments": rows,
+            "rollup": {"predicted_profit": round(pp, 2), "realized_profit": round(rp, 2),
+                       "delta_pct": round((rp / pp - 1) * 100, 2) if pp else None,
+                       "advanced_month": rows[0].get("advanced_month") if rows else None}}
 
 
 @router.get("/run/{run_id}")
