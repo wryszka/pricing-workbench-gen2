@@ -3,7 +3,7 @@ import logging
 import time
 from typing import Any
 
-from databricks.sdk.service.sql import StatementState
+from databricks.sdk.service.sql import StatementParameterListItem, StatementState
 
 from server.config import get_workspace_client, get_warehouse_id
 
@@ -18,7 +18,7 @@ _PENDING_STATES = (StatementState.PENDING, StatementState.RUNNING)
 _MAX_WAIT_SECONDS = 180.0
 
 
-def _execute_sync(sql: str) -> list[dict[str, Any]]:
+def _execute_sync(sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     client = get_workspace_client()
     warehouse_id = get_warehouse_id()
     if not warehouse_id:
@@ -26,6 +26,14 @@ def _execute_sync(sql: str) -> list[dict[str, Any]]:
             "No SQL warehouse available (WAREHOUSE_ID unset and none could be "
             "resolved) — cannot run queries.")
     logger.debug("SQL: %s", sql[:200])
+
+    # Named parameters (`:name` markers) — the injection-proof path for any
+    # user-supplied value. The server binds them; they can never alter the
+    # statement structure. Values are passed as strings (Spark casts in-query).
+    param_items = None
+    if params:
+        param_items = [StatementParameterListItem(name=k, value=(None if v is None else str(v)))
+                       for k, v in params.items()]
 
     # INLINE disposition only — Databricks Apps' egress is firewalled away
     # from the cloud-storage hosts that EXTERNAL_LINKS would point to, so
@@ -40,6 +48,7 @@ def _execute_sync(sql: str) -> list[dict[str, Any]]:
         statement=sql,
         warehouse_id=warehouse_id,
         wait_timeout="50s",
+        parameters=param_items,
     )
 
     deadline = time.monotonic() + _MAX_WAIT_SECONDS
@@ -58,6 +67,11 @@ def _execute_sync(sql: str) -> list[dict[str, Any]]:
         raise RuntimeError(f"SQL {state}: {error_msg}")
 
     if not response.manifest or not response.manifest.schema or not response.manifest.schema.columns:
+        # A SUCCEEDED statement with no schema is normal for DML/DDL (INSERT,
+        # CREATE, DELETE). Only warn when a SELECT unexpectedly returns no schema
+        # (a sign of a malformed query), so genuine empty result sets stay quiet.
+        if sql.lstrip()[:6].upper() == "SELECT":
+            logger.warning("SELECT returned no schema (possible malformed query): %s", sql[:160])
         return []
 
     columns = [col.name for col in response.manifest.schema.columns]
@@ -92,5 +106,5 @@ def _execute_sync(sql: str) -> list[dict[str, Any]]:
     return rows
 
 
-async def execute_query(sql: str) -> list[dict[str, Any]]:
-    return await asyncio.to_thread(_execute_sync, sql)
+async def execute_query(sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(_execute_sync, sql, params)

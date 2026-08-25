@@ -19,7 +19,8 @@ from pydantic import BaseModel
 
 from server.config import (fqn, get_catalog, get_schema, get_workspace_host,
                            get_bundle_files_base, get_workspace_client,
-                           resolve_job_by_name)
+                           get_current_user, resolve_job_by_name)
+from server.routes.admin import _require_admin
 from server.sql import execute_query
 
 logger = logging.getLogger(__name__)
@@ -35,9 +36,9 @@ AGENT_ENDPOINT  = "pwg2_chat_agent"                             # hosts the rate
 CORRIDOR_PCT    = 15.0                                          # server-side deploy-gate corridor
 
 
-async def _safe(sql: str):
+async def _safe(sql: str, params: dict | None = None):
     try:
-        return await execute_query(sql)
+        return await execute_query(sql, params)
     except Exception as e:
         logger.warning("optimisation query failed: %s", str(e)[:160])
         return None
@@ -293,10 +294,12 @@ class DeployRequest(BaseModel):
 
 @router.post("/deploy")
 async def deploy(req: DeployRequest):
-    """Approve → deploy the solved factor table (the HITL gate). The corridor is
-    re-checked **server-side** here: any segment outside ±corridor is rejected,
-    so the gate holds regardless of who calls it (a future agent included). On
-    approval we stamp optimisation_deployment + an immutable audit_log row."""
+    """Approve → deploy the solved factor table (the HITL gate). Two enforcements,
+    both server-side so no prompt/agent can bypass them: (1) RBAC — the caller must
+    be in ADMIN_USERS (the approver role); (2) the ±corridor is re-checked against
+    the live factor table. On approval we stamp optimisation_deployment + an
+    immutable audit_log row, using bound parameters (injection-proof)."""
+    _require_admin("optimisation-deploy")   # RBAC: approver must be in ADMIN_USERS
     rows = await _safe(f"""
         SELECT segment, factor, factor_pct, within_corridor, constraint_version
         FROM {fqn('optimisation_factor_table')}
@@ -311,35 +314,29 @@ async def deploy(req: DeployRequest):
         return {"ok": False, "gated": True,
                 "error": f"deploy blocked: {len(breaches)} segment(s) outside the "
                          f"±{CORRIDOR_PCT:.0f}% corridor: {', '.join(breaches[:5])}"}
-    # Escape every interpolated value for a Spark SQL string literal: BACKSLASH
-    # first (Spark interprets \x in literals), then single-quote doubling. The
-    # audit `details` JSON is built by SQL's own to_json(named_struct(...)), so the
-    # note's quotes/braces are JSON-encoded correctly instead of hand-embedded
-    # (a raw " or \ in the note previously corrupted the JSON). cver comes from a
-    # table but is escaped for defence-in-depth.
-    def _q(s: object) -> str:
-        return str(s).replace("\\", "\\\\").replace("'", "''")
-    cver = _q(rows[0].get("constraint_version") or "v1")
-    approver = _q(req.approver or "app_user")
-    note = _q(req.note or "approved in app")
+    cver = str(rows[0].get("constraint_version") or "v1")
+    approver = get_current_user() or req.approver or "app_user"
+    note = req.note or "approved in app"
     n = len(rows)
-    # Stamp the deployment ledger + the immutable audit log (append — the history
-    # of deployments IS the record). The table is pre-created by the solver notebook,
-    # so the app SP only needs INSERT (MODIFY), never CREATE. Surface write failures.
+    # Stamp the deployment ledger + the immutable audit log (append — the history of
+    # deployments IS the record) with BOUND PARAMETERS — user-supplied values can
+    # never alter the statement. The table is pre-created by the solver notebook, so
+    # the app SP only needs INSERT (MODIFY), never CREATE. Surface write failures.
+    p = {"cver": cver, "approver": approver, "note": note}
     dep_ok = await _safe(f"""
         INSERT INTO {fqn('optimisation_deployment')}
-        SELECT uuid(), '{cver}', {n}, '{approver}', '{note}', current_timestamp()
-    """)
+        SELECT uuid(), :cver, {n}, :approver, :note, current_timestamp()
+    """, p)
     aud_ok = await _safe(f"""
         INSERT INTO {fqn('audit_log')} (event_id, event_type, entity_type, entity_id,
                entity_version, user_id, timestamp, details, source)
-        SELECT uuid(), 'optimisation_deploy_approved', 'factor_table', '{cver}', '{cver}',
-               '{approver}', current_timestamp(),
-               to_json(named_struct('segments', {n}, 'note', '{note}')), 'optimisation_app'
-    """)
+        SELECT uuid(), 'optimisation_deploy_approved', 'factor_table', :cver, :cver,
+               :approver, current_timestamp(),
+               to_json(named_struct('segments', {n}, 'note', :note)), 'optimisation_app'
+    """, p)
     if dep_ok is None or aud_ok is None:
-        return {"ok": False, "constraint_version": cver, "segments": len(rows),
+        return {"ok": False, "constraint_version": cver, "segments": n,
                 "error": "corridor OK but writeback failed — check app-SP MODIFY grants "
                          "on optimisation_deployment / audit_log (run grant_app_sp)."}
-    return {"ok": True, "constraint_version": cver, "segments": len(rows),
+    return {"ok": True, "constraint_version": cver, "segments": n,
             "approver": approver, "message": "Factor table approved and deployed (audited)."}

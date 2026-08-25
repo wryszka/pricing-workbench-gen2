@@ -118,13 +118,35 @@ if TECH_SOURCE == "champion":
         deepest = max(mlmodel_dirs, key=lambda p: p.count(os.sep))   # inner raw sklearn flavor
         return mlflow.sklearn.load_model(deepest)
 
-    freq_m = load_inner("freq_glm_motor")
-    sev_m  = load_inner("sev_glm_motor")
-    book = book_sdf.toPandas()                                       # driver-side feature frame
-    freq = np.asarray(freq_m.predict(book), dtype=float).ravel()
-    sev  = np.asarray(sev_m.predict(book),  dtype=float).ravel()
+    # GATE-1 lineage attempt: score the champions with mlflow.pyfunc.spark_udf over
+    # the Spark book and write technical through a Spark path — this registers a UC
+    # `model version → table` lineage edge (the inner-artifact + pandas path does
+    # not). If the FE-wrapped champions won't load as a spark_udf (the failure mode
+    # the escalation record hit), fall back to the driver inner-artifact load — the
+    # numbers are identical; only the lineage edge differs. GATE-1 stays open on fallback.
+    lineage_ok = False
+    try:
+        import mlflow.pyfunc as _pf
+        _freq_udf = _pf.spark_udf(spark, f"models:/{fqn}.freq_glm_motor@champion", env_manager="local")
+        _sev_udf  = _pf.spark_udf(spark, f"models:/{fqn}.sev_glm_motor@champion",  env_manager="local")
+        _feat = [c for c in book_sdf.columns]
+        scored = (book_sdf
+                  .withColumn("_freq", _freq_udf(*[F.col(c) for c in _feat]))
+                  .withColumn("_sev",  _sev_udf(*[F.col(c) for c in _feat])))
+        book = scored.toPandas()
+        freq = np.asarray(book.pop("_freq"), dtype=float).ravel()
+        sev  = np.asarray(book.pop("_sev"),  dtype=float).ravel()
+        lineage_ok = True
+        print("[champion] scored via spark_udf — UC model→table lineage edge emitted (GATE-1)")
+    except Exception as _e:
+        print(f"[champion] spark_udf path unavailable ({str(_e)[:120]}); falling back to inner-artifact load (GATE-1 lineage edge stays open)")
+        freq_m = load_inner("freq_glm_motor")
+        sev_m  = load_inner("sev_glm_motor")
+        book = book_sdf.toPandas()                                   # driver-side feature frame
+        freq = np.asarray(freq_m.predict(book), dtype=float).ravel()
+        sev  = np.asarray(sev_m.predict(book),  dtype=float).ravel()
     technical = np.clip((freq / 5.0) * sev, MIN_PREM, MAX_PREM)      # freq is a 5-year count → annualise
-    print(f"[champion] technical mean £{technical.mean():,.0f}  (freq mean {freq.mean():.3f})")
+    print(f"[champion] technical mean £{technical.mean():,.0f}  (freq mean {freq.mean():.3f}, lineage_edge={lineage_ok})")
 else:
     # Dev scaffolding: transparent risk cost line (GATE-1 OPEN).
     book = book_sdf.toPandas()

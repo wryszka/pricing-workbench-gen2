@@ -116,7 +116,10 @@ grids = {s: curve[curve.segment == s].sort_values("price_multiplier")["price_mul
 convs = {s: curve[curve.segment == s].sort_values("price_multiplier")["conversion_prob"].values for s in segments}
 
 def conv_at(s, f):
-    return float(np.interp(f, grids[s], convs[s]))
+    # np.interp already clamps to the grid's endpoint values outside its domain
+    # (no linear extrapolation), but clip to [0,1] as belt-and-braces so a
+    # conversion probability can never leave valid range.
+    return float(np.clip(np.interp(f, grids[s], convs[s]), 0.0, 1.0))
 
 def neg_objective(f, s):
     p = conv_at(s, f)
