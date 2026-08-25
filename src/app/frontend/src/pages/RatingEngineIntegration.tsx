@@ -3,8 +3,14 @@ import { Link } from 'react-router-dom';
 import {
   Radar, ArrowLeft, Database, Table2, Shield, Lock, KeyRound,
   Network, FileCheck2, Workflow, Layers, Boxes, Activity,
-  ScrollText, Zap, Cpu, GitBranch, Repeat,
+  ScrollText, Zap, Cpu, GitBranch, Repeat, BookOpen, ExternalLink,
 } from 'lucide-react';
+
+// Companion reference: the full actuarial-software integration guide (Google Doc).
+// Covers Radar, Earnix, RAFM, Igloo, Unify and the Prophet wrapper — the deep-dive
+// behind the patterns shown on this page.
+const ACTUARIAL_SW_INTEGRATIONS_DOC =
+  'https://docs.google.com/document/d/13aL8cbM5_jVh72inqhGYskQZszEW8nkvqgnzqZrl0QU/edit';
 
 /**
  * Rating Engine Integration. Demo-grade explainer of three integration
@@ -46,6 +52,12 @@ export default function RatingEngineIntegration() {
           The workbench complements Willis Towers Watson Radar (and Earnix, or any in-house engine)
           across the model lifecycle. Three patterns, all governed end-to-end in Unity Catalog.
         </p>
+        <a href={ACTUARIAL_SW_INTEGRATIONS_DOC} target="_blank" rel="noopener noreferrer"
+           className="inline-flex items-center gap-1.5 mt-3 text-sm font-medium text-emerald-700 hover:text-emerald-900 hover:underline">
+          <BookOpen className="w-4 h-4 shrink-0" />
+          Actuarial Software Integrations — full integration guide (Radar, Earnix, RAFM, Igloo, Unify, Prophet)
+          <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+        </a>
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-1 mb-6 inline-flex gap-1 flex-wrap">
