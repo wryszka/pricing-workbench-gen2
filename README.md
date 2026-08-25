@@ -33,6 +33,7 @@ External data ─ enrichment ─┐
 - **Model Deployment** — two scoring paths: new-business (feature vector direct) and renewal (FeatureLookup via online store).
 - **Quote Review Analytics + Genie** — broader pattern analysis across the quote stream.
 - **Monitoring, Governance** — data freshness, DQ, immutable audit log, regulatory export.
+- **Price Optimisation** (motor) — the governed optimisation loop, seven tabs: **Optimiser** (objective front door, efficient frontier, per-segment waterfall, factor table, approve→deploy HITL, and **explain-this-price** for any quote), **Decisions** (immutable decision records + committee-paper drafting), **Demand & red-team** (monotone elasticity curves + endogeneity + parameter-recovery), **Monitoring** (drift, deviation, corridor/GIPP breaches, fair-value evidence, closed-loop advance-month), **Aggregator squeeze** (the reactive agentic second act), **Heavy mode** (ensemble disagreement map + exhaustive stochastic run with measured cost), **How it works** (constraint YAML, deep-links, the MCP tool surface). Agents on the managed framework: constraint-author, drift-sentinel, planner, recommender, price-explainer, committee-scribe, model-risk-narrator. Full loop also drivable from an external **MCP** client (10+ `opt_*` tools; the deploy gate is enforced server-side).
 
 ## Notebook track for data scientists / actuaries
 

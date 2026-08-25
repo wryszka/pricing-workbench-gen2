@@ -85,7 +85,7 @@ function LineChartSvg({ series, w = 560, h = 200, xlab, ylab, yFmt }: {
 }
 
 export default function PriceOptimisation() {
-  const [tab, setTab] = useState<'optimise' | 'demand' | 'monitor' | 'act2' | 'how'>('optimise');
+  const [tab, setTab] = useState<'optimise' | 'decisions' | 'demand' | 'monitor' | 'act2' | 'heavy' | 'how'>('optimise');
   const [showHelp, setShowHelp] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const [scen, setScen] = useState<any>(null);
@@ -93,6 +93,7 @@ export default function PriceOptimisation() {
   const [mon, setMon] = useState<any>(null);
   const [redteam, setRedteam] = useState<any>(null);
   const [fairness, setFairness] = useState<any>(null);
+  const [decisions, setDecisions] = useState<any>(null);
   const [constraints, setConstraints] = useState<any>(null);
   const [assets, setAssets] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -117,6 +118,7 @@ export default function PriceOptimisation() {
     api.optMonitoring().then(setMon).catch(() => {});
     api.optRedteam().then(setRedteam).catch(() => {});
     api.optFairness().then(setFairness).catch(() => {});
+    api.optDecisions().then(setDecisions).catch(() => {});
     api.optConstraints().then(setConstraints).catch(() => {});
     api.optAssets().then(setAssets).catch(() => {});
   };
@@ -209,9 +211,11 @@ export default function PriceOptimisation() {
 
       <div className="bg-gray-100 rounded-lg p-1 inline-flex gap-1 mb-5">
         <TabBtn id="optimise" label="Optimiser" />
+        <TabBtn id="decisions" label="Decisions" />
         <TabBtn id="demand" label="Demand & red-team" />
         <TabBtn id="monitor" label="Monitoring" />
         <TabBtn id="act2" label="Aggregator squeeze" />
+        <TabBtn id="heavy" label="Heavy mode" />
         <TabBtn id="how" label="How it works" />
       </div>
 
@@ -320,6 +324,8 @@ export default function PriceOptimisation() {
               )}
             </div>
           </Section>
+
+          <ExplainPrice />
         </>
       )}
 
@@ -466,8 +472,14 @@ export default function PriceOptimisation() {
         </>
       )}
 
+      {/* ------------------------------------------------------------ DECISIONS */}
+      {tab === 'decisions' && <DecisionRecords records={decisions?.records || []} available={decisions?.available} />}
+
       {/* ------------------------------------------------- ACT 2 (aggregator) */}
       {tab === 'act2' && <AggregatorSqueeze />}
+
+      {/* --------------------------------------------------------- HEAVY MODE */}
+      {tab === 'heavy' && <HeavyMode />}
 
       {/* --------------------------------------------------------- HOW IT WORKS */}
       {tab === 'how' && (
@@ -595,6 +607,257 @@ function EndoHeadline({ rows }: { rows: any[] }) {
       the correct ratio model predicts <b>{correct.toFixed(1)}pp</b>. Price the book on the naive model and you'd
       systematically over-raise.
     </p>
+  );
+}
+
+// --- Explain-this-price (§11): decompose any quote, plain-language ----------
+function ExplainPrice() {
+  const [qid, setQid] = useState('');
+  const [dec, setDec] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [plain, setPlain] = useState<{ busy?: boolean; text?: string } | null>(null);
+
+  const run = async (id?: string) => {
+    const q = (id ?? qid).trim(); if (!q) return;
+    setBusy(true); setDec(null); setPlain(null);
+    try { const r = await api.optExplain(q); setDec(r); } finally { setBusy(false); }
+  };
+  const loadGrandma = async () => {
+    const r = await api.optExplainDemo(); if (r?.quote_id) { setQid(r.quote_id); run(r.quote_id); }
+  };
+  const explainPlain = async () => {
+    if (!dec?.quote_id) return;
+    setPlain({ busy: true });
+    try { const r = await api.agentLead({ persona: 'price_explainer', question: `Explain the price for quote ${dec.quote_id} in plain language.` });
+      setPlain({ text: r?.answer || r?.error || '(no answer)' }); }
+    catch (e) { setPlain({ text: String(e) }); }
+  };
+  const d = dec?.decomposition;
+  return (
+    <Section title="Explain this price" icon={<ScrollText className="w-4 h-4 text-emerald-600" />}
+      sub="Decompose any quote into technical price + optimisation factor + corridor clamp — the governed explain_price function. The closing beat: 'here's exactly why this grandma pays what she pays.'">
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <input value={qid} onChange={(e) => setQid(e.target.value)} placeholder="quote id (e.g. MQ-000…)"
+          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm font-mono w-64" />
+        <button onClick={() => run()} disabled={busy}
+          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-md px-3 py-1.5">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Info className="w-4 h-4" />} Explain
+        </button>
+        <button onClick={loadGrandma} className="text-sm text-emerald-700 hover:underline">use the grandma-in-a-BMW demo case</button>
+      </div>
+      {dec && dec.available === false && <div className="text-sm text-amber-700">Quote not found.</div>}
+      {d && (
+        <div className="text-sm text-gray-700 space-y-1 bg-gray-50 border border-gray-200 rounded-lg p-3">
+          <div><b>{d.quote_id}</b> · segment <b>{d.segment}</b> (age {d.driver_age}, vehicle group {d.vehicle_group})</div>
+          <div>Technical (risk) price {gbp(d.technical_premium)} → +{d.expense_commission_loading_pct}% expense/commission → break-even {gbp(d.loaded_premium)}</div>
+          <div>Optimisation factor <b>{signPct(d.optimisation_factor_pct)}</b> ({d.factor_binding}) → indicated {gbp(d.indicated_after_factor)}</div>
+          <div>Offered {gbp(d.offered_premium)} · vs-technical {Number(d.vs_technical).toFixed(2)} · corridor clamp: <b>{d.corridor_clamped ? 'yes' : 'no'}</b> ({d.corridor})</div>
+          <div className="text-[11px] text-gray-500">{d.models}</div>
+          <div className="pt-1">
+            <button onClick={explainPlain} disabled={plain?.busy}
+              className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black disabled:opacity-60 text-white text-xs font-medium rounded-md px-3 py-1.5">
+              {plain?.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />} Explain in plain language
+            </button>
+            {plain?.text && <div className="mt-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap">{plain.text}</div>}
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// --- Heavy mode (§11a): the big-hammer second gear --------------------------
+function HeavyMode() {
+  const [dis, setDis] = useState<any>(null);
+  const [stoch, setStoch] = useState<any>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [run, setRun] = useState<string | null>(null);
+  const load = () => {
+    api.optHeavyDisagreement().then(setDis).catch(() => {});
+    api.optHeavyStochastic().then(setStoch).catch(() => {});
+  };
+  useEffect(load, []);
+  const go = async (preset: string) => {
+    setBusy(preset); setRun('PENDING');
+    try {
+      const r = await api.optHeavyRun({ preset });
+      if (!r?.ok) { setRun('error: ' + (r?.error || 'failed')); setBusy(null); return; }
+      let n = 0;
+      const poll = async () => {
+        if (++n > 100) { setRun('TIMEOUT'); setBusy(null); return; }
+        const s = await api.optRunStatus(r.run_id);
+        setRun(s.result_state || s.life_cycle_state);
+        if (s.life_cycle_state && !['TERMINATED', 'SKIPPED', 'INTERNAL_ERROR'].includes(s.life_cycle_state)) setTimeout(poll, 6000);
+        else { setBusy(null); load(); }
+      };
+      setTimeout(poll, 6000);
+    } catch (e) { setRun(String(e)); setBusy(null); }
+  };
+  const meta = stoch?.meta;
+  const disRows: any[] = dis?.segments || [];
+  const cands: any[] = stoch?.candidates || [];
+
+  return (
+    <div>
+      <div className="bg-slate-900 text-gray-100 rounded-lg p-4 text-sm mb-4">
+        <b>The second gear.</b> The default optimiser is deliberately light. Heavy mode is what you run
+        <b> because you can</b>: refit demand as an ensemble of candidate models and re-solve under each, and
+        score the whole book per-policy with Monte-Carlo demand draws for the full risk distribution.
+        <span className="text-emerald-300"> Smart when you can, exhaustive when it matters — the appliance has one gear.</span>
+      </div>
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <button onClick={() => go('live')} disabled={!!busy}
+          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-md px-4 py-2">
+          {busy === 'live' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Re-run live (small)
+        </button>
+        <button onClick={() => go('default')} disabled={!!busy}
+          className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black disabled:opacity-60 text-white text-sm font-medium rounded-md px-4 py-2">
+          {busy === 'default' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />} Full heavy run
+        </button>
+        {run && <span className="text-xs text-gray-500">run: <b>{run}</b></span>}
+      </div>
+
+      {meta && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-gray-800 mb-4">
+          <b>Measured, not claimed:</b> {Number(meta.total_evaluations).toLocaleString()} evaluations
+          ({Number(meta.policies).toLocaleString()} policies × {meta.grid_points} price sets × {meta.n_draws} draws,
+          {meta.n_models} demand models) in <b>{meta.wallclock_s}s</b> · ~<b>${meta.est_cost_usd}</b> compute (est.) · preset <b>{meta.preset}</b>.
+          <span className="text-gray-500"> Now ask an appliance to show you the distribution across your candidate models.</span>
+        </div>
+      )}
+
+      <Section title="Ensemble disagreement map" icon={<Layers className="w-4 h-4 text-emerald-600" />}
+        sub="Per-segment factor spread across the candidate demand models. Tight = high decision confidence; wide = treat the factor as uncertain (widen corridor or hold).">
+        {disRows.length ? (
+          <div className="space-y-1.5">
+            {disRows.map((d) => {
+              const wpc = Math.min(100, Number(d.factor_spread_pp) * 4);
+              const good = Number(d.agreement) >= 0.7;
+              return (
+                <div key={d.segment} className="flex items-center gap-2 text-xs">
+                  <div className="w-28 text-gray-700 truncate">{d.segment}</div>
+                  <div className="flex-1 h-4 bg-gray-100 rounded"><div className={`h-4 rounded ${good ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ width: `${wpc}%` }} /></div>
+                  <div className="w-40 text-right text-gray-500">spread {Number(d.factor_spread_pp).toFixed(1)}pp · agree {Number(d.agreement).toFixed(2)} · {d.n_models} models</div>
+                </div>
+              );
+            })}
+          </div>
+        ) : <div className="text-sm text-gray-400">Run heavy mode to build the disagreement map.</div>}
+      </Section>
+
+      <Section title="Uncertainty-banded frontier" icon={<TrendingUp className="w-4 h-4 text-emerald-600" />}
+        sub="Per-candidate expected profit with its P5–P95 band from the Monte-Carlo draws — not a point estimate. Hold baseline marked.">
+        {cands.length ? <StochFrontier cands={cands} /> : <div className="text-sm text-gray-400">Run heavy mode to see the distribution.</div>}
+      </Section>
+    </div>
+  );
+}
+
+function StochFrontier({ cands }: { cands: any[] }) {
+  const w = 560, h = 260, pad = 46;
+  const xs = cands.map((c) => Number(c.mean_volume)), lo = cands.map((c) => Number(c.p5_profit)), hi = cands.map((c) => Number(c.p95_profit));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...lo), y1 = Math.max(...hi);
+  const sx = (x: number) => pad + ((x - x0) / (x1 - x0 || 1)) * (w - pad - 12);
+  const sy = (y: number) => h - 28 - ((y - y0) / (y1 - y0 || 1)) * (h - 28 - 12);
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ maxHeight: h }}>
+      <line x1={pad} y1={h - 28} x2={w - 12} y2={h - 28} stroke="#e5e7eb" />
+      <line x1={pad} y1={12} x2={pad} y2={h - 28} stroke="#e5e7eb" />
+      <text x={pad} y={h - 10} fontSize="10" className="fill-gray-400">expected volume →</text>
+      <text x={6} y={16} fontSize="10" className="fill-gray-400">profit (P5–P95) ↑</text>
+      {cands.map((c) => {
+        const hold = c.candidate_id === 'hold'; const x = sx(Number(c.mean_volume));
+        return (
+          <g key={c.candidate_id}>
+            <line x1={x} y1={sy(Number(c.p5_profit))} x2={x} y2={sy(Number(c.p95_profit))} stroke={hold ? '#111827' : '#a7f3d0'} strokeWidth={hold ? 2 : 1.5} />
+            <circle cx={x} cy={sy(Number(c.mean_profit))} r={hold ? 5 : 2.5} fill={hold ? '#111827' : '#059669'} />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// --- Decision records (§11): immutable, reproducible deploy records ---------
+function DecisionRecords({ records, available }: { records: any[]; available?: boolean }) {
+  const [open, setOpen] = useState<string | null>(records[0]?.decision_id || null);
+  const [paper, setPaper] = useState<Record<string, { busy?: boolean; text?: string }>>({});
+  const jparse = (s: any) => { try { return JSON.parse(s); } catch { return null; } };
+
+  const draftPaper = async (rec: any) => {
+    setPaper((p) => ({ ...p, [rec.decision_id]: { busy: true } }));
+    try {
+      const r = await api.agentLead({ persona: 'committee_scribe', question:
+        `Draft the pricing-committee paper for decision record ${rec.decision_id} (deployment ${rec.deployment_id}). Use the decision record's chosen scenario, rejected alternatives, fairness evidence and monitoring plan.` });
+      setPaper((p) => ({ ...p, [rec.decision_id]: { text: r?.answer || r?.error || '(no answer)' } }));
+    } catch (e) { setPaper((p) => ({ ...p, [rec.decision_id]: { text: String(e) } })); }
+  };
+
+  if (available === false || !records.length) {
+    return <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-4 text-sm">
+      No decision records yet — deploy a factor set (Optimiser → Approve &amp; deploy) or run the decision-record job.</div>;
+  }
+  return (
+    <div>
+      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-gray-700 mb-4">
+        <b>Every deployment leaves an immutable, reproducible record.</b> Data snapshot, elasticity model
+        versions, constraint version, the chosen scenario <b>and the alternatives we passed on</b>, the
+        fairness review, approver + time, and a pointer to re-run the exact solve. This is what a regulator
+        or an internal audit asks to see.
+      </div>
+      {records.map((r) => {
+        const chosen = jparse(r.chosen_json) || {}; const rej = jparse(r.rejected_json) || [];
+        const facs = jparse(r.factors_json) || []; const isOpen = open === r.decision_id;
+        const pp = paper[r.decision_id];
+        return (
+          <div key={r.decision_id} className="bg-white rounded-lg border border-gray-200 mb-3">
+            <button onClick={() => setOpen(isOpen ? null : r.decision_id)}
+              className="w-full flex items-center justify-between px-5 py-3 text-left">
+              <div className="flex items-center gap-3">
+                <ScrollText className="w-4 h-4 text-emerald-600" />
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">Deployment {String(r.deployment_id).slice(0, 8)} · {r.objective}</div>
+                  <div className="text-[11px] text-gray-500">{r.created_at} · {r.approver} · constraints {r.constraint_version} · uplift {gbpM(chosen.profit_uplift)}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {r.fairness_pass != null && <span className={`text-[11px] px-2 py-0.5 rounded-full ${r.fairness_pass ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{r.fairness_pass ? 'fair-value ✓' : 'fair-value review'}</span>}
+                {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+              </div>
+            </button>
+            {isOpen && (
+              <div className="px-5 pb-5 border-t border-gray-100 pt-3 text-sm space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div><div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Reproducibility</div>
+                    <div className="text-xs text-gray-700 space-y-0.5">
+                      <div>Data: {r.data_snapshot}</div>
+                      <div>Conversion model: <span className="font-mono">{r.conversion_model}{r.conversion_model_version ? ` v${r.conversion_model_version}` : ''}</span></div>
+                      <div>Retention model: <span className="font-mono">{r.retention_model}{r.retention_model_version ? ` v${r.retention_model_version}` : ''}</span></div>
+                      <div>Re-run: <span className="font-mono">{r.rerun_pointer}</span></div>
+                    </div></div>
+                  <div><div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Chosen</div>
+                    <div className="text-xs text-gray-700">Objective <b>{chosen.objective}</b> · {chosen.segments} segments · expected profit {gbpM(chosen.expected_profit_opt)} (hold {gbpM(chosen.expected_profit_hold)}) · uplift <b>{gbpM(chosen.profit_uplift)}</b> · volume {Number(chosen.expected_volume || 0).toLocaleString()}</div>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500 mt-2 mb-1">Rejected alternatives</div>
+                    <div className="text-xs text-gray-700 space-y-0.5">
+                      {rej.map((a: any, i: number) => <div key={i}>• <b>{a.label}</b> — profit {gbpM(a.expected_profit)}, volume {Number(a.expected_volume || 0).toLocaleString()}{a.note ? ` (${a.note})` : ''}</div>)}
+                    </div></div>
+                </div>
+                {r.fairness_summary && <div><div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Fairness review</div><div className="text-xs text-gray-600">{r.fairness_summary}</div></div>}
+                {facs.length > 0 && <div className="text-[11px] text-gray-500">Factors: {facs.map((f: any) => `${f.segment} ${signPct(f.factor_pct)}`).join(' · ')}</div>}
+                <div className="pt-1">
+                  <button onClick={() => draftPaper(r)} disabled={pp?.busy}
+                    className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black disabled:opacity-60 text-white text-xs font-medium rounded-md px-3 py-1.5">
+                    {pp?.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />}
+                    Draft committee paper
+                  </button>
+                  {pp?.text && <div className="mt-2 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap max-h-96 overflow-y-auto">{pp.text}</div>}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

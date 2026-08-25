@@ -43,6 +43,7 @@ for stmt in [
     # writeback). Least-privilege — INSERT rights on these tables only, not the schema.
     f"GRANT MODIFY ON TABLE {catalog}.{schema}.audit_log TO `{app_sp}`",
     f"GRANT MODIFY ON TABLE {catalog}.{schema}.optimisation_deployment TO `{app_sp}`",
+    f"GRANT MODIFY ON TABLE {catalog}.{schema}.optimisation_decision_records TO `{app_sp}`",
 ]:
     try:
         spark.sql(stmt)

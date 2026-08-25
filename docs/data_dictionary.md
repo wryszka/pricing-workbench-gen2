@@ -203,3 +203,23 @@ The **Unified Pricing Table** — single wide denormalized feature table for mod
 | 100 | 5M | ~5M | 12M | ~60 min |
 
 All ratios (claims/policy, quote conversion, fraud rate, churn rate) are maintained at every scale.
+
+## Price Optimisation module (motor)
+
+| Table / object | Grain | Key columns | Written by |
+|---|---|---|---|
+| `optimisation_quote_response` | one new-business quote | technical/loaded/offered premium, vs_technical, vs_market, converted, month_idx, bound_ts | `optimisation_motor_data` |
+| `optimisation_renewal_response` | one renewal offer | prior/offered premium, rate_change, gipp_breach, retained | `optimisation_motor_data` |
+| `optimisation_portfolio_snapshot` | in-force policy | loaded/technical/current premium, vs_technical_now | `optimisation_motor_data` |
+| `optimisation_elasticity_curve` | segment × price point | price_multiplier, conversion_prob | `optimisation_elasticity` |
+| `optimisation_scenarios` | candidate price set | expected_profit/volume/gwp, pareto, grid_points, wallclock_s | `optimisation_simulation` |
+| `optimisation_factor_table` | segment | factor, factor_pct, conversion_hold/opt, profit_uplift, binding, within_corridor | `optimisation_solver` |
+| `optimisation_monitoring` / `_deviation_dist` / `_constraint_breaches` | month / band / check | actual vs expected conversion, drift; corridor + GIPP breach rates | `optimisation_monitoring` |
+| `optimisation_fairness_evidence` / `_summary` | check / run | proxy-correlation, disparate impact, vulnerability; overall_pass, worst_proxy_corr | `optimisation_fairness` |
+| `optimisation_advance_result` | segment | predicted vs realized conversion & profit (closed loop) | `optimisation_advance_month` |
+| **`optimisation_decision_records`** | deployment | data snapshot, model versions, constraint version, chosen + rejected_json, fairness, rerun_pointer | `optimisation_decision_record` + app `/deploy` |
+| **`optimisation_disagreement`** | segment | factor_min/max, factor_spread_pp, agreement, n_models (ensemble) | `optimisation_heavy_mode` |
+| **`optimisation_scenarios_stochastic`** | candidate | mean/p5/p95 profit, mean_volume, prob_below_plan | `optimisation_heavy_mode` |
+| `optimisation_heavy_meta` | run | grid_points, n_draws, n_models, policies, total_evaluations, wallclock_s, est_cost_usd | `optimisation_heavy_mode` |
+| `optimisation_deployment` | deployment | constraint_version, segments, approver, note | app `/deploy` (gated) |
+| `explain_price(quote_id)` UC function | — | returns JSON: technical price + loading + optimisation factor + corridor clamp | `optimisation_explain_price` |

@@ -58,6 +58,18 @@ House format (playbook §4): each beat is **GO** (where to click) · **DO** (the
 ## Act 2 — reactive second act (aggregator squeeze) — **BUILT** (Optimisation → "Aggregator squeeze" tab)
 Six driven beats, each firing the real agent or governed job: **detect** (drift sentinel) → **plan** (planner) → **decide** (governed solver, retention-weighted) → **recommend** (recommender: uplift by segment + fair-value verdict + residual risks) → **gate** (approve & deploy, corridor re-checked server-side, audited) → **did it work** (advance one month, predicted vs realized). SAY: "An aggregator moved — the system **detected it, proposed a response, decided under policy, and proved the result**; the machine runs the cycle, the human sets when it may act alone." IF FAILS: agent cold-start ~30s (yellow cache warms it), solver ~1 min; keep a pre-run screenshot.
 
+## Closing beat of the grandma walkthrough — Explain this price (Optimiser tab → "Explain this price")
+- **GO:** Optimiser tab, bottom → "use the grandma-in-a-BMW demo case".
+- **DO:** show the decomposition, then "Explain in plain language" (price_explainer agent).
+- **SAY:** "And here's exactly **why this grandma pays what she pays** — risk price, the factor we chose, the corridor that bounds it. Every number, traceable."
+
+## Act 3 — HEAVY MODE (Optimisation → "Heavy mode" tab) — **only after ~1:20 in**
+- **Rule:** never lead with this; run it once the governed loop has landed.
+- **GO/DO:** show the pre-computed disagreement map + uncertainty-banded frontier; read the **measured** caption (evaluations, wall-clock, est. cost). For a live re-run use **"Re-run live (small)"** (~1–2 min); the **full heavy run** is the pre-computed default (don't trigger the big one live unless you have the time).
+- **SAY:** "Smart when you can, **exhaustive when it matters — the appliance has one gear.**"
+- **IF FAILS:** the pre-computed results are the default view — no live run needed; the "live" preset is the only thing that touches compute in-room.
+- **LEAVE-BEHIND:** "Ask your current vendor to show you the distribution across your candidate models."
+
 ---
 
-**Per-beat timings (3-run avg):** B1 0:40 · B2 1:00 · B3 1:30 · B4 1:00 · B5 0:50 · B6 0:40 · B7 0:40 → **~6:20** for the full Act 1.
+**Per-beat timings (3-run avg):** B1 0:40 · B2 1:00 · B3 1:30 · B4 1:00 · B5 0:50 · B6 0:40 · B7 0:40 → **~6:20** for the full Act 1. Explain-price ~0:40. Heavy mode: pre-computed view instant; live re-run ~1–2 min.

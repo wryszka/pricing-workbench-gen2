@@ -26,6 +26,7 @@ _JOBS = {
     "run_solver":     "Price optimisation — constrained solver (gen2)",
     "advance_month":  "Price optimisation — advance month (did it work?) (gen2)",
     "run_fairness":   "Price optimisation — fairness & fair-value evidence (gen2)",
+    "heavy_mode":     "Price optimisation — heavy mode (ensemble + stochastic) (gen2)",
 }
 
 
@@ -66,6 +67,10 @@ async def _t_run_fairness(args, session_id, agent_id):
 
 async def _t_advance_month(args, session_id, agent_id):
     return _run_job(_JOBS["advance_month"])
+
+async def _t_run_heavy_mode(args, session_id, agent_id):
+    preset = str(args.get("preset") or "default")
+    return _run_job(_JOBS["heavy_mode"], {"preset": preset})
 
 async def _t_deploy_factors(args, session_id, agent_id):
     """Server-side gate: RBAC + corridor re-check. An agent cannot bypass it."""
@@ -123,6 +128,37 @@ async def _t_read_constraints(args, session_id, agent_id):
     except Exception as e:
         return {"ok": False, "error": str(e)[:160]}
 
+async def _t_explain_price(args, session_id, agent_id):
+    qid = str(args.get("quote_id") or "").replace("'", "''")
+    if not qid:
+        return {"ok": False, "error": "quote_id required"}
+    rows = await _q(f"SELECT {fqn('explain_price')}('{qid}') AS j")
+    import json as _j
+    try:
+        return {"ok": True, "decomposition": _j.loads(rows[0]["j"]) if rows and rows[0].get("j") else None}
+    except Exception:
+        return {"ok": True, "decomposition_raw": rows[0].get("j") if rows else None}
+
+async def _t_get_decision_record(args, session_id, agent_id):
+    did = str(args.get("deployment_id") or "").replace("'", "''")
+    where = f"WHERE deployment_id = '{did}'" if did else ""
+    rows = await _q(f"""SELECT deployment_id, cast(created_at as string) created_at, approver, constraint_version,
+                        conversion_model, retention_model, data_snapshot, objective, chosen_json,
+                        rejected_json, fairness_pass, fairness_summary, rerun_pointer
+                        FROM {fqn('optimisation_decision_records')} {where} ORDER BY created_at DESC LIMIT 1""")
+    return {"ok": True, "record": rows[0] if rows else None}
+
+async def _t_read_disagreement(args, session_id, agent_id):
+    rows = await _q(f"""SELECT segment, factor_min, factor_max, factor_spread_pp, agreement, n_models
+                        FROM {fqn('optimisation_disagreement')} ORDER BY factor_spread_pp DESC""")
+    return {"ok": True, "segments": rows}
+
+async def _t_read_run_costs(args, session_id, agent_id):
+    rows = await _q(f"""SELECT preset, grid_points, n_draws, n_models, policies, total_evaluations,
+                        wallclock_s, est_cost_usd, cast(ran_at as string) ran_at
+                        FROM {fqn('optimisation_heavy_meta')} LIMIT 1""")
+    return {"ok": True, "last_heavy_run": rows[0] if rows else None}
+
 
 def _schema(name, desc, props=None, required=None):
     return {"name": name, "description": desc,
@@ -137,11 +173,19 @@ OPTIMISATION_TOOL_SCHEMAS: list[dict[str, Any]] = [
              "constraint_version": {"type": "string"}}),
     _schema("opt_run_fairness", "Regenerate the fairness / fair-value evidence for the current solved factor set."),
     _schema("opt_advance_month", "Close the loop: roll the synthetic book forward one month under the deployed prices and realize outcomes."),
+    _schema("opt_run_heavy_mode", "Run HEAVY MODE (ensemble disagreement map + exhaustive per-policy Monte-Carlo). preset='live' for a small room-safe run.",
+            {"preset": {"type": "string", "enum": ["default", "live"]}}),
     _schema("opt_deploy_factors", "Approve & deploy the solved factor set. Server-side gate: RBAC + ±corridor re-check; cannot be bypassed."),
+    _schema("opt_explain_price", "Decompose one quote into technical price + optimisation factor + corridor clamp (explain-this-price).",
+            {"quote_id": {"type": "string"}}, ["quote_id"]),
+    _schema("opt_get_decision_record", "The immutable decision record for a deployment (chosen + rejected alternatives + fairness + re-run pointer). Latest if no id.",
+            {"deployment_id": {"type": "string"}}),
     _schema("opt_read_scenarios", "Read the efficient frontier (Pareto-optimal candidates + hold)."),
     _schema("opt_read_factors", "Read the solved per-segment factor table."),
     _schema("opt_read_monitoring", "Read conversion-drift over months + corridor/GIPP breach rates."),
     _schema("opt_read_fairness", "Read the fair-value evidence pack (proxy-correlation / disparate-impact / vulnerability checks)."),
+    _schema("opt_read_disagreement", "Read the ensemble disagreement map (per-segment factor spread/agreement across candidate demand models)."),
+    _schema("opt_read_run_costs", "Read the last heavy-mode run's measured cost — row count, wall-clock, est. compute cost."),
     _schema("opt_read_constraints", "Read the versioned constraint YAML (the pricing policy)."),
 ]
 
@@ -150,10 +194,15 @@ OPTIMISATION_TOOL_IMPLS = {
     "opt_run_solver":     _t_run_solver,
     "opt_run_fairness":   _t_run_fairness,
     "opt_advance_month":  _t_advance_month,
+    "opt_run_heavy_mode": _t_run_heavy_mode,
     "opt_deploy_factors": _t_deploy_factors,
+    "opt_explain_price":  _t_explain_price,
+    "opt_get_decision_record": _t_get_decision_record,
     "opt_read_scenarios": _t_read_scenarios,
     "opt_read_factors":   _t_read_factors,
     "opt_read_monitoring": _t_read_monitoring,
     "opt_read_fairness":  _t_read_fairness,
+    "opt_read_disagreement": _t_read_disagreement,
+    "opt_read_run_costs": _t_read_run_costs,
     "opt_read_constraints": _t_read_constraints,
 }

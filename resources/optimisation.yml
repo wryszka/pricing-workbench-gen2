@@ -195,6 +195,56 @@ resources:
             client: "5"
             dependencies: [pandas, numpy, pyyaml]
 
+    # --- §11 immutable decision records (creates table, seeds, backfills) ------
+    optimisation_decision_record:
+      name: "Price optimisation — decision records (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: records
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_decision_record.py
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              schema_name:  "{{job.parameters.schema_name}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [mlflow, pandas]
+
+    # --- §11 explain-this-price UC function -----------------------------------
+    optimisation_explain_price:
+      name: "Price optimisation — explain-price function (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: create_fn
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_explain_price.py
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              schema_name:  "{{job.parameters.schema_name}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [pandas]
+
     # --- closed loop: advance one month under the deployed prices (§3 tail) ----
     optimisation_advance_month:
       name: "Price optimisation — advance month (did it work?) (gen2)"
@@ -219,6 +269,36 @@ resources:
           spec:
             client: "5"
             dependencies: [pandas, numpy, python-dateutil]
+
+    # --- §11a HEAVY MODE: DEFINED-BUT-DORMANT, never in full_build ------------
+    # The big-hammer second gear: ensemble disagreement map + exhaustive
+    # per-policy Monte-Carlo run. Run on demand; captures real measured cost.
+    optimisation_heavy_mode:
+      name: "Price optimisation — heavy mode (ensemble + stochastic) (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: preset
+          default: "default"      # default (heavy, pre-computed) | live (small, room-safe)
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: heavy
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_heavy_mode.py
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              schema_name:  "{{job.parameters.schema_name}}"
+              preset:       "{{job.parameters.preset}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [lightgbm, scikit-learn, pandas, numpy]
 
     # --- §7B real-time elasticity serving tier: DEFINED-BUT-DORMANT ------------
     # Not chained into full_build; armed on demand (scale-to-zero, ~free idle),
@@ -316,3 +396,11 @@ resources:
           depends_on: [{task_key: solver}]
           run_job_task:
             job_id: ${resources.jobs.optimisation_fairness.id}
+        - task_key: decision_record
+          depends_on: [{task_key: fairness}]
+          run_job_task:
+            job_id: ${resources.jobs.optimisation_decision_record.id}
+        - task_key: explain_price
+          depends_on: [{task_key: decision_record}]
+          run_job_task:
+            job_id: ${resources.jobs.optimisation_explain_price.id}

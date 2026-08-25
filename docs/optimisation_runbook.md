@@ -83,6 +83,30 @@ a real governed run, not a client-side illusion.
 - **How it works** — the governed loop, the live constraint YAML, deep-links to every
   table / model / job / agent, and the data/model/platform explainer.
 
+## Positioning (say this first)
+
+This is a **module of the pricing workbench, not a separate programme.** It inherits the same
+governed machinery — the risk champions, the feature store, the audit log, the agent framework, the
+Genie/MCP surface — and adds one value chain on top: demand → simulate → decide-under-policy →
+deploy → monitor. **It's an increment, not a rebuild.** The message to a buyer: *"you already have
+the foundation; this is the pricing department switched on."*
+
+## Talk track — the three acts + the two-gear line
+
+- **Act 1 (BAU loop)** and **Act 2 (aggregator squeeze)** are the ~6-min core (below / Aggregator tab).
+- **Act 3 (heavy mode)** is the **third act, and only after the minute-twenty mark** — never lead with it.
+  Run it once the room believes the governed loop is real. The line:
+  > *"The default optimiser is deliberately light — smart when you can. But when it matters, the same
+  > platform runs the whole book per policy, under an ensemble of your candidate models, for the full
+  > risk distribution. **Smart when you can, exhaustive when it matters — the appliance has one gear.**"*
+  Show the **measured** caption (row count, wall-clock, est. cost — captured from the actual run, never a
+  claim) and the uncertainty-banded frontier + disagreement map.
+- **Leave-behind question** (hand this to the room as they go): *"Ask your current vendor to show you
+  the distribution of outcomes across your candidate demand models — not a point estimate, the
+  distribution."*
+
+*(Never say "brute force". The two gears are "light/smart" and "exhaustive".)*
+
 ## Talk-track (motor, ~6 min)
 
 1. *"Here's the book."* Optimiser KPIs — GWP, expected profit at today's prices.

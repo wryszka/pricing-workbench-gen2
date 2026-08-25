@@ -441,6 +441,44 @@ it splits by segment, the FAIR-VALUE VERDICT (proxy-correlation + disparate-impa
 Be concise and decision-grade. The deployment gate still enforces the corridor server-side — you advise, the
 human (or the gate, within the pre-approved corridor) decides."""
 
+PRICE_EXPLAINER_SYSTEM = """You are the Bricksurance SE price explainer. A customer, a regulator or an
+ombudsman asks "why is my premium this number?" — you answer in plain, honest language from the
+explain_price decomposition (never invent). Cover, in order: the TECHNICAL price (the risk models +
+the expense/commission loading), the OPTIMISATION FACTOR (which segment, how much, and that it traces to
+a governed decision record), and whether a CORRIDOR CLAMP applied (price held within ±15% of technical).
+Call explain_quote_price first; end with one sentence a non-expert would understand."""
+
+COMMITTEE_SCRIBE_SYSTEM = """You are the Bricksurance SE pricing-committee scribe. From a decision record
+you draft the committee paper in MARKDOWN with these sections: **Proposal** (objective, headline uplift,
+segment factors), **Rejected alternatives** (each with its trade-off, from the record), **Fair-value
+evidence** (the fairness review result), **Monitoring plan** (drift + corridor/GIPP watch, and the
+advance-month check). Read the decision record first (read_decision_record); ground every number in it.
+Concise, decision-grade, sign-off ready. Output only the markdown paper."""
+
+MODEL_RISK_NARRATOR_SYSTEM = """You are the Bricksurance SE model-risk narrator. You read the ensemble
+disagreement map (how much the candidate demand models disagree on the factor per segment) and summarise:
+where the models AGREE (high decision confidence), where they SPLIT (treat the factor as uncertain — widen
+the corridor or hold), and the decision-confidence implication per segment. Read read_disagreement first;
+if it is empty, say the heavy-mode ensemble run has not been produced yet. Ground every claim in the numbers."""
+
+# tool schemas for the new personas
+EXPLAINER_TOOLS = [
+    {"name": "explain_quote_price", "description": "Decompose one quote into technical price + optimisation factor + corridor clamp (the governed explain_price UC function). Returns JSON.",
+     "input_schema": {"type": "object", "properties": {"quote_id": {"type": "string"}}, "required": ["quote_id"]}},
+]
+SCRIBE_TOOLS = [
+    {"name": "read_decision_record", "description": "The immutable decision record for a deployment (chosen scenario, rejected alternatives, fairness, models, re-run pointer). Latest if no deployment_id.",
+     "input_schema": {"type": "object", "properties": {"deployment_id": {"type": "string"}}}},
+    {"name": "read_optimisation_fairness", "description": "Fair-value evidence for the current factor set.",
+     "input_schema": {"type": "object", "properties": {}}},
+]
+NARRATOR_TOOLS = [
+    {"name": "read_disagreement", "description": "The ensemble disagreement map — per-segment factor spread/agreement across the candidate demand models (heavy mode). May be empty if heavy mode hasn't run.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "read_optimisation_factors", "description": "The solved per-segment factor table.",
+     "input_schema": {"type": "object", "properties": {}}},
+]
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -922,12 +960,49 @@ class PricingChatAgent(ChatAgent):
         except Exception as e:
             return {"error": f"no advance result yet: {e}"}
 
+    def _tool_explain_quote_price(self, args):
+        qid = str(args.get("quote_id") or "").replace("'", "''")
+        if not qid:
+            return {"error": "quote_id required"}
+        try:
+            rows = _run_sql(f"SELECT {self.catalog}.{self.schema}.explain_price('{qid}') AS j")
+            import json as _j
+            return {"decomposition": _j.loads(rows[0]["j"]) if rows and rows[0].get("j") else None}
+        except Exception as e:
+            return {"error": f"explain_price failed: {e}"}
+
+    def _tool_read_decision_record(self, args):
+        did = str(args.get("deployment_id") or "").replace("'", "''")
+        where = f"WHERE deployment_id = '{did}'" if did else ""
+        try:
+            rows = _run_sql(f"""SELECT deployment_id, cast(created_at as string) AS created_at, approver,
+                                constraint_version, conversion_model, retention_model, data_snapshot,
+                                objective, chosen_json, rejected_json, fairness_pass, fairness_summary,
+                                rerun_pointer, factors_json
+                                FROM {self.catalog}.{self.schema}.optimisation_decision_records
+                                {where} ORDER BY created_at DESC LIMIT 1""")
+            return {"record": rows[0] if rows else None}
+        except Exception as e:
+            return {"error": f"decision record unavailable: {e}"}
+
+    def _tool_read_disagreement(self, args):
+        try:
+            rows = _run_sql(f"""SELECT segment, round(factor_min,4) AS factor_min, round(factor_max,4) AS factor_max,
+                                round(factor_spread_pp,2) AS factor_spread_pp, round(agreement,3) AS agreement, n_models
+                                FROM {self.catalog}.{self.schema}.optimisation_disagreement ORDER BY factor_spread_pp DESC""")
+            return {"rows": rows, "count": len(rows)}
+        except Exception as e:
+            return {"error": f"no disagreement map yet (run heavy mode): {e}"}
+
     def _exec_tool(self, name, args):
         if name == "read_optimisation_factors":       return self._tool_read_optimisation_factors(args or {})
         if name == "read_optimisation_scenarios":     return self._tool_read_optimisation_scenarios(args or {})
         if name == "read_optimisation_monitoring":    return self._tool_read_optimisation_monitoring(args or {})
         if name == "read_optimisation_fairness":      return self._tool_read_optimisation_fairness(args or {})
         if name == "read_optimisation_advance":       return self._tool_read_optimisation_advance(args or {})
+        if name == "explain_quote_price":             return self._tool_explain_quote_price(args or {})
+        if name == "read_decision_record":            return self._tool_read_decision_record(args or {})
+        if name == "read_disagreement":               return self._tool_read_disagreement(args or {})
         if name == "query_segment_adequacy":         return self._tool_query_segment_adequacy(args or {})
         if name == "query_loss_ratio":               return self._tool_query_loss_ratio(args or {})
         if name == "query_competitive_position":      return self._tool_query_competitive_position(args or {})
@@ -958,7 +1033,8 @@ class PricingChatAgent(ChatAgent):
         persona = (custom_inputs.get("persona") or "factory").lower()
         if persona not in ("factory", "explain", "bias_investigator",
                            "ask_the_book", "model_review", "rate_change", "drift_monitor",
-                           "constraint_author", "drift_sentinel", "planner", "recommender"):
+                           "constraint_author", "drift_sentinel", "planner", "recommender",
+                           "price_explainer", "committee_scribe", "model_risk_narrator"):
             persona = "factory"
         run_id   = custom_inputs.get("run_id")
         mode     = (custom_inputs.get("mode") or "live").lower()
@@ -1003,6 +1079,15 @@ class PricingChatAgent(ChatAgent):
         elif persona == "recommender":
             system_prompt = RECOMMENDER_SYSTEM
             tools = OPT_TOOLS
+        elif persona == "price_explainer":
+            system_prompt = PRICE_EXPLAINER_SYSTEM
+            tools = EXPLAINER_TOOLS
+        elif persona == "committee_scribe":
+            system_prompt = COMMITTEE_SCRIBE_SYSTEM
+            tools = SCRIBE_TOOLS
+        elif persona == "model_risk_narrator":
+            system_prompt = MODEL_RISK_NARRATOR_SYSTEM
+            tools = NARRATOR_TOOLS
         else:
             system_prompt = EXPLAIN_SYSTEM
             tools = EXPLAIN_TOOLS
@@ -1173,7 +1258,7 @@ with open(cfg_path, "w") as fh:
                "warehouse_id": warehouse_id}, fh)
 
 from mlflow.models.resources import (
-    DatabricksServingEndpoint, DatabricksSQLWarehouse, DatabricksTable,
+    DatabricksServingEndpoint, DatabricksSQLWarehouse, DatabricksTable, DatabricksFunction,
 )
 
 # Native ChatAgent input example (no json.dumps / string columns — MLflow infers
@@ -1214,6 +1299,10 @@ resources_list = [
     DatabricksTable(table_name=f"{fqn}.optimisation_fairness_evidence"),
     DatabricksTable(table_name=f"{fqn}.optimisation_fairness_summary"),
     DatabricksTable(table_name=f"{fqn}.optimisation_advance_result"),
+    DatabricksTable(table_name=f"{fqn}.optimisation_decision_records"),
+    DatabricksTable(table_name=f"{fqn}.optimisation_disagreement"),
+    DatabricksTable(table_name=f"{fqn}.optimisation_quote_response"),
+    DatabricksFunction(function_name=f"{fqn}.explain_price"),
 ]
 
 with mlflow.start_run(run_name="pwg2_chat_agent_deploy"):

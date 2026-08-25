@@ -326,6 +326,13 @@ export const api = {
   optMonitoring:  () => fetchJson<any>('/optimisation/monitoring'),
   optRedteam:     () => fetchJson<any>('/optimisation/redteam'),
   optFairness:    () => fetchJson<any>('/optimisation/fairness'),
+  optDecisions:   () => fetchJson<any>('/optimisation/decisions'),
+  optHeavyDisagreement: () => fetchJson<any>('/optimisation/heavy/disagreement'),
+  optHeavyStochastic:   () => fetchJson<any>('/optimisation/heavy/stochastic'),
+  optHeavyRun: (body: { preset?: string }) =>
+    fetchJson<any>('/optimisation/heavy/run', { method: 'POST', body: JSON.stringify(body) }),
+  optExplain: (quoteId: string) => fetchJson<any>(`/optimisation/explain/${encodeURIComponent(quoteId)}`),
+  optExplainDemo: () => fetchJson<any>('/optimisation/explain-demo'),
   optConstraints: () => fetchJson<any>('/optimisation/constraints'),
   optAssets:      () => fetchJson<any>('/optimisation/assets'),
   optRun: (body: { grid_points?: number; objective?: string; full?: boolean }) =>
