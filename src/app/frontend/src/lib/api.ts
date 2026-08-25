@@ -325,6 +325,7 @@ export const api = {
   optElasticity:  () => fetchJson<any>('/optimisation/elasticity'),
   optMonitoring:  () => fetchJson<any>('/optimisation/monitoring'),
   optRedteam:     () => fetchJson<any>('/optimisation/redteam'),
+  optFairness:    () => fetchJson<any>('/optimisation/fairness'),
   optConstraints: () => fetchJson<any>('/optimisation/constraints'),
   optAssets:      () => fetchJson<any>('/optimisation/assets'),
   optRun: (body: { grid_points?: number; objective?: string; full?: boolean }) =>

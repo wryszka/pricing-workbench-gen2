@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Target, ChevronDown, ChevronUp, ShieldCheck, Info, Cpu, Database,
          Layers, GitBranch, LineChart, ExternalLink, Play, Loader2, CheckCircle2,
-         Activity, Zap, AlertTriangle, ScrollText, TrendingUp, Gauge } from 'lucide-react';
+         Activity, Zap, AlertTriangle, ScrollText, TrendingUp, Gauge, Bot } from 'lucide-react';
 import { api } from '../lib/api';
 
 // Price Optimisation — the motor offline spine (§3–§9, §13). Every surface reads
@@ -92,6 +92,7 @@ export default function PriceOptimisation() {
   const [elast, setElast] = useState<any>(null);
   const [mon, setMon] = useState<any>(null);
   const [redteam, setRedteam] = useState<any>(null);
+  const [fairness, setFairness] = useState<any>(null);
   const [constraints, setConstraints] = useState<any>(null);
   const [assets, setAssets] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -115,6 +116,7 @@ export default function PriceOptimisation() {
     api.optElasticity().then((d) => { setElast(d); if (d?.curves?.length) setSegSel((p) => p || d.curves[0].segment); }).catch(() => {});
     api.optMonitoring().then(setMon).catch(() => {});
     api.optRedteam().then(setRedteam).catch(() => {});
+    api.optFairness().then(setFairness).catch(() => {});
     api.optConstraints().then(setConstraints).catch(() => {});
     api.optAssets().then(setAssets).catch(() => {});
   };
@@ -429,6 +431,37 @@ export default function PriceOptimisation() {
               ))}
             </div>
           </Section>
+
+          <Section title="Fair-value evidence (§11)" icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />}
+            sub="Generated on every solve, before deploy: proxy-correlation of the price factor with forbidden signals, disparate impact across protected groups, and a vulnerability screen. This is the pack a Consumer-Duty / GIPP review asks for.">
+            {fairness?.summary && (
+              <div className={`rounded-lg border p-3 mb-3 text-sm ${fairness.summary.overall_pass ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                <b>{fairness.summary.overall_pass ? 'PASS' : 'REVIEW'}</b> · worst proxy-correlation {Number(fairness.summary.worst_proxy_corr).toFixed(2)} vs 0.35 ceiling. {fairness.summary.evidence}
+              </div>
+            )}
+            {fairness?.checks?.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-left text-gray-500 border-b">
+                    <th className="py-1.5 pr-3">Check</th><th className="pr-3">Dimension</th><th className="pr-3">Group</th>
+                    <th className="pr-3">Value</th><th className="pr-3">Threshold</th><th>Result</th>
+                  </tr></thead>
+                  <tbody>
+                    {fairness.checks.map((c: any, i: number) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        <td className="py-1.5 pr-3 text-gray-700">{c.check}</td>
+                        <td className="pr-3 text-gray-600">{c.dimension}</td>
+                        <td className="pr-3 text-gray-600">{c.group}</td>
+                        <td className="pr-3">{Number(c.value).toFixed(3)}</td>
+                        <td className="pr-3 text-gray-500">{Number(c.threshold).toFixed(2)}</td>
+                        <td>{c.pass ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-amber-600" />}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
         </>
       )}
 
@@ -460,6 +493,17 @@ export default function PriceOptimisation() {
               <LinkChip href={assets?.notebook_url}>solver notebook</LinkChip>
               <LinkChip href={assets?.job_url}>governed job</LinkChip>
               <LinkChip href={assets?.agent_url}>rate-change agent</LinkChip>
+            </div>
+          </Section>
+
+          <Section title="Agent-callable — one MCP surface (Principle 8)" icon={<Bot className="w-4 h-4 text-emerald-600" />}
+            sub="Every stage and read is a tool on the same MCP server the app and notebooks use — an external agent can drive the whole loop. The deploy tool stays gated server-side (RBAC + corridor); no prompt bypasses it.">
+            <div className="flex flex-wrap gap-2">
+              {['opt_run_simulation', 'opt_run_solver', 'opt_run_fairness', 'opt_advance_month',
+                'opt_deploy_factors ⛨', 'opt_read_scenarios', 'opt_read_factors', 'opt_read_monitoring',
+                'opt_read_fairness', 'opt_read_constraints'].map((t) => (
+                <span key={t} className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-200 rounded-full px-3 py-1 font-mono">{t}</span>
+              ))}
             </div>
           </Section>
 

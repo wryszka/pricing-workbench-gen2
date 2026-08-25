@@ -330,6 +330,12 @@ TOOL_IMPLS = {
     "policy_terms":           _tool_policy_terms,
 }
 
+# Price-optimisation stages + reads as MCP tools (Principle 8 — MCP-first: app,
+# notebook and agent are all clients of one surface). Merged into the same server.
+from server.optimisation_mcp import OPTIMISATION_TOOL_SCHEMAS, OPTIMISATION_TOOL_IMPLS  # noqa: E402
+TOOL_SCHEMAS = TOOL_SCHEMAS + OPTIMISATION_TOOL_SCHEMAS
+TOOL_IMPLS = {**TOOL_IMPLS, **OPTIMISATION_TOOL_IMPLS}
+
 
 # ---------------------------------------------------------------------------
 # JSON-RPC transport

@@ -60,8 +60,9 @@ _NUM_COLS = {
     "month_idx", "true_slope", "recovered_slope", "n_quotes",
     "predicted_conversion", "realized_conversion", "predicted_profit", "realized_profit",
     "profit_delta_pct",
+    "value", "threshold", "n_checks", "n_fail", "worst_proxy_corr",
 }
-_BOOL_COLS = {"within_corridor", "pareto", "outside_corridor"}
+_BOOL_COLS = {"within_corridor", "pareto", "outside_corridor", "pass", "overall_pass"}
 
 
 def _coerce(rows):
@@ -204,6 +205,24 @@ async def redteam():
     return {"available": endo is not None,
             "endogeneity": _coerce(endo) or [],
             "param_recovery": _coerce(recov) or []}
+
+
+@router.get("/fairness")
+async def fairness():
+    """§11 fair-value evidence: the proxy-correlation / disparate-impact /
+    vulnerability checks on the solved factor set + the plain-English pack."""
+    ev = await _safe(f"""
+        SELECT check, dimension, group, metric, value, threshold, pass
+        FROM {fqn('optimisation_fairness_evidence')} ORDER BY check, dimension, group
+    """)
+    summ = await _safe(f"""
+        SELECT overall_pass, n_checks, n_fail, worst_proxy_corr, evidence
+        FROM {fqn('optimisation_fairness_summary')} LIMIT 1
+    """)
+    if ev is None:
+        return {"available": False, "checks": [], "summary": None}
+    return {"available": True, "checks": _coerce(ev) or [],
+            "summary": (_coerce(summ) or [None])[0]}
 
 
 @router.get("/constraints")
