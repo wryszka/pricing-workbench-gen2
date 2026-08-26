@@ -22,6 +22,7 @@ dbutils.widgets.text("catalog_name",       "lr_pricing_v2_aws_us_catalog")
 dbutils.widgets.text("schema_name",        "pricing_workbench_gen2")
 dbutils.widgets.text("constraint_version", "v1")
 dbutils.widgets.text("objective",          "")   # override YAML objective; blank = use YAML
+dbutils.widgets.text("min_volume_ratio",   "")   # override YAML portfolio floor; blank = use YAML
 dbutils.widgets.text("constraint_yaml_path", "")  # optional explicit path; else defaults below
 catalog = dbutils.widgets.get("catalog_name")
 schema  = dbutils.widgets.get("schema_name")
@@ -149,10 +150,12 @@ def seg_profit(s, f): return conv_at(s, f) * (agg.loc[s, "gwp"] * f - agg.loc[s,
 # today's book. A per-segment argmax can trade too much volume for margin; this
 # couples the segments. Greedy repair: while under the floor, walk back the raised
 # segment that recovers the most volume per £ of profit given up, a step at a time.
-min_vol_ratio = float(constraints.get("portfolio", {}).get("min_volume_ratio", 0.90))
+_mvr_override = dbutils.widgets.get("min_volume_ratio").strip()
+min_vol_ratio = float(_mvr_override) if _mvr_override else float(constraints.get("portfolio", {}).get("min_volume_ratio", 0.90))
 hold_vol = sum(seg_vol(s, 1.0) for s in solved)
 floor = min_vol_ratio * hold_vol
 _repair_steps = 0
+repaired_segs = set()             # segments the volume floor pulled back (for the binding label)
 def total_vol(): return sum(seg_vol(s, chosen[s]) for s in solved)
 while total_vol() < floor - 1e-9 and _repair_steps < 500:
     best_s, best_ratio = None, -np.inf
@@ -168,6 +171,7 @@ while total_vol() < floor - 1e-9 and _repair_steps < 500:
     if best_s is None:
         break
     chosen[best_s] = max(1.0, chosen[best_s] - 0.005)
+    repaired_segs.add(best_s)
     _repair_steps += 1
 portfolio_bound = _repair_steps > 0
 print(f"portfolio floor {min_vol_ratio:.0%} of {hold_vol:,.0f}: "
@@ -177,8 +181,8 @@ print(f"portfolio floor {min_vol_ratio:.0%} of {hold_vol:,.0f}: "
 rows = []
 for s in solved:
     factor = chosen[s]; lo, hi = bounds[s]
-    capped = "corridor" if abs(factor - (1 + corr_hi)) < 1e-3 or abs(factor - (1 + corr_lo)) < 1e-3 else \
-             ("portfolio_volume" if portfolio_bound and abs(factor - 1.0) < 1e-6 else
+    capped = "portfolio_volume" if s in repaired_segs else \
+             ("corridor" if abs(factor - (1 + corr_hi)) < 1e-3 or abs(factor - (1 + corr_lo)) < 1e-3 else
               ("segment_cap" if abs(factor - hi) < 1e-3 or abs(factor - lo) < 1e-3 else "interior"))
     rows.append({
         "constraint_version": cver, "segment": s, "policies": int(agg.loc[s, "n"]),

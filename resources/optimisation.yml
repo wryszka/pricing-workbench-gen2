@@ -123,6 +123,8 @@ resources:
           default: "v1"
         - name: objective
           default: ""      # blank = use the YAML objective
+        - name: min_volume_ratio
+          default: ""      # blank = use the YAML portfolio floor; set (e.g. 0.99) to bind it
       permissions:
         - service_principal_name: ${var.app_service_principal_id}
           level: CAN_MANAGE_RUN
@@ -135,6 +137,7 @@ resources:
               schema_name:        "{{job.parameters.schema_name}}"
               constraint_version: "{{job.parameters.constraint_version}}"
               objective:          "{{job.parameters.objective}}"
+              min_volume_ratio:   "{{job.parameters.min_volume_ratio}}"
           environment_key: env
       environments:
         - environment_key: env
