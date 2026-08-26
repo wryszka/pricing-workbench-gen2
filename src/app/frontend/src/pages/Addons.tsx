@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Receipt, BookOpen, ArrowRight, Package, Radar, Network, Calculator } from 'lucide-react';
+import { Receipt, BookOpen, ArrowRight, Package, Radar, Network, Calculator, Server } from 'lucide-react';
 import { Page, PageHeader, OnThisPage, DemoDisclaimer, SectionHead } from '../components/ui';
 
 /**
@@ -19,7 +19,7 @@ export default function Addons() {
         icon={Package}
       />
       <OnThisPage>
-        Grouped by purpose. <strong>Pricing tools & integrations</strong>: the interactive <strong>Pricing Engine</strong> (score a risk through the live rate build) and <strong>Rating Engine Integration</strong> (Radar/Earnix enrichment patterns). <strong>Companion use-cases</strong>: <strong>Quote Review</strong> (transaction drill-down + replay), <strong>New Data Impact</strong> (external-data enrichment analysis), and <strong>Agentic Distribution</strong> (AI-channel presence + MCP).
+        Grouped by purpose. <strong>Pricing tools & integrations</strong>: the interactive <strong>Pricing Engine</strong> (score a risk through the live rate build), <strong>Rating Engine Integration</strong> (Radar/Earnix enrichment patterns), and the <strong>MCP Server</strong> (the tool surface for outside agents). <strong>Companion use-cases</strong>: <strong>Quote Review</strong> (transaction drill-down + replay), <strong>New Data Impact</strong> (external-data enrichment analysis), and <strong>Agentic Distribution</strong> (AI-channel presence + MCP).
       </OnThisPage>
 
       <SectionHead>Pricing tools & integrations</SectionHead>
@@ -41,6 +41,15 @@ export default function Addons() {
           description="The workbench acts as an enrichment layer for commercial rating engines like Willis Towers Watson Radar and Earnix — delivering scored factors, features, and loading signals into the rating engine without disrupting the actuary's existing workflow."
           audience="pricing actuaries · rating-engine administrators"
           tags={['Radar / Earnix', 'Feature enrichment', 'Reference architecture']}
+        />
+        <AddonCard
+          to="/pricing-ai?tab=mcp"
+          icon={Server}
+          accent="violet"
+          title="MCP Server"
+          description="The workbench's pricing capabilities published as a Model Context Protocol server — discovery, a real engine price, and the optimiser stages/reads exposed as callable tools for outside agents. Opens the live tool surface on the Pricing AI page."
+          audience="platform · distribution · agent developers"
+          tags={['JSON-RPC /api/mcp', '21 live tools', 'Server-side deploy gate']}
         />
       </div>
 

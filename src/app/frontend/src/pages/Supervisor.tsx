@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Bot, Send, Loader2, Sparkles, ChevronDown, ChevronUp, Wrench,
   Database, Shield, Scale, Workflow, FlaskConical, ExternalLink,
+  Server, Plug, Target,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import {
   Page, PageHeader, OnThisPage, Card, CardTitle, Section, UnderTheHood,
-  Grid,
+  Grid, Pill, Loading,
 } from '../components/ui';
 
 /**
@@ -60,6 +61,8 @@ export default function Supervisor() {
   const [turns, setTurns]   = useState<Turn[]>([]);
   const [input, setInput]   = useState('');
   const [busy, setBusy]     = useState(false);
+  const [tab, setTab]       = useState<'copilot' | 'mcp'>(
+    () => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'mcp' ? 'mcp' : 'copilot'));
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,30 +115,168 @@ export default function Supervisor() {
       />
 
       <OnThisPage>
-        Chat surface auto-routes to the right agent (or pick one manually) · every dispatch is audit-logged
-        · Mosaic AI Framework agents + Genie spaces together.
+        Two surfaces: the <strong>Copilot</strong> auto-routes to the right agent (or pick one) — every dispatch audit-logged,
+        Mosaic AI Framework agents + Genie spaces together. The <strong>MCP server</strong> tab is the same capabilities exposed
+        as callable tools for outside agents.
       </OnThisPage>
 
-      <SupervisorChat
-        agents={agents} chosen={chosen} setChosen={setChosen}
-        turns={turns} input={input} setInput={setInput} busy={busy}
-        onSend={send} allSuggestions={allSuggestions}
-        scrollRef={scrollRef}
-      />
+      <div className="flex gap-1 border-b border-line">
+        <PaneTab active={tab === 'copilot'} onClick={() => setTab('copilot')} icon={Sparkles} label="Copilot" />
+        <PaneTab active={tab === 'mcp'}     onClick={() => setTab('mcp')}     icon={Server}   label="MCP server" />
+      </div>
 
-      <ArchitectureDiagram agents={agents} />
+      {tab === 'copilot' && (
+        <>
+          <SupervisorChat
+            agents={agents} chosen={chosen} setChosen={setChosen}
+            turns={turns} input={input} setInput={setInput} busy={busy}
+            onSend={send} allSuggestions={allSuggestions}
+            scrollRef={scrollRef}
+          />
+
+          <ArchitectureDiagram agents={agents} />
+
+          <UnderTheHood
+            title="Pricing AI — Multi-Agent Routing"
+            lines={[
+              { component: '/api/supervisor', detail: 'Chat endpoint that classifies questions and routes to sub-agents; audit-logged' },
+              { component: 'classifier', detail: '10-token FM API call for routing — sub-second latency' },
+              { component: 'sub-agents', detail: 'Six independent Mosaic AI Agent Framework endpoints (governance, bias, explain, factory) + Genie spaces (mart, quote)' },
+              { component: 'audit_log', detail: 'Every dispatch recorded: question, chosen agent, classifier flag, model, tokens, tool trace' },
+              { component: 'Mosaic AI Agent Framework', detail: 'Unified agent interface with tool orchestration and grounding' },
+            ]}
+          />
+        </>
+      )}
+
+      {tab === 'mcp' && <McpTab />}
+    </Page>
+  );
+}
+
+function PaneTab({ active, onClick, icon: Icon, label }:
+  { active: boolean; onClick: () => void; icon: any; label: string }) {
+  return (
+    <button onClick={onClick}
+      className={`inline-flex items-center gap-2 px-4 py-2.5 text-[13.5px] font-semibold border-b-2 -mb-px transition ${
+        active ? 'border-[#2563eb] text-[#2563eb]' : 'border-transparent text-mut hover:text-ink'}`}>
+      <Icon className="w-4 h-4" /> {label}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MCP server tab — the live tool surface an external agent sees. Reads the
+// running server's own manifest (GET /api/mcp/manifest) so it never drifts from
+// what /api/mcp actually serves.
+// ---------------------------------------------------------------------------
+function McpTab() {
+  const [m, setM] = useState<any | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+  useEffect(() => {
+    api.getMcpManifest().then(setM).catch((e: any) => setErr(String(e?.message || e)));
+  }, []);
+
+  if (err) return <Card><div className="text-[13px] text-red-700">MCP manifest unavailable — {err}</div></Card>;
+  if (!m) return <Loading label="Reading the MCP server manifest…" />;
+
+  const tools: any[] = m.tools || [];
+  const dist = tools.filter(t => !t.name.startsWith('opt_'));
+  const opt  = tools.filter(t => t.name.startsWith('opt_'));
+  const rpcUrl = `${origin}/api/mcp`;
+
+  return (
+    <div className="space-y-5">
+      <Card className="border-blue-200 bg-blue-50/40">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <CardTitle>MCP server — live</CardTitle>
+            <p className="text-[13px] text-ink leading-relaxed mt-1 max-w-2xl">
+              The workbench publishes its pricing capabilities as a <strong>Model Context Protocol</strong> server, so an
+              outside agent can discover requirements, get a real engine price, and run the optimiser — the same tools the
+              app and notebooks use (MCP-first: one surface, no logic built twice). Read live from the running server's manifest.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5 items-end">
+            <Pill tone="green">running</Pill>
+            <span className="text-[11px] text-mut">{tools.length} tools</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
+          <McpMeta label="Server" value={m.server?.name} />
+          <McpMeta label="Version" value={m.server?.version} />
+          <McpMeta label="MCP protocol" value={m.protocol_version} />
+          <McpMeta label="Tools" value={String(tools.length)} />
+        </div>
+        <div className="mt-4 space-y-1.5">
+          <div className="text-[11px] uppercase tracking-wide text-mut font-semibold">Endpoints</div>
+          <div className="flex items-center gap-2 text-[12.5px]">
+            <span className="font-mono bg-slate-100 border border-line rounded px-1.5 py-0.5">POST</span>
+            <code className="font-mono text-slate-700 break-all">{rpcUrl}</code>
+            <span className="text-mut">· JSON-RPC (initialize · tools/list · tools/call)</span>
+          </div>
+          <div className="flex items-center gap-2 text-[12.5px]">
+            <span className="font-mono bg-slate-100 border border-line rounded px-1.5 py-0.5">GET</span>
+            <code className="font-mono text-slate-700 break-all">{rpcUrl}/manifest</code>
+            <span className="text-mut">· this manifest</span>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-center gap-2 mb-2">
+          <Plug className="w-4 h-4 text-[#2563eb]" />
+          <CardTitle>Distribution tools</CardTitle>
+          <span className="text-[11px] text-mut ml-auto">{dist.length}</span>
+        </div>
+        <p className="text-[12.5px] text-mut mb-3">The agentic-distribution surface — an AI channel can quote a motor risk through the live engine.</p>
+        <McpToolList tools={dist} />
+      </Card>
+
+      <Card>
+        <div className="flex items-center gap-2 mb-2">
+          <Target className="w-4 h-4 text-[#2563eb]" />
+          <CardTitle>Price-optimisation tools</CardTitle>
+          <span className="text-[11px] text-mut ml-auto">{opt.length}</span>
+        </div>
+        <p className="text-[12.5px] text-mut mb-3">Run the optimiser stages and read every governed output. <code className="font-mono text-[11px] bg-slate-100 border border-line px-1 rounded">opt_deploy_factors</code> is gated server-side (RBAC + corridor) — an agent can't bypass it.</p>
+        <McpToolList tools={opt} />
+      </Card>
 
       <UnderTheHood
-        title="Pricing AI — Multi-Agent Routing"
+        title="MCP server"
         lines={[
-          { component: '/api/supervisor', detail: 'Chat endpoint that classifies questions and routes to sub-agents; audit-logged' },
-          { component: 'classifier', detail: '10-token FM API call for routing — sub-second latency' },
-          { component: 'sub-agents', detail: 'Six independent Mosaic AI Agent Framework endpoints (governance, bias, explain, factory) + Genie spaces (mart, quote)' },
-          { component: 'audit_log', detail: 'Every dispatch recorded: question, chosen agent, classifier flag, model, tokens, tool trace' },
-          { component: 'Mosaic AI Agent Framework', detail: 'Unified agent interface with tool orchestration and grounding' },
+          { component: 'POST /api/mcp', detail: 'JSON-RPC 2.0 — initialize / tools/list / tools/call; single entry point' },
+          { component: 'GET /api/mcp/manifest', detail: 'Plain manifest of the tool surface (what this tab reads)' },
+          { component: 'shared tool surface', detail: 'The same tools back the app, notebooks and external agents — nothing built twice (Principle 8)' },
+          { component: 'server-side gate', detail: 'opt_deploy_factors re-checks RBAC + the ±corridor before any write — prompt-proof' },
         ]}
       />
-    </Page>
+    </div>
+  );
+}
+
+function McpMeta({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="bg-white border border-line rounded px-2.5 py-1.5">
+      <div className="text-[10px] uppercase tracking-wide text-mut">{label}</div>
+      <div className="font-mono font-semibold text-ink text-[13px]">{value || '—'}</div>
+    </div>
+  );
+}
+
+function McpToolList({ tools }: { tools: any[] }) {
+  return (
+    <div className="divide-y divide-slate-100 border border-line rounded-lg overflow-hidden">
+      {tools.map((t) => (
+        <div key={t.name} className="px-3.5 py-2.5 flex items-start gap-3">
+          <code className="font-mono text-[11.5px] bg-slate-50 border border-line text-slate-800 px-1.5 py-0.5 rounded shrink-0">{t.name}</code>
+          <span className="text-[13px] text-slate-700 leading-relaxed">{t.description}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 

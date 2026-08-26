@@ -32,6 +32,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  getMcpManifest: () => fetchJson<any>('/mcp/manifest'),
 
   // Dataset routes
   getDatasets:       () => fetchJson<any[]>('/datasets'),
