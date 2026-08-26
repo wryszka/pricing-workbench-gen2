@@ -514,7 +514,10 @@ async def _write_decision_record(deployment_id, approver, cver, objective="expec
         "rm": f"{get_catalog()}.{get_schema()}.retention_elasticity_motor@champion",
         "snap": f"optimisation_quote_response @ {sn.get('m')}, {sn.get('q')} quotes",
         "chosen": json.dumps(chosen), "rej": json.dumps(rejected),
-        "fpass": bool(fr.get("overall_pass")) if fr.get("overall_pass") is not None else None,
+        # fairness_pass bound as a string param + cast to boolean in-SQL (None → NULL),
+        # so it can never be a raw Python bool interpolated into the statement.
+        "fpass": (None if fr.get("overall_pass") is None
+                  else ("true" if bool(fr.get("overall_pass")) else "false")),
         "fsum": str(fr.get("evidence") or "")[:1500],
         "rerun": f"job='Price optimisation — constrained solver (gen2)' params: objective={objective}, constraint_version={cver}",
         "facs": json.dumps(_coerce(facs or [])),
@@ -526,9 +529,9 @@ async def _write_decision_record(deployment_id, approver, cver, objective="expec
            data_snapshot, objective, chosen_json, rejected_json, fairness_pass, fairness_summary,
            rerun_pointer, factors_json)
         SELECT uuid(), :did, current_timestamp(), :appr, :cver, :cm, NULL, :rm, NULL,
-               :snap, :obj, :chosen, :rej, {'NULL' if p['fpass'] is None else p['fpass']}, :fsum,
+               :snap, :obj, :chosen, :rej, cast(:fpass AS BOOLEAN), :fsum,
                :rerun, :facs
-    """, {k: v for k, v in p.items() if k != "fpass"})
+    """, p)
     return "written" if ok is not None else None
 
 

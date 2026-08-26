@@ -136,10 +136,11 @@ export default function PriceOptimisation() {
       // simulation rebuild is the standalone `optimisation_full` job, run offline.)
       const r = await api.optRun({ objective, grid_points: grid, full: false });
       if (!r?.ok) { setRun({ error: r?.error || 'run failed' }); setBusy(false); return; }
-      let polls = 0;
+      let polls = 0; let lastUrl: string | undefined;
       const poll = async () => {
-        if (++polls > 80) { setRun({ state: 'TIMEOUT', url: run?.url }); setBusy(false); return; }
+        if (++polls > 80) { setRun({ state: 'TIMEOUT', url: lastUrl }); setBusy(false); return; }
         const s = await api.optRunStatus(r.run_id);
+        lastUrl = s.run_page_url || lastUrl;
         setRun({ state: s.result_state || s.life_cycle_state, url: s.run_page_url });
         if (s.life_cycle_state && !['TERMINATED', 'SKIPPED', 'INTERNAL_ERROR'].includes(s.life_cycle_state)) {
           setTimeout(poll, 5000);

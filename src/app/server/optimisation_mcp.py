@@ -14,8 +14,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from fastapi import HTTPException
+
 from server.config import (fqn, get_workspace_client, resolve_job_by_name,
                            get_bundle_files_base, get_current_user)
+from server.routes.admin import _require_admin
 from server.sql import execute_query
 
 logger = logging.getLogger(__name__)
@@ -30,9 +33,9 @@ _JOBS = {
 }
 
 
-async def _q(sql: str):
+async def _q(sql: str, params: dict | None = None):
     try:
-        return await execute_query(sql)
+        return await execute_query(sql, params)
     except Exception as e:
         logger.warning("opt-mcp query failed: %s", str(e)[:160])
         return []
@@ -73,10 +76,18 @@ async def _t_run_heavy_mode(args, session_id, agent_id):
     return _run_job(_JOBS["heavy_mode"], {"preset": preset})
 
 async def _t_deploy_factors(args, session_id, agent_id):
-    """Server-side gate: RBAC + corridor re-check. An agent cannot bypass it."""
+    """Server-side gate: **RBAC + corridor re-check** — the SAME gate as the app
+    /deploy route, so an external MCP client (agent or user) cannot bypass it.
+    On approval it also writes the immutable decision record (parity with the app)."""
+    # (1) RBAC — caller must be in ADMIN_USERS, identical to the app route.
+    try:
+        _require_admin("optimisation-deploy")
+    except HTTPException as e:
+        return {"ok": False, "gated": True, "error": f"admin-only: {e.detail}"}
     rows = await _q(f"SELECT segment, factor, constraint_version FROM {fqn('optimisation_factor_table')}")
     if not rows:
         return {"ok": False, "error": "no factor table — solve first"}
+    # (2) corridor re-check, server-side.
     lo, hi = 1 - CORRIDOR_PCT / 100, 1 + CORRIDOR_PCT / 100
     breaches = [r["segment"] for r in rows
                 if not (lo - 1e-6 <= float(r.get("factor") or 1.0) <= hi + 1e-6)]
@@ -94,6 +105,14 @@ async def _t_deploy_factors(args, session_id, agent_id):
                user_id, timestamp, details, source)
         SELECT uuid(), 'optimisation_deploy_approved', 'factor_table', :cver, :cver, :who,
                current_timestamp(), to_json(named_struct('segments', :n, 'note', :note)), 'optimisation_mcp'""", p)
+    # (3) immutable decision record — parity with the app /deploy path (governance §11).
+    try:
+        from server.routes.optimisation import _write_decision_record
+        dep = await _q(f"SELECT deployment_id FROM {fqn('optimisation_deployment')} ORDER BY deployed_at DESC LIMIT 1")
+        dep_id = dep[0]["deployment_id"] if dep else None
+        await _write_decision_record(dep_id, who, cver, objective="expected_profit")
+    except Exception as e:
+        logger.warning("mcp deploy: decision-record write failed: %s", str(e)[:160])
     return {"ok": True, "segments": len(rows), "constraint_version": cver, "deployed_by": who}
 
 
@@ -129,10 +148,10 @@ async def _t_read_constraints(args, session_id, agent_id):
         return {"ok": False, "error": str(e)[:160]}
 
 async def _t_explain_price(args, session_id, agent_id):
-    qid = str(args.get("quote_id") or "").replace("'", "''")
+    qid = str(args.get("quote_id") or "")
     if not qid:
         return {"ok": False, "error": "quote_id required"}
-    rows = await _q(f"SELECT {fqn('explain_price')}('{qid}') AS j")
+    rows = await _q(f"SELECT {fqn('explain_price')}(:qid) AS j", {"qid": qid})
     import json as _j
     try:
         return {"ok": True, "decomposition": _j.loads(rows[0]["j"]) if rows and rows[0].get("j") else None}
@@ -140,12 +159,13 @@ async def _t_explain_price(args, session_id, agent_id):
         return {"ok": True, "decomposition_raw": rows[0].get("j") if rows else None}
 
 async def _t_get_decision_record(args, session_id, agent_id):
-    did = str(args.get("deployment_id") or "").replace("'", "''")
-    where = f"WHERE deployment_id = '{did}'" if did else ""
+    did = str(args.get("deployment_id") or "")
+    where = "WHERE deployment_id = :did" if did else ""
     rows = await _q(f"""SELECT deployment_id, cast(created_at as string) created_at, approver, constraint_version,
                         conversion_model, retention_model, data_snapshot, objective, chosen_json,
                         rejected_json, fairness_pass, fairness_summary, rerun_pointer
-                        FROM {fqn('optimisation_decision_records')} {where} ORDER BY created_at DESC LIMIT 1""")
+                        FROM {fqn('optimisation_decision_records')} {where} ORDER BY created_at DESC LIMIT 1""",
+                    {"did": did} if did else None)
     return {"ok": True, "record": rows[0] if rows else None}
 
 async def _t_read_disagreement(args, session_id, agent_id):

@@ -7,6 +7,21 @@
 # of THIS file is the auditable record of how the pricing policy evolved.
 #
 # Demo beat: open this file + `git log -p` on it, live, in the room.
+#
+# ENFORCEMENT MODEL — be honest about HOW each rule below binds (Phase 1, motor
+# new-business factors):
+#   * SOLVE-TIME ENFORCED (hard): deviation_corridor + segment_caps — they set the
+#     solver's per-segment factor bounds, and the deploy gate re-checks the
+#     corridor server-side. A factor outside them cannot be produced or deployed.
+#   * ENFORCED BY CONSTRUCTION: forbidden_signals — the optimised factor is keyed
+#     only on the age×vehicle segment, so protected characteristics are never
+#     optimisation levers in the first place; proxy_correlation_max is then
+#     verified post-solve by the fairness job (optimisation_fairness).
+#   * MONITORED, NOT YET SOLVE-TIME ENFORCED: the renewal/GIPP rule. Phase 1
+#     optimises NEW-BUSINESS factors; it does not reprice renewals, so GIPP is
+#     tracked by the monitoring/fairness jobs (breach tile) rather than enforced
+#     inside the solver. Renewal optimisation with in-solver GIPP is Phase 2.
+#     (See docs/DEMO_QA.md and docs/optimisation_runbook.md.)
 # ---------------------------------------------------------------------------
 version: "v1"
 effective_from: "auto"          # resolved to the current rate-book month at solve time

@@ -7,6 +7,20 @@ failure modes). See also `docs/OPTIMIZATION_RECONCILIATION.md` (spec↔reality) 
 
 ---
 
+## 2026-08-26 — 7-agent review panel (playbook v2.1) + fixes
+
+Ran the v2.1 seven-agent panel (adds the **incumbent champion**) on the optimisation module; report in `docs/REVIEW/REVIEW_REPORT_optimiser_v2.1.md`. Verdict **SHIP WITH ROADMAPPED GAPS** after fixes. Blockers/criticals found and **fixed**:
+- **Security CRITICAL / Senior-dev major — MCP deploy authz bypass.** `opt_deploy_factors` (MCP) enforced only the corridor, not the `_require_admin` RBAC the app `/deploy` enforces — an external agent could deploy bypassing the human gate (violates Principle 8). Fixed: the MCP tool now calls `_require_admin` first (same gate, both entry points), and also writes the immutable decision record (parity with the app path).
+- **Senior-dev blocker — decision-record `fairness_pass`** was a Python bool interpolated into SQL. Fixed: bound as a string param + `cast(:fpass AS BOOLEAN)`.
+- **Security/Senior-dev — MCP SQL parameterisation.** `opt_explain_price` / `opt_get_decision_record` used `.replace("'","''")` + f-strings. Fixed: bound `:qid` / `:did` (the MCP `_q` helper now takes params).
+- **Senior-dev minor — React poll stale closure** (`run?.url` on timeout) → track `lastUrl` locally.
+
+**Enforcement-model honesty (incumbent champion).** The constraint YAML advertised `gipp_renewal_rule` + `forbidden_signals` as if solver-enforced. Reality (documented now in the YAML header + DEMO_QA Q8/Q19): corridor + segment caps are **solve-time hard-enforced**; forbidden signals are **excluded by construction** (the factor is keyed on age×vehicle only) + proxy-tested post-solve; **renewal/GIPP is monitored, not solve-time enforced** (Phase 1 is new-business; renewal optimisation + in-solver GIPP is Phase 2). Not removed, relabelled honestly.
+
+**MCP authorization design (logged per security recommendation):** the JSON-RPC MCP transport (`routes/mcp.py`) authenticates via the Databricks App; per-tool authorization is enforced **inside** the sensitive tool (`opt_deploy_factors` → `_require_admin`), matching the app routes. Read tools are unrestricted (same as the app's read endpoints). If more write tools are added, gate each at the tool.
+
+**Incumbent-champion roadmap (labelled, not blocking):** renewal optimisation + in-solver GIPP; portfolio-level (cross-segment) constraints; finer segmentation on a real book; a live elasticity-sensitivity widget; C-suite narrative coaching (risk-of-inaction, incumbent-contrast artifact). Current-Databricks sweep: no deprecations; hand-rolled MCP is a compliant "expected-but-evolving" forward hook; verify the `databricks-claude-sonnet-4-6` FM endpoint exists in a target workspace before a live run.
+
 ## 2026-08-25 — Commercial-lines optimiser: NO-GO (motor is the sole LOB)
 
 A commercial-lines optimiser (wiring the governed `demand_gbm` into a second optimisation
