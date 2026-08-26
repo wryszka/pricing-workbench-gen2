@@ -181,9 +181,10 @@ def volume_repair(chosen_d, conv):
 
 repaired_segs, _repair_steps = volume_repair(chosen, conv_at)
 portfolio_bound = _repair_steps > 0
+_final_vol = sum(seg_vol(s, chosen[s]) for s in solved)
 print(f"portfolio floor {min_vol_ratio:.0%} of {hold_vol:,.0f}: "
       f"{'repaired in ' + str(_repair_steps) + ' steps' if portfolio_bound else 'non-binding'}, "
-      f"final volume {total_vol():,.0f}")
+      f"final volume {_final_vol:,.0f}")
 
 rows = []
 for s in solved:
