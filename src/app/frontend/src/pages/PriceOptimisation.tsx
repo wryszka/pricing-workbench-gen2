@@ -107,6 +107,7 @@ export default function PriceOptimisation() {
   const [busy, setBusy] = useState(false);
   // HITL deploy
   const [deployMsg, setDeployMsg] = useState<{ ok?: boolean; text: string } | null>(null);
+  const [deployBusy, setDeployBusy] = useState(false);
   const [segSel, setSegSel] = useState('');
   // closed-loop advance-month
   const [advBusy, setAdvBusy] = useState(false);
@@ -183,9 +184,11 @@ export default function PriceOptimisation() {
   };
 
   const doDeploy = async () => {
-    setDeployMsg(null);
-    const r = await api.optDeploy({ approver: 'app_user', note: `objective=${objective}` });
-    setDeployMsg({ ok: r?.ok, text: r?.ok ? r.message : (r?.error || 'deploy failed') });
+    setDeployMsg(null); setDeployBusy(true);
+    try {
+      const r = await api.optDeploy({ approver: 'app_user', note: `objective=${objective}` });
+      setDeployMsg({ ok: r?.ok, text: r?.ok ? r.message : (r?.error || 'deploy failed') });
+    } finally { setDeployBusy(false); }
   };
 
   const TabBtn = ({ id, label }: { id: typeof tab; label: string }) => (
@@ -211,10 +214,12 @@ export default function PriceOptimisation() {
 
       {showHelp && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-gray-700 mb-4 space-y-2">
-          <p><b>The wedge against a black-box optimiser:</b> demand is a governed, monotone model; price enters as a
-            ratio to the technically-correct (break-even) price, never raw; the solver is boring scipy bound by a
-            constraint file you can open and <code>git log</code>; and nothing deploys without passing a corridor check
-            server-side. Turn the objective, run the real governed DAG, watch the whole book move, then approve.</p>
+          <p>This shows the best set of prices across your motor book, chosen by a transparent solver that
+            respects your rules. Pick what to optimise for, run it, and watch the whole book move — then
+            approve. <b>▲ green</b> = we raised the price, <b>▼ amber</b> = we cut it or hit a limit. Use
+            "Explain this price" to see exactly why any one customer pays what they pay. Unlike a black box:
+            the demand model, the rules, and every decision are open and auditable — nothing goes live
+            without passing the safety check.</p>
           <p className="text-xs text-emerald-800"><b>About this demo:</b> synthetic, illustrative motor data in a
             Databricks sandbox — it demonstrates the end-to-end capability, not a real book.</p>
         </div>
@@ -240,6 +245,16 @@ export default function PriceOptimisation() {
       {/* ------------------------------------------------------- OPTIMISER */}
       {tab === 'optimise' && summary?.available && (
         <>
+          {rollup && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <Kpi label="Expected profit (opt)" value={gbpM(rollup.expected_profit_opt)} hint={`hold ${gbpM(rollup.expected_profit_hold)}`} tone="good" />
+              <Kpi label="Profit uplift" value={gbpM(rollup.profit_uplift)} hint={signPct(rollup.profit_uplift_pct)} tone="good" />
+              <Kpi label="Book" value={`${Number(rollup.policies).toLocaleString()}`} hint={`${rollup.segments} segments · ${gbpM(rollup.gwp_current)} GWP`} />
+              <Kpi label="Constraint corridor" value={rollup.all_within_corridor ? 'All within' : 'Breach!'}
+                hint={`policy set ${summary?.constraint?.version || 'v1'}`} tone={rollup.all_within_corridor ? 'good' : 'warn'} />
+            </div>
+          )}
+
           <Section title="Objective front door" icon={<Gauge className="w-4 h-4 text-emerald-600" />}
             sub="Pick what the book should maximise and how many candidate price sets to explore, then run the real governed DAG (data → elasticity → simulate → solve → monitor). The solver is bound by the versioned constraint set.">
             <div className="flex flex-wrap items-end gap-3">
@@ -275,16 +290,6 @@ export default function PriceOptimisation() {
             )}
           </Section>
 
-          {rollup && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-              <Kpi label="Expected profit (opt)" value={gbpM(rollup.expected_profit_opt)} hint={`hold ${gbpM(rollup.expected_profit_hold)}`} tone="good" />
-              <Kpi label="Profit uplift" value={gbpM(rollup.profit_uplift)} hint={signPct(rollup.profit_uplift_pct)} tone="good" />
-              <Kpi label="Book" value={`${Number(rollup.policies).toLocaleString()}`} hint={`${rollup.segments} segments · ${gbpM(rollup.gwp_current)} GWP`} />
-              <Kpi label="Constraint corridor" value={rollup.all_within_corridor ? 'All within' : 'Breach!'}
-                hint={`policy set ${summary?.constraint?.version || 'v1'}`} tone={rollup.all_within_corridor ? 'good' : 'warn'} />
-            </div>
-          )}
-
           <Section title="Efficient frontier" icon={<TrendingUp className="w-4 h-4 text-emerald-600" />}
             sub="Every Pareto-optimal candidate (expected volume vs expected profit). Hold = today's book. The solver picks the objective-optimal point within the constraint corridor.">
             <FrontierChart frontier={scen?.frontier || []} />
@@ -311,7 +316,7 @@ export default function PriceOptimisation() {
           </Section>
 
           <Section title="Solved factor table" icon={<ScrollText className="w-4 h-4 text-emerald-600" />}
-            sub="The deployable artifact — the per-segment factor the rating config consumes.">
+            sub="The deployable artifact — the per-segment factor the rating config consumes. 'Binding' shows why each segment stopped: interior (free optimum), segment_cap, corridor, or portfolio_volume (a portfolio volume floor, default 90% of today's book — enforced by the solver; non-binding here because the profit-optimum already holds volume).">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-gray-500 border-b">
@@ -323,7 +328,7 @@ export default function PriceOptimisation() {
                     <tr key={f.segment} className="border-b border-gray-100">
                       <td className="py-1.5 pr-3 font-medium text-gray-800">{f.segment}</td>
                       <td className="pr-3">{Number(f.policies).toLocaleString()}</td>
-                      <td className={`pr-3 font-medium ${f.factor_pct >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{signPct(f.factor_pct)}</td>
+                      <td className={`pr-3 font-medium ${f.factor_pct >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{f.factor_pct >= 0 ? '▲' : '▼'} {signPct(f.factor_pct)}</td>
                       <td className="pr-3 text-gray-600">{pct(f.conversion_hold, 0)} → {pct(f.conversion_opt, 0)}</td>
                       <td className="pr-3">{gbp(f.profit_uplift)}</td>
                       <td className="pr-3"><span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{f.binding}</span></td>
@@ -355,7 +360,7 @@ export default function PriceOptimisation() {
                       <tr key={r.segment} className="border-b border-gray-100">
                         <td className="py-1.5 pr-3 font-medium text-gray-800">{r.segment}</td>
                         <td className="pr-3">{Number(r.policies).toLocaleString()}</td>
-                        <td className={`pr-3 font-medium ${r.renewal_factor_pct >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{signPct(r.renewal_factor_pct)}</td>
+                        <td className={`pr-3 font-medium ${r.renewal_factor_pct >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{r.renewal_factor_pct >= 0 ? '▲' : '▼'} {signPct(r.renewal_factor_pct)}</td>
                         <td className="pr-3 text-gray-600">{pct(r.retention_hold, 0)} → {pct(r.retention_opt, 0)}</td>
                         <td className="pr-3">{gbp(r.margin_uplift)}</td>
                         <td>{r.gipp_breaches === 0 ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-amber-600" />}</td>
@@ -370,9 +375,9 @@ export default function PriceOptimisation() {
           <Section title="Approve → deploy" icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />}
             sub="The human sets policy; the gate enforces it. On approve, the corridor is re-checked SERVER-SIDE (a future agent cannot bypass it), then the factor set is stamped to optimisation_deployment + the immutable audit log.">
             <div className="flex items-center gap-3 flex-wrap">
-              <button onClick={doDeploy}
-                className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black text-white text-sm font-medium rounded-md px-4 py-2">
-                <CheckCircle2 className="w-4 h-4" /> Approve &amp; deploy factor set {summary?.constraint?.version || 'v1'}
+              <button onClick={doDeploy} disabled={deployBusy}
+                className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-60 text-gray-800 text-sm font-medium rounded-md px-4 py-2">
+                {deployBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4 text-emerald-600" />} Approve &amp; deploy factor set {summary?.constraint?.version || 'v1'}
               </button>
               {deployMsg && (
                 <span className={`text-sm ${deployMsg.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
@@ -724,7 +729,7 @@ function ExplainPrice() {
         <input value={qid} onChange={(e) => setQid(e.target.value)} placeholder="quote id (e.g. MQ-000…)"
           className="border border-gray-200 rounded-md px-3 py-1.5 text-sm font-mono w-64" />
         <button onClick={() => run()} disabled={busy}
-          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-md px-3 py-1.5">
+          className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-60 text-gray-800 text-sm font-medium rounded-md px-3 py-1.5">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Info className="w-4 h-4" />} Explain
         </button>
         <button onClick={loadGrandma} className="text-sm text-emerald-700 hover:underline">use the grandma-in-a-BMW demo case</button>

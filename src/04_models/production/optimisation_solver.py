@@ -154,25 +154,32 @@ _mvr_override = dbutils.widgets.get("min_volume_ratio").strip()
 min_vol_ratio = float(_mvr_override) if _mvr_override else float(constraints.get("portfolio", {}).get("min_volume_ratio", 0.90))
 hold_vol = sum(seg_vol(s, 1.0) for s in solved)
 floor = min_vol_ratio * hold_vol
-_repair_steps = 0
-repaired_segs = set()             # segments the volume floor pulled back (for the binding label)
-def total_vol(): return sum(seg_vol(s, chosen[s]) for s in solved)
-while total_vol() < floor - 1e-9 and _repair_steps < 500:
-    best_s, best_ratio = None, -np.inf
-    for s in solved:
-        if chosen[s] <= 1.0 + 1e-6:      # only walk back segments we raised
-            continue
-        f0 = chosen[s]; f1 = max(1.0, f0 - 0.005)
-        dvol = seg_vol(s, f1) - seg_vol(s, f0)          # >0 (recovering volume)
-        dprof = seg_profit(s, f0) - seg_profit(s, f1)   # profit given up (>=0)
-        ratio = dvol / dprof if dprof > 1e-9 else dvol * 1e9
-        if ratio > best_ratio:
-            best_ratio, best_s = ratio, s
-    if best_s is None:
-        break
-    chosen[best_s] = max(1.0, chosen[best_s] - 0.005)
-    repaired_segs.add(best_s)
-    _repair_steps += 1
+
+def volume_repair(chosen_d, conv):
+    """Greedy repair: while total volume < floor, walk back the raised segment that
+    recovers the most volume per £ of profit given up. Parameterised by a conv(s,f)
+    so BOTH the main solve and the sensitivity re-solves apply the same floor
+    (else the sensitivity uplifts would be inconsistent with a binding constraint)."""
+    def sv(s, f): return conv(s, f) * agg.loc[s, "n"]
+    def sp(s, f): return conv(s, f) * (agg.loc[s, "gwp"] * f - agg.loc[s, "cost"])
+    touched, steps = set(), 0
+    while sum(sv(s, chosen_d[s]) for s in solved) < floor - 1e-9 and steps < 500:
+        best_s, best_ratio = None, -np.inf
+        for s in solved:
+            if chosen_d[s] <= 1.0 + 1e-6:
+                continue
+            f0 = chosen_d[s]; f1 = max(1.0, f0 - 0.005)
+            dvol = sv(s, f1) - sv(s, f0)
+            dprof = sp(s, f0) - sp(s, f1)
+            ratio = dvol / dprof if dprof > 1e-9 else dvol * 1e9
+            if ratio > best_ratio:
+                best_ratio, best_s = ratio, s
+        if best_s is None:
+            break
+        chosen_d[best_s] = max(1.0, chosen_d[best_s] - 0.005); touched.add(best_s); steps += 1
+    return touched, steps
+
+repaired_segs, _repair_steps = volume_repair(chosen, conv_at)
 portfolio_bound = _repair_steps > 0
 print(f"portfolio floor {min_vol_ratio:.0%} of {hold_vol:,.0f}: "
       f"{'repaired in ' + str(_repair_steps) + ' steps' if portfolio_bound else 'non-binding'}, "
@@ -248,19 +255,19 @@ def conv_scaled(s, f, scale):
 
 sens_rows = []
 for scale in [0.5, 0.75, 1.0, 1.25, 1.5]:
-    tot = 0.0
+    cs = {}
     for s in solved:
         lo, hi = bounds[s]
         if elasticity_on:
             negp = lambda f, s=s: -(conv_scaled(s, f, scale) * (agg.loc[s, "gwp"] * f - agg.loc[s, "cost"]))
-            f = float(minimize_scalar(negp, bounds=(lo, hi), method="bounded").x)
+            cs[s] = float(minimize_scalar(negp, bounds=(lo, hi), method="bounded").x)
         else:
-            f = 1.0
-        opt = conv_scaled(s, f, scale) * (agg.loc[s, "gwp"] * f - agg.loc[s, "cost"])
-        hold = conv_scaled(s, 1.0, scale) * (agg.loc[s, "gwp"] - agg.loc[s, "cost"])
-        tot += (opt - hold)
-    sens_rows.append({"elasticity_scale": scale, "profit_uplift": round(tot, 2),
-                      "vs_base_pct": None})
+            cs[s] = 1.0
+    # apply the SAME portfolio volume floor so each scenario is comparable to base
+    volume_repair(cs, lambda s, f: conv_scaled(s, f, scale))
+    tot = sum(conv_scaled(s, cs[s], scale) * (agg.loc[s, "gwp"] * cs[s] - agg.loc[s, "cost"])
+              - conv_scaled(s, 1.0, scale) * (agg.loc[s, "gwp"] - agg.loc[s, "cost"]) for s in solved)
+    sens_rows.append({"elasticity_scale": scale, "profit_uplift": round(tot, 2), "vs_base_pct": None})
 _base = next((r["profit_uplift"] for r in sens_rows if r["elasticity_scale"] == 1.0), None)
 for r in sens_rows:
     r["vs_base_pct"] = round((r["profit_uplift"] / _base - 1) * 100, 1) if _base else None
