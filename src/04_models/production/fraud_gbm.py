@@ -44,7 +44,7 @@ import pyspark.sql.functions as F
 
 mlflow.set_registry_uri("databricks-uc")
 user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get()
-mlflow.set_experiment(f"/Workspace/Users/{user}/pricing_workbench_production_fraud")
+mlflow.set_experiment("/Workspace/Shared/.bundle/pricing-workbench-gen2/experiments/fraud")
 
 fe = FeatureEngineeringClient()
 

@@ -431,7 +431,7 @@ def _call_fm(endpoint: str, messages: list, tools: list):
     import requests as _r
     w = WorkspaceClient()
     host  = w.config.host.rstrip("/")
-    token = w.config._header_factory()
+    token = w.config.authenticate()  # public auth-headers dict (was _header_factory())
     openai_tools = [{
         "type": "function",
         "function": {
@@ -516,8 +516,8 @@ with mlflow.start_run(run_name="governance_agent_deploy"):
         input_example=input_example,
         registered_model_name=agent_uc_name,
         pip_requirements=[
-            "mlflow>=2.16",
-            "databricks-sdk>=0.30.0",
+            "mlflow>=3.0,<4",
+            "databricks-sdk>=0.130.0",
             "pandas",
             "pyarrow",
             "requests",

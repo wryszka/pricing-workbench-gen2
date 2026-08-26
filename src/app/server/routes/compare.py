@@ -258,10 +258,10 @@ async def get_cached(cache_key: str) -> dict:
                holdout_metrics, explain_diff, review,
                requested_by, generated_at
         FROM {fqn('compare_results')}
-        WHERE cache_key = '{cache_key}'
+        WHERE cache_key = :cache_key
         ORDER BY generated_at DESC
         LIMIT 1
-    """)
+    """, {"cache_key": cache_key})
     if not rows:
         raise HTTPException(404, f"no cached result for {cache_key}")
     row = rows[0]

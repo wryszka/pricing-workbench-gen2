@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import GenieChat from '../components/GenieChat';
+import { Page, PageHeader, OnThisPage, Metric, Pill } from '../components/ui';
 
 type Recent = {
   transaction_id: string; company_name: string; postcode: string; region: string;
@@ -40,13 +41,16 @@ export default function QuoteReview() {
   useEffect(() => { api.getConfig().then(setConfig).catch(() => {}); }, []);
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-5">
-        <h2 className="text-2xl font-bold text-gray-900">Quote Review</h2>
-        <p className="text-gray-500 mt-1">
-          Investigate individual commercial quotes end-to-end. From customer call to pricing-engine replay.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Add-ons · Pricing Workbench"
+        title="Quote Review"
+        subtitle="Investigate individual commercial quotes end-to-end. From customer call to pricing-engine replay."
+        icon={Search}
+      />
+      <OnThisPage>
+        Pick a transaction from the recent list (left) to see its three JSON payloads — the sales-channel request, what was sent to the rating engine, and the engine's response. Hit <strong>Re-run</strong> to replay against today's model and see whether the price reproduces. The AI Analyst tab provides root-cause analysis for outliers.
+      </OnThisPage>
 
       {/* Scenario banner — always visible, explains what this thing is for */}
       <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
@@ -100,7 +104,7 @@ export default function QuoteReview() {
       {tab === 'lookup'    && <LookupTab />}
       {tab === 'analytics' && <AnalyticsTab />}
       {tab === 'genie'     && <GenieTab config={config} />}
-    </div>
+    </Page>
   );
 }
 
@@ -201,7 +205,9 @@ function LookupTab() {
                 </div>
                 <div className="text-gray-500 text-[11px] truncate">{r.company_name}</div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <StatusBadge status={r.quote_status} />
+                  <Pill tone={r.quote_status === 'BOUND' ? 'green' : r.quote_status === 'QUOTED' ? 'blue' : 'slate'}>
+                    {r.quote_status}
+                  </Pill>
                   <span className="text-gray-600">{r.gross_premium ? `£${fmtInt(r.gross_premium)}` : '—'}</span>
                 </div>
               </button>
@@ -597,14 +603,17 @@ function AnalyticsTab() {
 
   return (
     <div className="space-y-6">
+      <OnThisPage>
+        KPI tiles show the full quote stream. The outlier table flags any quote above p99 × 3 of its peer group — these are the cases most likely to trigger a complaint. The funnel table shows where customers drop out by channel, and the distribution chart shows premium spread by region.
+      </OnThisPage>
       <div className="grid grid-cols-5 gap-4">
-        <MetricCard label="Transactions" value={fmtInt(total)} />
-        <MetricCard label="Bound"        value={fmtInt(bound)}
-          sub={total ? `${((bound / total) * 100).toFixed(0)}% conversion` : ''} />
-        <MetricCard label="Abandoned"    value={fmtInt(abandoned)}
+        <Metric label="Transactions" value={fmtInt(total)} />
+        <Metric label="Bound"        value={fmtInt(bound)}
+          sub={total ? `${((bound / total) * 100).toFixed(0)}% conversion` : ''} tone="green" />
+        <Metric label="Abandoned"    value={fmtInt(abandoned)}
           sub={total ? `${((abandoned / total) * 100).toFixed(0)}% drop-out` : ''} tone="amber" />
-        <MetricCard label="Avg premium (ex-outliers)" value={summary?.avg_premium ? `£${fmtInt(Number(summary.avg_premium))}` : '—'} />
-        <MetricCard label="Outliers"     value={fmtInt(Number(summary?.outliers) || 0)} tone="red" />
+        <Metric label="Avg premium (ex-outliers)" value={summary?.avg_premium ? `£${fmtInt(Number(summary.avg_premium))}` : '—'} tone="blue" />
+        <Metric label="Outliers"     value={fmtInt(Number(summary?.outliers) || 0)} tone="red" />
       </div>
 
       <div className="grid grid-cols-2 gap-6">
@@ -768,32 +777,6 @@ function Stat({ label, value, sub, subClass, mono }: {
       {sub && <div className={`text-[11px] mt-0.5 ${subClass || 'text-gray-500'}`}>{sub}</div>}
     </div>
   );
-}
-
-function MetricCard({ label, value, sub, tone }: {
-  label: string; value: string; sub?: string; tone?: 'amber' | 'red';
-}) {
-  const toneMap = {
-    amber: 'border-amber-200 bg-amber-50 text-amber-700',
-    red:   'border-red-200 bg-red-50 text-red-700',
-  };
-  const cls = tone ? toneMap[tone] : 'border-gray-200 bg-white text-gray-800';
-  return (
-    <div className={`rounded-lg border p-4 ${cls}`}>
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value}</div>
-      {sub && <div className="text-[11px] mt-0.5 opacity-80">{sub}</div>}
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    BOUND:     'bg-green-100 text-green-700',
-    QUOTED:    'bg-blue-100 text-blue-700',
-    ABANDONED: 'bg-gray-100 text-gray-600',
-  };
-  return <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${map[status] || 'bg-gray-100 text-gray-600'}`}>{status}</span>;
 }
 
 function fmtInt(n: number | null | undefined) {

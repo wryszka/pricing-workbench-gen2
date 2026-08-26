@@ -176,7 +176,7 @@ for cfg in MODEL_CONFIGS:
     print(f"  Base metrics: { {k: round(v, 4) for k, v in base_metrics.items()} }")
 
     champ_source = champ.source   # UC artifact URI of the champion version
-    mlflow.set_experiment(f"/Workspace/Users/{user}/pricing_workbench_{cfg['experiment']}")
+    mlflow.set_experiment(f"/Workspace/Shared/.bundle/pricing-workbench-gen2/experiments/{cfg['experiment']}")
 
     import hashlib
     for i, (sim_date, story_tag, story_text, nudge) in enumerate(STORIES[cfg["name"]]):

@@ -394,8 +394,8 @@ async def _materialise_variants_background(run_id: str, family: str, plan: list[
         await execute_query(f"""
             UPDATE {fqn('factory_runs')}
             SET status = 'COMPLETED', duration_seconds = 12.0
-            WHERE run_id = '{run_id}'
-        """)
+            WHERE run_id = :run_id
+        """, {"run_id": run_id})
 
         await log_audit_event(
             event_type="factory_plan_approved",
@@ -410,8 +410,8 @@ async def _materialise_variants_background(run_id: str, family: str, plan: list[
             await execute_query(f"""
                 UPDATE {fqn('factory_runs')}
                 SET status = 'FAILED', duration_seconds = 0.0
-                WHERE run_id = '{run_id}'
-            """)
+                WHERE run_id = :run_id
+            """, {"run_id": run_id})
         except Exception:
             pass
 
@@ -425,8 +425,8 @@ async def run_status(run_id: str) -> dict:
     rows = await execute_query(f"""
         SELECT run_id, model_family, approved_by, started_at, duration_seconds,
                status, variant_count, narrative
-        FROM {fqn('factory_runs')} WHERE run_id = '{run_id}' LIMIT 1
-    """)
+        FROM {fqn('factory_runs')} WHERE run_id = :run_id LIMIT 1
+    """, {"run_id": run_id})
     if not rows:
         raise HTTPException(404, f"run {run_id} not found")
     r = rows[0]
@@ -514,8 +514,8 @@ async def leaderboard(run_id: str) -> dict:
     rows = await execute_query(f"""
         SELECT variant_id, name, category, n_features, config_json, metrics_json
         FROM {fqn('factory_variants')}
-        WHERE run_id = '{run_id}'
-    """)
+        WHERE run_id = :run_id
+    """, {"run_id": run_id})
     variants = _parse_variant_rows(rows)
     # Default sort: descending Gini
     variants.sort(key=lambda v: -(v["metrics"].get("gini") or 0))
@@ -642,8 +642,8 @@ async def factory_chat(req: ChatRequest) -> dict:
     try:
         run_rows = await execute_query(f"""
             SELECT model_family, status FROM {fqn('factory_runs')}
-            WHERE run_id = '{req.run_id}' LIMIT 1
-        """)
+            WHERE run_id = :run_id LIMIT 1
+        """, {"run_id": req.run_id})
     except Exception as e:
         raise HTTPException(500, f"Run lookup failed: {e}")
     if not run_rows:
@@ -703,8 +703,8 @@ async def promote_variant(run_id: str, variant_id: str) -> dict:
     rows = await execute_query(f"""
         SELECT name, category, config_json, metrics_json
         FROM {fqn('factory_variants')}
-        WHERE run_id = '{run_id}' AND variant_id = '{variant_id}' LIMIT 1
-    """)
+        WHERE run_id = :run_id AND variant_id = :variant_id LIMIT 1
+    """, {"run_id": run_id, "variant_id": variant_id})
     if not rows:
         raise HTTPException(404, f"variant {variant_id} not found in run {run_id}")
     v = rows[0]

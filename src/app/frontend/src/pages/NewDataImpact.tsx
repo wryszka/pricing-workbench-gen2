@@ -5,6 +5,7 @@ import {
   Plus, Sparkles,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { Page, PageHeader, OnThisPage } from '../components/ui';
 
 // Deployed workspace path for the new_data_impact notebooks — comes from
 // /api/config (BUNDLE_FILES_BASE per target), so no deployer home path is baked
@@ -87,22 +88,20 @@ export default function NewDataImpact() {
     host ? `${host}/#workspace${impactBase.slice('/Workspace'.length)}/${file}` : '#';
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <Page>
       <Link to="/add-ons"
-            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-2">
+            className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 -mb-1">
         <ArrowLeft className="w-3.5 h-3.5" /> Back to Add-ons
       </Link>
-
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <BookOpen className="w-6 h-6 text-indigo-600" /> New Data Impact
-        </h2>
-        <p className="text-gray-500 mt-1">
-          Does adding real external data make pricing models better? We trained two models on the same
-          200 000-policy portfolio — one with the standard rating factors, one with those factors plus
-          real UK public data. Here's what we found.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Add-ons · Pricing Workbench"
+        title="New Data Impact"
+        subtitle="Does adding real external data make pricing models better? Two models trained on the same 200 000-policy portfolio — standard rating factors vs those factors plus real UK public data."
+        icon={BookOpen}
+      />
+      <OnThisPage>
+        The headline tiles show before/after Gini, deviance explained, MAE and loss-ratio spread. The comparison section shows which features were added and the lift attribution bar chart shows where the improvement came from. Notebooks at the bottom link to the live Databricks workspace — open them for the exact outputs of the current run.
+      </OnThisPage>
 
       {/* Executive headline strip */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -255,7 +254,7 @@ export default function NewDataImpact() {
         ONS Rural-Urban Classification 2011 — all under the Open Government Licence.
         No real customer data is used in this module.
       </div>
-    </div>
+    </Page>
   );
 }
 

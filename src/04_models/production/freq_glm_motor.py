@@ -41,15 +41,20 @@ from databricks.feature_engineering import FeatureEngineeringClient, FeatureLook
 
 mlflow.set_registry_uri("databricks-uc")
 user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get()
-mlflow.set_experiment(f"/Workspace/Users/{user}/pricing_workbench_production_motor_freq")
+mlflow.set_experiment("/Workspace/Shared/.bundle/pricing-workbench-gen2/experiments/motor_freq")
 
 fe = FeatureEngineeringClient()
 
 # COMMAND ----------
 
+# REGULATORY: `gender` is deliberately NOT a rating factor. EU/UK pricing must
+# not rate on gender (Test-Achats), so it is excluded from the frequency GLM's
+# design matrix — no fitted coefficient, no effect on premium. The column stays
+# in the mart and is still collected, but only for post-hoc FAIRNESS monitoring,
+# never as a model input.
 FEATURES = [
     "driver_age", "license_years_held", "no_claims_years",
-    "gender", "marital_status", "occupation_class",
+    "marital_status", "occupation_class",
     "vehicle_group", "vehicle_value", "vehicle_age",
     "annual_mileage", "parking_overnight", "business_use", "fuel_type",
     "prior_convictions", "prior_accidents_5y",

@@ -80,6 +80,12 @@ if not rating_row:
 
 RATING_CFG = {
     "version":                 rating_row[0]["version"],
+    # freq_glm is trained on `claim_count_5y` (a FIVE-YEAR claim count) but a
+    # premium covers ONE year, so the scorer divides the GLM output by this
+    # before multiplying by per-claim severity — otherwise the commercial
+    # technical premium is ~5x overstated. Mirrors the motor scorer's
+    # `freq_exposure_years`. Retrain the GLM on a 1-year count → set to 1.0.
+    "freq_exposure_years":     5.0,
     "expense_loading_pct":     float(rating_row[0]["expense_loading_pct"]),
     "commission_bp":           int(rating_row[0]["commission_bp"]),
     "fraud_loading_pct":       float(rating_row[0]["fraud_loading_pct"]),
@@ -328,15 +334,29 @@ class PricingScorer(PythonModel):
             return ser.astype(float).fillna(float(default)) if not isinstance(default, str) else ser.fillna(default)
         return pd.Series([default] * len(df), index=df.index)
 
-    def _build_demand_input(self, df):
+    def _build_demand_input(self, df, proposed_premium=None):
         """The demand model was trained on quote-level features (channel,
         voluntary_excess, gross_premium_quoted etc.) that don't exist on a
         policy. Project policy attributes through deterministic defaults so
-        the demand prediction is stable per policy_id."""
+        the demand prediction is stable per policy_id.
+
+        `proposed_premium` is the price we just computed for THIS quote
+        (loaded + fraud_load, before the demand fine-tune). Demand must be
+        evaluated at the proposed price, not the stale in-force premium — else
+        the conversion signal reflects a price we are no longer offering."""
         import numpy as np, pandas as pd
         sum_insured     = self._col(df, "sum_insured",     1_000_000.0).astype(float)
         current_premium = self._col(df, "current_premium", 1500.0).astype(float)
         market_median   = self._col(df, "market_median_rate", 1.5).astype(float)
+
+        # Evaluate demand at the computed price. Fall back to current_premium
+        # for any row where a computed premium isn't available (guards new
+        # business that has no prior in-force premium, and any zero/NaN).
+        if proposed_premium is not None:
+            quoted = pd.Series(np.asarray(proposed_premium, dtype=float), index=df.index)
+            quoted = quoted.where(np.isfinite(quoted) & (quoted > 0), current_premium)
+        else:
+            quoted = current_premium
 
         out = pd.DataFrame(index=df.index)
         out["channel"]              = "broker"
@@ -349,8 +369,8 @@ class PricingScorer(PythonModel):
         out["contents_si"]          = sum_insured * 0.2
         out["liability_si"]         = 1_000_000.0
         out["voluntary_excess"]     = 500.0
-        out["gross_premium_quoted"] = current_premium
-        out["log_gross_premium"]    = np.log1p(current_premium)
+        out["gross_premium_quoted"] = quoted.values
+        out["log_gross_premium"]    = np.log1p(quoted.values)
         out["log_buildings_si"]     = np.log1p(sum_insured)
         out["rate_per_1k_si"]       = self._col(df, "rate_per_1k_si", 1.5).astype(float)
         out["vs_market_rate"]       = self._col(df, "market_position_ratio", 1.0).astype(float)
@@ -365,14 +385,30 @@ class PricingScorer(PythonModel):
         out["alarmed"]              = 0
         return out
 
-    def _apply_rules(self, freq, sev, demand, fraud):
+    def _apply_rules(self, freq, sev, fraud):
+        """Price up to but EXCLUDING the demand adjustment. Demand is then
+        evaluated at this computed premium (see predict) and _apply_demand
+        finalises. Returns (technical, loaded, fraud_load)."""
         import numpy as np
         cfg       = self.rating_cfg
-        technical = freq * sev
+        # freq_glm is trained on `claim_count_5y` — a FIVE-YEAR claim count —
+        # but a premium covers ONE year, so annualise before meeting per-claim
+        # severity. Without this the commercial technical premium is ~5x too
+        # high. `freq_exposure_years` keeps the divisor explicit and matches the
+        # motor scorer; retrain the GLM on a 1-year count and set it to 1.0.
+        annual_freq = freq / float(cfg.get("freq_exposure_years", 1.0) or 1.0)
+        technical = annual_freq * sev
         loaded    = technical * (1.0 + cfg["expense_loading_pct"] / 100.0) \
                               * (1.0 + cfg["commission_bp"] / 10_000.0)
         fraud_load = np.where(fraud > cfg["fraud_loading_threshold"],
                               loaded * cfg["fraud_loading_pct"] / 100.0, 0.0)
+        return technical, loaded, fraud_load
+
+    def _apply_demand(self, loaded, fraud_load, demand):
+        """Apply the demand adjustment (evaluated at the computed price) and
+        clip to the premium band. Returns (demand_adj, final)."""
+        import numpy as np
+        cfg = self.rating_cfg
         demand_adj = np.where(demand < cfg["demand_adj_threshold_lo"],
                               loaded * cfg["demand_adj_pct"] / 100.0,
                               np.where(demand > cfg["demand_adj_threshold_hi"],
@@ -380,7 +416,7 @@ class PricingScorer(PythonModel):
                                        0.0))
         final = np.clip(loaded + fraud_load + demand_adj,
                         cfg["min_premium"], cfg["max_premium"])
-        return technical, loaded, fraud_load, demand_adj, final
+        return demand_adj, final
 
     def predict(self, context, model_input, params=None):
         import pandas as pd, numpy as np
@@ -400,10 +436,15 @@ class PricingScorer(PythonModel):
         freq   = self._score_glm(self.freq,   features_df)
         sev    = self._score_glm(self.sev,    features_df)
         fraud  = self._score_lgb(self.fraud,  features_df)
-        demand = self._score_lgb(self.demand, self._build_demand_input(features_df))
 
-        technical, loaded, fraud_load, demand_adj, final = self._apply_rules(
-            freq, sev, demand, fraud)
+        # Price up to (not including) the demand adjustment first, so demand can
+        # be evaluated at the price we're actually proposing for this quote
+        # rather than the stale in-force premium.
+        technical, loaded, fraud_load = self._apply_rules(freq, sev, fraud)
+        proposed_premium = loaded + fraud_load
+        demand = self._score_lgb(
+            self.demand, self._build_demand_input(features_df, proposed_premium))
+        demand_adj, final = self._apply_demand(loaded, fraud_load, demand)
 
         n = len(model_input)
         return pd.DataFrame({

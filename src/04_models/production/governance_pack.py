@@ -1096,7 +1096,7 @@ try:
     import requests as _rq
     _w = _WC()
     _host  = _w.config.host.rstrip("/")
-    _token = _w.config._header_factory()
+    _token = _w.config.authenticate()
     _q = (f"Review {family} version {version} for director_gender bias in "
           f"pack-baked mode. Report DETECTION, DIAGNOSIS, JUSTIFICATION, "
           f"EVIDENCE, MITIGATION, CONCLUSION in 5-8 sentences per section.")

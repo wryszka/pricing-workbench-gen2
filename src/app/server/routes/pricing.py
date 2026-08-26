@@ -81,8 +81,8 @@ async def get_release(release_id: str) -> dict:
                status, freq_glm_version, sev_glm_version, demand_gbm_version,
                fraud_gbm_version, rating_engine_version, approved_by, narrative
         FROM {fqn('pricing_engine_releases')}
-        WHERE release_id = '{release_id}' LIMIT 1
-    """)
+        WHERE release_id = :release_id LIMIT 1
+    """, {"release_id": release_id})
     if not rows:
         raise HTTPException(404, f"release '{release_id}' not found")
     return _coerce_release(rows[0])
@@ -329,10 +329,10 @@ async def _score_via_inference_logs(policy_id: str) -> dict | None:
                    technical_premium,
                    freq_version, sev_version, demand_version, fraud_version
             FROM {fqn('inference_logs')}
-            WHERE policy_id = '{policy_id}'
+            WHERE policy_id = :policy_id
             ORDER BY scored_at DESC
             LIMIT 1
-        """)
+        """, {"policy_id": policy_id})
     except Exception as e:
         logger.info("inference_logs lookup for %s failed: %s", policy_id, e)
         return None
@@ -370,7 +370,7 @@ async def _score_via_endpoint(policy_id: str) -> dict | None:
         try:
             w = get_workspace_client()
             host  = w.config.host.rstrip("/")
-            token = w.config._header_factory()
+            token = w.config.authenticate()
             resp = _rq.post(
                 f"{host}/serving-endpoints/{SCORER_ENDPOINT}/invocations",
                 headers={**token, "Content-Type": "application/json"},
@@ -440,8 +440,8 @@ async def _current_config() -> dict:
 async def _config_row_by_version(version: str) -> dict | None:
     rows = await execute_query(f"""
         SELECT * FROM {fqn('rating_engine_config')}
-        WHERE version = '{version}' LIMIT 1
-    """)
+        WHERE version = :version LIMIT 1
+    """, {"version": version})
     return rows[0] if rows else None
 
 
@@ -834,8 +834,8 @@ async def policy_context(policy_id: str) -> dict:
                cast(renewal_date   AS string) AS renewal_date,
                current_premium, industry_risk_tier, region, construction_type
         FROM {fqn('unified_pricing_table_live')}
-        WHERE policy_id = '{policy_id}' LIMIT 1
-    """)
+        WHERE policy_id = :policy_id LIMIT 1
+    """, {"policy_id": policy_id})
     if not rows:
         raise HTTPException(404, f"policy {policy_id} not found")
     p = rows[0]
@@ -918,8 +918,8 @@ async def simulate_mta(req: MtaRequest) -> dict:
     policy_id = req.policy_id.strip().upper()
     rows = await execute_query(f"""
         SELECT * FROM {fqn('unified_pricing_table_live')}
-        WHERE policy_id = '{policy_id}' LIMIT 1
-    """)
+        WHERE policy_id = :policy_id LIMIT 1
+    """, {"policy_id": policy_id})
     if not rows:
         raise HTTPException(404, f"policy {policy_id} not found")
     policy = rows[0]

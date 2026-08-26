@@ -209,8 +209,8 @@ async def run_status(run_id: str) -> dict:
     rows = await execute_query(f"""
         SELECT run_id, model_family, approved_by, started_at, duration_seconds,
                status, variant_count, narrative
-        FROM {fqn('factory_runs')} WHERE run_id = '{run_id}' LIMIT 1
-    """)
+        FROM {fqn('factory_runs')} WHERE run_id = :run_id LIMIT 1
+    """, {"run_id": run_id})
     if not rows:
         raise HTTPException(404, f"run {run_id} not found")
     r = rows[0]
@@ -218,8 +218,8 @@ async def run_status(run_id: str) -> dict:
     # Count real variants written so far
     try:
         vc = await execute_query(f"""
-            SELECT count(*) AS n FROM {fqn('factory_variants')} WHERE run_id = '{run_id}'
-        """)
+            SELECT count(*) AS n FROM {fqn('factory_variants')} WHERE run_id = :run_id
+        """, {"run_id": run_id})
         n_complete = int(vc[0]["n"]) if vc else 0
     except Exception:
         n_complete = 0
@@ -284,8 +284,8 @@ async def leaderboard(run_id: str) -> dict:
     rows = await execute_query(f"""
         SELECT variant_id, name, category, n_features, config_json, metrics_json
         FROM {fqn('factory_variants')}
-        WHERE run_id = '{run_id}'
-    """)
+        WHERE run_id = :run_id
+    """, {"run_id": run_id})
     variants = _parse_variants(rows)
     variants.sort(key=lambda v: -(v["metrics"].get("gini") or 0))
     return {"run_id": run_id, "variants": variants, "n_total": len(variants), "mode": "real"}

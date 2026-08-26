@@ -5,6 +5,7 @@ import {
   UserCircle2, MessageSquare, TrendingDown, TrendingUp, Info,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { Page, PageHeader, OnThisPage, Metric } from '../components/ui';
 
 type Variant = {
   variant_id: string;
@@ -63,16 +64,16 @@ const API_BY_MODE = {
 export default function ModelFactory() {
   const [mode, setMode] = useState<Mode>('demo');
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <FlaskConical className="w-6 h-6 text-indigo-600" /> Model Factory
-        </h2>
-        <p className="text-gray-500 mt-1">
-          Systematic generation and review of many candidate models. Four steps: analyse &amp; plan,
-          train, review, selectively package for promotion.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Model Development · Pricing Workbench"
+        title="Model Factory"
+        subtitle="Systematic generation and review of many candidate models. Four steps: analyse & plan, train, review, selectively package for promotion."
+        icon={FlaskConical}
+      />
+      <OnThisPage>
+        Choose a model family, click <strong>Propose plan</strong> to let the Pricing AI suggest a variant set, then approve to kick off training. Switch to <strong>Real</strong> to fit actual models on the Modelling Mart. After training, use the leaderboard, portfolio what-if and shortlist to select variants for governance packaging.
+      </OnThisPage>
 
       <div className="flex gap-1 border-b border-gray-200 mb-5">
         <button onClick={() => setMode('demo')}
@@ -90,7 +91,7 @@ export default function ModelFactory() {
       </div>
 
       <FactoryFlow key={mode} mode={mode} />
-    </div>
+    </Page>
   );
 }
 
@@ -360,11 +361,11 @@ function StepPlan({ family, setFamily, proposing, propose, plan, narrative, revi
 
           {/* Plan summary */}
           <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <SummaryTile label="Total variants"         value={plan.length.toString()} />
-            <SummaryTile label="Feature-subset probes"  value={plan.filter(v => v.category === 'feature_subset').length.toString()} />
-            <SummaryTile label="Interaction probes"     value={plan.filter(v => v.category === 'interactions').length.toString()} />
-            <SummaryTile label="Banding probes"         value={plan.filter(v => v.category === 'banding').length.toString()} />
-            <SummaryTile label="Distributional families" value={new Set(plan.map(v => v.glm?.family)).size.toString()} />
+            <Metric label="Total variants"         value={plan.length.toString()} />
+            <Metric label="Feature-subset probes"  value={plan.filter(v => v.category === 'feature_subset').length.toString()} />
+            <Metric label="Interaction probes"     value={plan.filter(v => v.category === 'interactions').length.toString()} />
+            <Metric label="Banding probes"         value={plan.filter(v => v.category === 'banding').length.toString()} />
+            <Metric label="Distributional families" value={new Set(plan.map(v => v.glm?.family)).size.toString()} />
           </section>
 
           {/* Plan table */}
@@ -420,15 +421,6 @@ function StepPlan({ family, setFamily, proposing, propose, plan, narrative, revi
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function SummaryTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg p-3">
-      <div className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</div>
-      <div className="text-2xl font-semibold text-gray-900 mt-0.5">{value}</div>
     </div>
   );
 }
@@ -862,7 +854,7 @@ function ChatPane({ runId, apiSet }: { runId: string; apiSet: typeof API_BY_MODE
           </span>
         </h3>
       </div>
-      <div className="flex flex-col" style={{ height: '560px' }}>
+      <div className="flex flex-col" style={{ height: 'clamp(420px, calc(100vh - 280px), 720px)' }}>
         <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50">
           {turns.length === 0 ? (
             <div className="py-2">

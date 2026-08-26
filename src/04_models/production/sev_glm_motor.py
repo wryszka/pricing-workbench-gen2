@@ -36,7 +36,7 @@ from pyspark.sql.functions import col
 
 mlflow.set_registry_uri("databricks-uc")
 user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get()
-mlflow.set_experiment(f"/Workspace/Users/{user}/pricing_workbench_production_motor_sev")
+mlflow.set_experiment("/Workspace/Shared/.bundle/pricing-workbench-gen2/experiments/motor_sev")
 fe = FeatureEngineeringClient()
 
 # COMMAND ----------
@@ -120,9 +120,9 @@ print(f"Train: {len(X_train):,}   Test: {len(X_test):,}")
 FEATURE_NAMES = list(X.columns)
 
 class GammaGLMWrapper(BaseEstimator, RegressorMixin):
-    def __init__(self, result, feature_names, raw_features, log_cols, scaler):
+    def __init__(self, result, feature_names, raw_features, log_cols, scaler, smearing=1.0):
         self.result=result; self.feature_names=feature_names; self.raw_features=raw_features
-        self.log_cols=log_cols; self.scaler=scaler
+        self.log_cols=log_cols; self.scaler=scaler; self.smearing=float(smearing)
     def fit(self, X, y): return self
     def _transform(self, X):
         if hasattr(X, "columns"):
@@ -145,22 +145,33 @@ class GammaGLMWrapper(BaseEstimator, RegressorMixin):
         return Xd.values
     def predict(self, X):
         log_y = self.result.predict(sm.add_constant(self._transform(X), has_constant="add"))
-        return np.exp(log_y)
+        # Duan/log-normal smearing correction — back-transform on the mean scale.
+        return self.smearing * np.exp(log_y)
 
-tags = {"feature_table": upt_table, "model_type": "GLM_Gamma_Motor", "story": "champion"}
+tags = {"feature_table": upt_table,
+        "model_type": "OLS on log-severity (Gamma approximation)", "story": "champion"}
 
 with mlflow.start_run(run_name=f"sev_glm_motor_{run_name}", tags=tags) as run:
-    mlflow.log_params({"family":"Gamma","link":"log","features":len(FEATURE_NAMES),
+    mlflow.log_params({"family":"OLS on log-severity (Gamma approximation)","link":"log",
+                       "features":len(FEATURE_NAMES),
                        "train_rows":len(X_train),"test_rows":len(X_test)})
     # Fit OLS on log(y) — equivalent to Gamma GLM with log link for large samples
     log_y = np.log(y_train.values)
     res = sm.OLS(log_y, sm.add_constant(X_train.values, has_constant="add")).fit()
-    y_pred = np.exp(res.predict(sm.add_constant(X_test.values, has_constant="add")))
+    # Duan/log-normal smearing constant exp(0.5 * log-residual variance),
+    # captured ONCE at fit time. Without it the exp() back-transform is biased
+    # ~20-27% low; the wrapper multiplies every prediction by it (mean scale).
+    resid_var = float(res.mse_resid)
+    smearing  = float(np.exp(0.5 * resid_var))
+    y_pred = smearing * np.exp(res.predict(sm.add_constant(X_test.values, has_constant="add")))
     mae = float(mean_absolute_error(y_test, y_pred))
     mlflow.log_metrics({"mae": mae, "n_train": len(X_train)})
-    print(f"MAE={mae:.0f}")
+    mlflow.log_params({"log_resid_var": round(resid_var, 6),
+                       "smearing_factor": round(smearing, 6)})
+    print(f"MAE={mae:.0f}  smearing={smearing:.4f}")
 
-    wrapper = GammaGLMWrapper(res, FEATURE_NAMES, FEATURES, LOG_COLS, SCALER)
+    wrapper = GammaGLMWrapper(res, FEATURE_NAMES, FEATURES, LOG_COLS, SCALER,
+                              smearing=smearing)
 
     from mlflow.models.signature import infer_signature
     sample_X    = _prep(training_pdf.head(5))

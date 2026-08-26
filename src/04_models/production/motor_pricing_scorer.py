@@ -125,8 +125,11 @@ artifact_paths["config"] = cfg_path
 
 # Feature unions across the three motor sub-models.
 FREQ_FEATURES = [
+    # `gender` is intentionally absent — the frequency GLM must not rate on it
+    # (EU/UK Test-Achats). It stays in the FeatureLookup union below because the
+    # fraud/demand models and fairness monitoring still read it.
     "driver_age", "license_years_held", "no_claims_years",
-    "gender", "marital_status", "occupation_class",
+    "marital_status", "occupation_class",
     "vehicle_group", "vehicle_value", "vehicle_age",
     "annual_mileage", "parking_overnight", "business_use", "fuel_type",
     "prior_convictions", "prior_accidents_5y",
@@ -410,7 +413,7 @@ _served_entity = {
     "workload_type": "CPU",
 }
 _host = w.config.host.rstrip("/")
-_hdrs = {**w.config._header_factory(), "Content-Type": "application/json"}
+_hdrs = {**w.config.authenticate(), "Content-Type": "application/json"}
 
 import time as _time
 

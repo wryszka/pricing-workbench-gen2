@@ -68,7 +68,7 @@ def _price_blocking(features: dict[str, Any]) -> tuple[float, int, dict | None, 
         try:
             w = get_workspace_client()
             host = w.config.host.rstrip("/")
-            token = w.config._header_factory()
+            token = w.config.authenticate()  # public auth-headers dict (was _header_factory())
             resp = _get_session().post(
                 f"{host}/serving-endpoints/{DIRECT_ENDPOINT}/invocations",
                 headers={**token, "Content-Type": "application/json"},

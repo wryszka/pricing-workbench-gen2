@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import type { ReactNode, ComponentType } from 'react';
-import { ChevronRight, Sparkles, Send, Loader2 } from 'lucide-react';
+import { ChevronRight, Sparkles, Send, Loader2, Archive, Zap } from 'lucide-react';
 import { api } from '../lib/api';
 
 // ---------------------------------------------------------------------------
@@ -264,7 +264,7 @@ export function UnderTheHood({ title, lines }: {
     <section className="border border-line bg-white rounded-xl overflow-hidden">
       <button onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-2 px-3.5 py-2.5 text-left hover:bg-slate-50 transition">
-        <span className="text-[11px] uppercase tracking-[0.08em] font-bold text-mut">⌘ Under the hood</span>
+        <span className="text-[11px] uppercase tracking-[0.08em] font-bold text-mut">⌘ How does this work?</span>
         {title && <span className="text-[11px] text-mut truncate">· {title}</span>}
         <ChevronRight className={`w-3.5 h-3.5 ml-auto text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
@@ -299,4 +299,68 @@ export function Page({ children, className = '' }: { children: ReactNode; classN
 export function Grid({ cols = 3, children, className = '' }: { cols?: 1 | 2 | 3 | 4 | 5 | 6; children: ReactNode; className?: string }) {
   const c = { 1: '', 2: 'md:grid-cols-2', 3: 'md:grid-cols-3', 4: 'md:grid-cols-4', 5: 'md:grid-cols-5', 6: 'md:grid-cols-6' }[cols];
   return <div className={`grid grid-cols-1 ${c} gap-4 ${className}`}>{children}</div>;
+}
+
+// ---------------------------------------------------------------------------
+// AiModeBadge — live vs cached toggle. Used in the sidebar AND injected into
+// standalone page headers (BrokerChat, QuoteSystem) so the mode is always
+// visible when those pages are open direct.
+// ---------------------------------------------------------------------------
+export function AiModeBadge({ theme = 'dark' }: { theme?: 'dark' | 'light' }) {
+  const [mode, setMode] = useState<'live' | 'cached' | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [entries, setEntries] = useState<number>(0);
+
+  useEffect(() => {
+    fetch('/api/admin/ai-mode')
+      .then((r) => r.json())
+      .then((d) => { setMode(d.mode); setEntries(d.entries ?? 0); })
+      .catch(() => setMode('live'));
+  }, []);
+
+  async function flip() {
+    if (busy || !mode) return;
+    setBusy(true);
+    const next = mode === 'live' ? 'cached' : 'live';
+    try {
+      const r = await fetch('/api/admin/ai-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ mode: next }),
+      });
+      const d = await r.json();
+      setMode(d.mode);
+      setEntries(d.entries ?? 0);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const isCached = mode === 'cached';
+  const Icon = isCached ? Archive : Zap;
+  const colour = theme === 'dark'
+    ? (isCached
+        ? 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border-amber-400/30'
+        : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border-emerald-400/30')
+    : (isCached
+        ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100');
+
+  return (
+    <button
+      type="button"
+      onClick={flip}
+      disabled={!mode || busy}
+      title={isCached
+        ? `Serving cached AI responses (${entries} stored). Click to switch to live.`
+        : 'Calling real serving endpoints. Click to switch to cached / consistent / fast.'}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors disabled:opacity-50 ${colour}`}
+    >
+      <Icon className="w-3.5 h-3.5 shrink-0" />
+      <span>AI: {mode ?? '…'}</span>
+      {isCached && entries > 0 && (
+        <span className="text-[10px] opacity-70">{entries}</span>
+      )}
+    </button>
+  );
 }

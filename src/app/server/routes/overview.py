@@ -187,7 +187,7 @@ async def ai_summary():
         import requests
         w = get_workspace_client()
         host = w.config.host.rstrip("/")
-        token = w.config._header_factory()
+        token = w.config.authenticate()
         prompt = (
             "You are a pricing-operations control tower. In 2-3 short sentences, "
             "summarise the current state for a chief pricing actuary and say what to "

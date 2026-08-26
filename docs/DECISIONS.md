@@ -50,7 +50,10 @@ demand model (unchanged), just not fronted by an optimiser.
   demand model as `offered ÷ loaded` (deviation from the technically-correct price); the
   pure `freq_glm_motor × sev_glm_motor` cost is the **margin floor**. Without this a real
   premium reads ~37% above "technical" and the ±15% corridor is incoherent. *Verified:*
-  hold £7.95m → opt £8.79m (+£837k, +10.5%), all segments within corridor.
+  hold £9.38m → opt £10.39m (+£1.00m, +10.7%), all segments within corridor.
+  *(Figures re-measured 2026-08-26 after the model-correctness fixes — severity Duan
+  smearing and gender removal shifted the motor technical base, so the book GWP and
+  uplift rose from the earlier £7.95m→£8.79m/+£837k.)*
 - **`mlflow.lightgbm`, not `mlflow.sklearn`, for the elasticity models.** Newer MLflow
   serialises sklearn models via skops, which rejects LightGBM's Booster as an untrusted
   type. *Verified:* both models register + alias @champion and load on the driver.

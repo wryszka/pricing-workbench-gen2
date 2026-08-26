@@ -56,7 +56,7 @@ print(f"run_id={run_id}  target={target_qps} qps for {duration_s}s  concurrency=
 w     = WorkspaceClient()
 host  = w.config.host.rstrip("/")
 url   = f"{host}/serving-endpoints/{endpoint_name}/invocations"
-token = w.config._header_factory()
+token = w.config.authenticate()
 
 # Sample policy_ids — pull a few thousand to randomise across the load test
 sample_size = max(1000, target_qps * 10)

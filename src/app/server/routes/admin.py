@@ -19,14 +19,18 @@ RESET_JOB_NAME = "v1 — Demo reset (landing page button)"
 
 def _require_admin(action: str) -> None:
     """Gate destructive, everyone-affecting actions (demo reset, sleep, cache
-    clear) behind an allowlist so a random viewer can't wipe a live demo for all
-    users. ADMIN_USERS is a comma-separated env of emails. If it's unset the
-    guard is permissive (preserves single-presenter behaviour) but logs a warning
-    — set ADMIN_USERS in app.yaml to enforce for a shared demo."""
+    clear, optimiser deploy) behind an allowlist so a random viewer can't wipe a
+    live demo — or deploy pricing changes — for all users. ADMIN_USERS is a
+    comma-separated env of emails.
+
+    FAILS CLOSED: if ADMIN_USERS is unset the action is denied for everyone. A
+    misconfigured deploy therefore locks the admin surface rather than silently
+    allowing any authenticated viewer to run destructive/deploy actions. Every
+    shipped app.yaml sets ADMIN_USERS; add each presenter's email there."""
     allow = [u.strip().lower() for u in os.getenv("ADMIN_USERS", "").split(",") if u.strip()]
     if not allow:
-        logger.warning("ADMIN_USERS not set — '%s' allowed for any user (set ADMIN_USERS to restrict)", action)
-        return
+        logger.error("ADMIN_USERS not set — denying '%s' (fail-closed). Set ADMIN_USERS in app.yaml.", action)
+        raise HTTPException(403, f"'{action}' is admin-only but ADMIN_USERS is not configured; access denied.")
     user = (get_current_user() or "").lower()
     if user not in allow:
         raise HTTPException(403, f"'{action}' is admin-only. {user or 'unknown user'} is not in ADMIN_USERS.")
@@ -300,7 +304,7 @@ def _set_lakebase_stopped(name: str, stopped: bool) -> dict:
     import requests as _rq
     w = get_workspace_client()
     host  = w.config.host.rstrip("/")
-    token = w.config._header_factory()
+    token = w.config.authenticate()
     try:
         resp = _rq.patch(
             f"{host}/api/2.0/database/instances/{name}?update_mask=stopped",
@@ -360,7 +364,7 @@ async def cost_status() -> dict:
     import asyncio, requests as _rq
     w = get_workspace_client()
     host  = w.config.host.rstrip("/")
-    token = w.config._header_factory()
+    token = w.config.authenticate()
 
     def _serving(ep: str) -> dict:
         try:

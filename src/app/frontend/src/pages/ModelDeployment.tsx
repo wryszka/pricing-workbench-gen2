@@ -382,7 +382,7 @@ function LiveEndpointMetrics({ families }: { families: Family[] }) {
         <div className="text-[11px] text-mut inline-flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           Updated every 2s
-          <Pill tone="amber" className="ml-1">demo</Pill>
+          <Pill tone="amber" className="ml-1">demo simulation</Pill>
         </div>
       </div>
 

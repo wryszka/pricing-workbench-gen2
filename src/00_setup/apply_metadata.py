@@ -560,7 +560,7 @@ grant_skipped = 0
 # tag / govern the model.
 import requests
 host  = w.config.host.rstrip("/")
-token = w.config._header_factory()
+token = w.config.authenticate()  # public auth-headers dict (was _header_factory())
 for m in APP_SP_MODELS:
     full_name = f"{fqn}.{m}"
     try:

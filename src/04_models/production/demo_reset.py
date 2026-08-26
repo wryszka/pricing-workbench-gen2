@@ -447,7 +447,7 @@ try:
     import requests as _rq
     _w = _W()
     _host = _w.config.host.rstrip("/")
-    _token_hdr = _w.config._header_factory()
+    _token_hdr = _w.config.authenticate()
     # Find the workbench app on this workspace — name is stable across targets.
     _app_url = None
     try:

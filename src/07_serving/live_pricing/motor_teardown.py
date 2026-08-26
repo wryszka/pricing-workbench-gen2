@@ -47,7 +47,7 @@ except Exception as e:
 # Stop the Lakebase instance (retry through transitional states; verify it
 # reaches stopped so deactivate is reliable rather than fire-and-forget).
 _host = w.config.host.rstrip("/")
-_hdrs = lambda: {**w.config._header_factory(), "Content-Type": "application/json"}
+_hdrs = lambda: {**w.config.authenticate(), "Content-Type": "application/json"}
 
 def _instance():
     r = _rq.get(f"{_host}/api/2.0/database/instances/{online_store}", headers=_hdrs(), timeout=30)

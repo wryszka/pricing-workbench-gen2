@@ -5,6 +5,7 @@ import {
   RefreshCw, Terminal, Copy, Check,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { Page, PageHeader, OnThisPage } from '../components/ui';
 
 /**
  * Agentic Distribution — the carrier's presence in the agent channel.
@@ -46,16 +47,16 @@ export default function AgenticDistribution() {
   const p = tel?.premiums || {};
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Network className="w-6 h-6 text-violet-600" /> Agentic Distribution
-        </h2>
-        <p className="text-gray-500 mt-1">
-          Being present and priceable when the customer arrives through an AI agent
-          rather than a website. Three channels, one pricing engine.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Add-ons · Pricing Workbench"
+        title="Agentic Distribution"
+        subtitle="Being present and priceable when the customer arrives through an AI agent rather than a website. Three channels, one pricing engine."
+        icon={Network}
+      />
+      <OnThisPage>
+        The panel shows channel telemetry from the last 24 hours — sessions, priced quotes, and tool-call latency from the conversational journey and MCP endpoints. Numbers start at zero before the first run. Copy the MCP URL and point any agent client at it to see live calls appear below.
+      </OnThisPage>
 
       {/* What am I seeing */}
       <div className="mb-6 rounded-lg border border-gray-200 bg-white">
@@ -228,7 +229,7 @@ export default function AgenticDistribution() {
         </Panel>
       </div>
 
-      {/* Recent */}
+      {/* Recent calls */}
       <Panel title="Recent calls">
         {tel?.recent?.length ? (
           <div className="overflow-x-auto max-h-72 overflow-y-auto">
@@ -268,7 +269,7 @@ export default function AgenticDistribution() {
           </div>
         ) : <Empty />}
       </Panel>
-    </div>
+    </Page>
   );
 }
 

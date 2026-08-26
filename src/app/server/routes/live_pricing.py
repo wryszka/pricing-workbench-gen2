@@ -249,7 +249,7 @@ async def endpoint_scale() -> dict:
         import requests as _rq
         w = get_workspace_client()
         host  = w.config.host.rstrip("/")
-        token = w.config._header_factory()
+        token = w.config.authenticate()
         out: dict[str, Any] = {"endpoint": ENDPOINT_NAME}
         # min/max from config
         try:
@@ -295,8 +295,8 @@ async def policy_profile(policy_id: str) -> dict:
                recent_speeding_events, recent_curfew_breaches,
                recent_harsh_braking_30d, telematics_recent_event_count
         FROM {fqn(UPT_TABLE_NAME)}
-        WHERE policy_id = '{pid}' LIMIT 1
-    """)
+        WHERE policy_id = :pid LIMIT 1
+    """, {"pid": pid})
     if not rows:
         raise HTTPException(404, f"policy {pid} not found")
     r = rows[0]
@@ -557,7 +557,7 @@ async def quote_whatif(req: WhatIfRequest) -> dict:
     # Pull the policy's full feature row from the feature table.
     cols = ", ".join(WHATIF_FEATURES)
     rows = await execute_query(
-        f"SELECT {cols} FROM {fqn(UPT_TABLE_NAME)} WHERE policy_id = '{pid}' LIMIT 1")
+        f"SELECT {cols} FROM {fqn(UPT_TABLE_NAME)} WHERE policy_id = :pid LIMIT 1", {"pid": pid})
     if not rows:
         raise HTTPException(404, f"policy {pid} not found")
     feat = {k: rows[0].get(k) for k in WHATIF_FEATURES}
@@ -575,7 +575,7 @@ async def quote_whatif(req: WhatIfRequest) -> dict:
         import requests as _rq
         w = get_workspace_client()
         host  = w.config.host.rstrip("/")
-        token = w.config._header_factory()
+        token = w.config.authenticate()
         t0 = time.perf_counter()
         try:
             resp = _rq.post(
@@ -663,8 +663,8 @@ async def telematics_event(req: TelematicsEventRequest,
         SELECT behaviour_score, recent_speeding_events, recent_curfew_breaches,
                recent_harsh_braking_30d, telematics_recent_event_count
         FROM {fqn(UPT_TABLE_NAME)}
-        WHERE policy_id = '{pid}' LIMIT 1
-    """)
+        WHERE policy_id = :pid LIMIT 1
+    """, {"pid": pid})
     if not before_rows:
         raise HTTPException(404, f"policy {pid} not found")
     before = before_rows[0]
@@ -684,8 +684,8 @@ async def telematics_event(req: TelematicsEventRequest,
             recent_curfew_breaches    = recent_curfew_breaches    + {cb_inc},
             recent_harsh_braking_30d  = recent_harsh_braking_30d  + {hb_inc},
             behaviour_score           = GREATEST(0, LEAST(100, behaviour_score - {bs_dec}))
-        WHERE policy_id = '{pid}'
-    """)
+        WHERE policy_id = :pid
+    """, {"pid": pid})
     telematics_write_ms = (time.perf_counter() - t0) * 1000.0
 
     # 2. MERGE the updated telematics row into UPT (so Lakebase has fresh data)
@@ -698,7 +698,7 @@ async def telematics_event(req: TelematicsEventRequest,
                    recent_speeding_events + recent_curfew_breaches +
                    recent_harsh_braking_30d AS telematics_recent_event_count
             FROM {fqn(TELEMATICS_TABLE)}
-            WHERE policy_id = '{pid}'
+            WHERE policy_id = :pid
         ) src
         ON target.policy_id = src.policy_id
         WHEN MATCHED THEN UPDATE SET
@@ -707,7 +707,7 @@ async def telematics_event(req: TelematicsEventRequest,
             target.recent_curfew_breaches        = src.recent_curfew_breaches,
             target.recent_harsh_braking_30d      = src.recent_harsh_braking_30d,
             target.telematics_recent_event_count = src.telematics_recent_event_count
-    """)
+    """, {"pid": pid})
     upt_merge_ms = (time.perf_counter() - t0) * 1000.0
 
     # Backwards-compat naming for the UI which still reads claim_write_ms.
@@ -718,8 +718,8 @@ async def telematics_event(req: TelematicsEventRequest,
         SELECT behaviour_score, recent_speeding_events, recent_curfew_breaches,
                recent_harsh_braking_30d, telematics_recent_event_count
         FROM {fqn(UPT_TABLE_NAME)}
-        WHERE policy_id = '{pid}' LIMIT 1
-    """)
+        WHERE policy_id = :pid LIMIT 1
+    """, {"pid": pid})
     after = after_rows[0] if after_rows else {}
 
     # Trigger a Lakebase SNAPSHOT refresh. The publish_table call at provision
@@ -1062,10 +1062,13 @@ async def load_test_metrics(since: str | None = None,
     """Per-second QPS/p50/p95/p99 from `live_pricing_load_test_summary`.
     Optional `since` (ISO 8601) and `run_id` filters."""
     where = []
+    params: dict[str, Any] = {}
     if since:
-        where.append(f"ts >= TIMESTAMP'{since}'")
+        where.append("ts >= CAST(:since AS TIMESTAMP)")
+        params["since"] = since
     if run_id:
-        where.append(f"run_id = '{run_id.replace(chr(39), chr(39)+chr(39))}'")
+        where.append("run_id = :run_id")
+        params["run_id"] = run_id
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     table = fqn("live_pricing_load_test_summary")
@@ -1077,7 +1080,7 @@ async def load_test_metrics(since: str | None = None,
             {where_sql}
             ORDER BY ts ASC
             LIMIT 5000
-        """)
+        """, params)
     except Exception as e:
         # Table may not exist until first load-test run
         if "TABLE_OR_VIEW_NOT_FOUND" in str(e) or "not found" in str(e).lower():

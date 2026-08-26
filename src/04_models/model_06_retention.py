@@ -36,7 +36,7 @@ from pyspark.sql.functions import col
 mlflow.set_registry_uri("databricks-uc")
 try:
     user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get()
-    mlflow.set_experiment(f"/Workspace/Users/{user}/pricing_workbench_retention")
+    mlflow.set_experiment("/Workspace/Shared/.bundle/pricing-workbench-gen2/experiments/retention")
 except Exception:
     pass
 
@@ -72,18 +72,41 @@ pdf = upt.select(
     "quote_count", "competitor_quote_count",
 ).toPandas()
 
+# ---------------------------------------------------------------------------
+# TARGET-LEAKAGE GUARD
+# ---------------------------------------------------------------------------
+# `is_churned` below is a SYNTHETIC label built by a deterministic scoring
+# formula (no real renewal outcomes exist in this demo mart — there is no
+# post-renewal policy record to derive a true temporal lapse from). Training a
+# classifier on the SAME features that define the label is circular: the model
+# would just re-learn the formula and post an unrealistically high AUC.
+#
+# To keep the demo honest we EXCLUDE from the model inputs the six features that
+# directly drive the churn-score formula (market_position_ratio, claim_count_5y,
+# business_stability_score, competitor_quote_count, price_index_trend,
+# years_trading). Those columns are still pulled from the mart because the label
+# construction needs them — they are simply not offered to the model. The run is
+# also tagged `label_basis="synthetic_proxy_for_demo"` so the governance pack
+# never mistakes this for a model fit on observed renewals.
+LABEL_DRIVER_COLS = [
+    "market_position_ratio", "claim_count_5y", "business_stability_score",
+    "competitor_quote_count", "price_index_trend", "years_trading",
+]
 feature_cols = [
     "annual_turnover", "sum_insured", "current_premium", "building_age_years",
-    "claim_count_5y", "total_incurred_5y", "loss_ratio_5y",
-    "market_median_rate", "market_position_ratio", "rate_per_1k_si",
-    "price_index_trend", "competitor_ratio",
-    "credit_score", "business_stability_score", "years_trading",
+    "total_incurred_5y", "loss_ratio_5y",
+    "market_median_rate", "rate_per_1k_si",
+    "competitor_ratio",
+    "credit_score",
     "composite_location_risk", "combined_risk_score",
     "flood_zone_rating", "crime_theft_index",
-    "quote_count", "competitor_quote_count",
+    "quote_count",
 ]
 
-pdf[feature_cols] = pdf[feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+# Coerce every pulled numeric column (model features AND the label drivers, which
+# the synthetic-label formula clips/scales below) so nothing arrives as object.
+_numeric_cols = [c for c in pdf.columns if c != "policy_id"]
+pdf[_numeric_cols] = pdf[_numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
 
 # Generate synthetic churn labels (~15% churn rate)
 # Churn is more likely when: overpriced vs market, no claims (less sticky),
@@ -124,6 +147,11 @@ y_test = test_pdf["is_churned"].values
 with mlflow.start_run(run_name="lgbm_retention_churn") as run:
     mlflow.log_param("model_type", "LightGBM_Classifier")
     mlflow.log_param("target", "is_churned")
+    # Governance: the label is a deterministic synthetic proxy, not observed
+    # renewal outcomes — and the six formula-driver features are excluded from
+    # the inputs (see TARGET-LEAKAGE GUARD above) so this is not a circular fit.
+    mlflow.set_tag("label_basis", "synthetic_proxy_for_demo")
+    mlflow.log_param("leakage_features_excluded", ",".join(LABEL_DRIVER_COLS))
     mlflow.log_param("churn_rate", round(churn_rate, 3))
     mlflow.log_param("features", len(feature_cols))
     mlflow.log_param("upt_table", upt_table_name)

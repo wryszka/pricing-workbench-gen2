@@ -1,7 +1,7 @@
 # Price Optimisation — runbook (Phase 1: offline spine, motor)
 
 What shipped, how to run it, and how to demo it. This is the **offline spine** on
-personal **motor** — the phase-1 scope of `docs/optimization_spec.md`, built with
+personal **motor** — the phase-1 scope of `docs/optimisation_demo_spec.md` (Part 2), built with
 the naming/placement decisions in `docs/OPTIMIZATION_RECONCILIATION.md`
 (British `optimisation_*` evolved in place; MCP/agents, real-time serving, and the
 closed-loop generator are deferred to phases 2–3).
@@ -177,7 +177,9 @@ the foundation; this is the pricing department switched on."*
 - **Closed loop (§3 tail, Principle 6):** `optimisation_advance_month` job + `/advance`
   endpoint + Monitoring "Advance one month" button — rolls the book forward under the
   deployed prices, writes predicted-vs-realized, appends the month to monitoring + the
-  quote stream. Verified: predicted £8.79m → realized £8.77m (−0.2%).
+  quote stream. On the current book the deployed plan predicts ~£10.39m; the
+  advance-month beat measures realized-vs-predicted live (a fresh ±3pp demand shock
+  on top of the deployed prices — an honest calibration check on synthetic data).
 - **Real-time serving (§7B):** `pwg2_elasticity_scorer` — defined-but-dormant, arm/teardown
   jobs (`src/07_serving/optimisation_elasticity_serve/`), scale-to-zero.
 - **MCP surface (§8/§10):** 10 `opt_*` tools on the JSON-RPC MCP server (stages + reads;

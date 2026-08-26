@@ -1,9 +1,11 @@
-# Full demo pipeline — runs everything from scratch
+# LEGACY — monolith runner, kept as a fallback reference only.
+# The canonical post-deploy build command is `full_build` (defined in resources/*.yml).
+# Use `databricks bundle run full_build --target pricingv2 --profile PRICING_V2` instead.
 
 resources:
   jobs:
     run_full_demo:
-      name: "Run Full Demo Pipeline (gen2)"
+      name: "[LEGACY] Run Full Demo Pipeline (gen2)"
       parameters:
         - name: catalog_name
           default: ${var.catalog_name}

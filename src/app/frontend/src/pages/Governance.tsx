@@ -325,10 +325,15 @@ function ByDate({ onPick }: { onPick: (p: Pack) => void }) {
       .catch(() => setPacks([])).finally(() => setLoading(false));
   }, [date]);
 
+  const getRelativeDate = (monthsAgo: number) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - monthsAgo, 25);
+    return d.toISOString().substring(0, 10);
+  };
   const examples = [
-    { label: 'Feb 2026 — initial baseline', date: '2026-02-25' },
-    { label: 'Mar 2026 — mid-cycle refit',  date: '2026-03-20' },
-    { label: 'Apr 2026 — current champions', date: '2026-04-25' },
+    { label: 'Initial baseline',  date: getRelativeDate(6) },
+    { label: 'Mid-cycle refit',   date: getRelativeDate(3) },
+    { label: 'Most recent',       date: getRelativeDate(1) },
   ];
 
   return (
@@ -613,7 +618,7 @@ function PdfPane({ pack, pdfUrl }: { pack: Pack; pdfUrl: string }) {
           </a>
         ))}
       </div>
-      <div className="border border-gray-200 rounded overflow-hidden bg-gray-50" style={{ height: '70vh' }}>
+      <div className="border border-gray-200 rounded overflow-hidden bg-gray-50" style={{ height: 'clamp(420px, calc(100vh - 280px), 900px)' }}>
         <object data={pdfUrl} type="application/pdf" className="w-full h-full">
           <div className="flex flex-col items-center justify-center h-full text-sm text-gray-600 p-6">
             Your browser can't preview this PDF inline.
@@ -711,7 +716,7 @@ function ChatPane({ pack, policyContext }:
         </span>
       </div>
 
-      <div className="border border-gray-200 rounded flex flex-col" style={{ height: '70vh' }}>
+      <div className="border border-gray-200 rounded flex flex-col" style={{ height: 'clamp(420px, calc(100vh - 280px), 900px)' }}>
         <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50">
           {turns.length === 0 && (
             <div className="py-4">
@@ -1571,7 +1576,7 @@ function GovernanceAgentChat() {
       </div>
       <p className="text-[12.5px] text-mut mb-3">Free-form Q&A across every pack, audit event, and model artefact. Tools: <code className="bg-slate-100 px-1 rounded text-[11px]">query_pack_index</code> · <code className="bg-slate-100 px-1 rounded text-[11px]">read_pack_artefact</code> · <code className="bg-slate-100 px-1 rounded text-[11px]">query_audit_log</code>.</p>
 
-      <div className="border border-line rounded-lg overflow-hidden flex flex-col" style={{ height: '480px' }}>
+      <div className="border border-line rounded-lg overflow-hidden flex flex-col" style={{ height: 'clamp(360px, calc(100vh - 320px), 720px)' }}>
         <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50">
           {turns.length === 0 && !busy && (
             <div>

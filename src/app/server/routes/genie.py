@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/genie", tags=["genie"])
 
 def _auth_headers() -> dict:
     w = get_workspace_client()
-    return w.config._header_factory()
+    return w.config.authenticate()  # public auth-headers dict (was _header_factory())
 
 
 def _host() -> str:

@@ -259,8 +259,8 @@ async def pack_pdf(pack_id: str):
     rows = await execute_query(f"""
         SELECT pdf_path, model_family, model_version
         FROM {fqn('governance_packs_index')}
-        WHERE pack_id = '{pack_id}' LIMIT 1
-    """)
+        WHERE pack_id = :pack_id LIMIT 1
+    """, {"pack_id": pack_id})
     if not rows:
         raise HTTPException(404, f"pack {pack_id} not found")
     path = rows[0]["pdf_path"]
@@ -311,8 +311,8 @@ async def _pack_text(pack_id: str) -> tuple[dict, str]:
     rows = await execute_query(f"""
         SELECT pack_id, model_family, model_version, pdf_path
         FROM {fqn('governance_packs_index')}
-        WHERE pack_id = '{pack_id}' LIMIT 1
-    """)
+        WHERE pack_id = :pack_id LIMIT 1
+    """, {"pack_id": pack_id})
     if not rows:
         raise HTTPException(404, f"pack {pack_id} not found")
     r = rows[0]
@@ -380,8 +380,8 @@ async def chat(req: ChatRequest) -> dict:
     pack_row = (await execute_query(f"""
         SELECT pack_id, model_family, model_version, pdf_path
         FROM {fqn('governance_packs_index')}
-        WHERE pack_id = '{req.pack_id}' LIMIT 1
-    """) or [{}])[0]
+        WHERE pack_id = :pack_id LIMIT 1
+    """, {"pack_id": req.pack_id}) or [{}])[0]
     if not pack_row:
         raise HTTPException(404, f"pack {req.pack_id} not found")
 
@@ -539,7 +539,7 @@ def _query_agent_endpoint(pack_id: str, question: str, policy_id: str | None) ->
             return {"ok": False, "error": f"endpoint lookup failed: {e}"}
 
         host  = w.config.host.rstrip("/")
-        token = w.config._header_factory()
+        token = w.config.authenticate()
         # ChatAgent serving contract: a native chat request. custom_inputs is a
         # free dict, so pass pack_id + policy_id directly (the agent reads both).
         ci: dict = {"pack_id": pack_id}
@@ -613,8 +613,8 @@ async def policy_scoring(policy_id: str) -> dict:
                flood_zone_rating, credit_score, claim_count_5y, total_incurred_5y,
                is_coastal, urban_score
         FROM {fqn('unified_pricing_table_live')}
-        WHERE policy_id = '{policy_id}' LIMIT 1
-    """)
+        WHERE policy_id = :policy_id LIMIT 1
+    """, {"policy_id": policy_id})
     if not rows:
         raise HTTPException(404, f"policy {policy_id} not found in Modelling Mart")
     row = rows[0]
@@ -631,8 +631,8 @@ async def policy_scoring(policy_id: str) -> dict:
                    fraud_pred,  fraud_version,
                    base_premium, fraud_loading, demand_adj, technical_premium
             FROM {fqn('inference_logs')}
-            WHERE policy_id = '{policy_id}' LIMIT 1
-        """)
+            WHERE policy_id = :policy_id LIMIT 1
+        """, {"policy_id": policy_id})
         if inf_rows:
             inf_row   = inf_rows[0]
             simulated = False

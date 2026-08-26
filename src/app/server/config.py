@@ -146,13 +146,22 @@ import time as _time
 
 _asset_cache: dict[str, tuple[str, float]] = {}
 _ASSET_TTL_SECONDS = 300.0
+# Guard the cache like the other process-wide singletons — concurrent requests
+# on a cold app can otherwise read/write it while another thread is mutating it.
+_asset_cache_lock = threading.Lock()
 
 
 def _asset_cache_get(key: str) -> str | None:
-    hit = _asset_cache.get(key)
+    with _asset_cache_lock:
+        hit = _asset_cache.get(key)
     if hit and (_time.monotonic() - hit[1]) < _ASSET_TTL_SECONDS:
         return hit[0]
     return None
+
+
+def _asset_cache_put(key: str, value: str) -> None:
+    with _asset_cache_lock:
+        _asset_cache[key] = (value, _time.monotonic())
 
 
 def resolve_genie_space_by_title(title: str) -> str:
@@ -166,13 +175,20 @@ def resolve_genie_space_by_title(title: str) -> str:
     if cached:
         return cached
     try:
-        resp = get_workspace_client().api_client.do("GET", "/api/2.0/genie/spaces")
-        for sp in (resp.get("spaces") or []):
-            if sp.get("title") == title:
-                sid = sp.get("space_id") or ""
-                if sid:
-                    _asset_cache[title] = (sid, _time.monotonic())
-                return sid
+        client = get_workspace_client()
+        page_token = None
+        while True:
+            query = {"page_token": page_token} if page_token else None
+            resp = client.api_client.do("GET", "/api/2.0/genie/spaces", query=query)
+            for sp in (resp.get("spaces") or []):
+                if sp.get("title") == title:
+                    sid = sp.get("space_id") or ""
+                    if sid:
+                        _asset_cache_put(title, sid)
+                    return sid
+            page_token = resp.get("next_page_token")
+            if not page_token:
+                break
     except Exception as e:
         logger.info("genie title resolve failed for %r: %s", title, e)
     return ""
@@ -189,14 +205,22 @@ def resolve_job_by_name(name: str) -> str:
     if cached:
         return cached
     try:
-        resp = get_workspace_client().api_client.do(
-            "GET", "/api/2.1/jobs/list", query={"name": name, "limit": 25})
-        for j in (resp.get("jobs") or []):
-            if (j.get("settings") or {}).get("name") == name:
-                jid = str(j.get("job_id") or "")
-                if jid:
-                    _asset_cache[key] = (jid, _time.monotonic())
-                return jid
+        client = get_workspace_client()
+        page_token = None
+        while True:
+            query = {"name": name, "limit": 25}
+            if page_token:
+                query["page_token"] = page_token
+            resp = client.api_client.do("GET", "/api/2.1/jobs/list", query=query)
+            for j in (resp.get("jobs") or []):
+                if (j.get("settings") or {}).get("name") == name:
+                    jid = str(j.get("job_id") or "")
+                    if jid:
+                        _asset_cache_put(key, jid)
+                    return jid
+            page_token = resp.get("next_page_token")
+            if not resp.get("has_more") or not page_token:
+                break
     except Exception as e:
         logger.info("job name resolve failed for %r: %s", name, e)
     return ""
@@ -212,13 +236,20 @@ def resolve_dashboard_by_title(name: str) -> str:
     if cached:
         return cached
     try:
-        resp = get_workspace_client().api_client.do("GET", "/api/2.0/lakeview/dashboards")
-        for d in (resp.get("dashboards") or []):
-            if d.get("display_name") == name:
-                did = d.get("dashboard_id") or ""
-                if did:
-                    _asset_cache[key] = (did, _time.monotonic())
-                return did
+        client = get_workspace_client()
+        page_token = None
+        while True:
+            query = {"page_token": page_token} if page_token else None
+            resp = client.api_client.do("GET", "/api/2.0/lakeview/dashboards", query=query)
+            for d in (resp.get("dashboards") or []):
+                if d.get("display_name") == name:
+                    did = d.get("dashboard_id") or ""
+                    if did:
+                        _asset_cache_put(key, did)
+                    return did
+            page_token = resp.get("next_page_token")
+            if not page_token:
+                break
     except Exception as e:
         logger.info("dashboard title resolve failed for %r: %s", name, e)
     return ""

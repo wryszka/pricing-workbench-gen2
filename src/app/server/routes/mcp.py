@@ -281,14 +281,25 @@ def _plain_text(raw: str) -> str:
 async def _tool_explain_price(args: dict, session_id: str, agent_id: str) -> dict:
     breakdown = args.get("breakdown") or {}
     question = args.get("question") or "Why is my premium this amount?"
+    # Optional provenance: which price-drivers were book-average fallbacks for a
+    # new customer rather than their own declared values. If the caller passes it
+    # (from price_motor_risk's `provenance`), the explanation flags those honestly.
+    book_mean = args.get("book_mean_fallback") or (args.get("provenance") or {}).get("book_mean_fallback") or []
 
     from server.agent_client import invoke_agent
+    fallback_note = (
+        f"\n\nNote: these fields are book-average fallbacks for a new customer, not the "
+        f"customer's own values: {', '.join(book_mean)}. If any is named as a price driver, "
+        f"say plainly it is a population average that updates once the customer's real data "
+        f"(e.g. telematics) is connected."
+    ) if book_mean else ""
     prompt = (
         f"A motor customer asks: {question}\n\n"
         f"Here is the rating breakdown from our pricing engine:\n{breakdown}\n\n"
         "Explain in plain language what drove this premium — name the factors "
         "that pushed it up and any that brought it down. Be specific and honest. "
         "Do not quote a different premium than the one in the breakdown."
+        + fallback_note
     )
     try:
         result = await invoke_agent(endpoint_name="pwg2_chat_agent",

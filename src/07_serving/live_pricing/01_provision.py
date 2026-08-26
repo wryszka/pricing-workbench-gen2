@@ -320,7 +320,7 @@ try:
     print(f"warm-up policy ids: {sample_pids}")
 
     host  = w.config.host.rstrip("/")
-    token = w.config._header_factory()
+    token = w.config.authenticate()
     for pid in sample_pids:
         t0 = time.perf_counter()
         resp = _rq.post(

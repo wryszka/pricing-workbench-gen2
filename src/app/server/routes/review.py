@@ -517,9 +517,9 @@ async def download_pack(pack_id: str) -> StreamingResponse:
         rows = await execute_query(f"""
             SELECT pdf_path, model_family, model_version
             FROM {fqn('governance_packs_index')}
-            WHERE pack_id = '{pack_id}'
+            WHERE pack_id = :pack_id
             LIMIT 1
-        """)
+        """, {"pack_id": pack_id})
     except Exception as e:
         raise HTTPException(500, f"Packs index unavailable: {e}")
     if not rows:

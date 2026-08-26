@@ -53,7 +53,7 @@ from mlflow.tracking import MlflowClient
 
 mlflow.set_registry_uri("databricks-uc")
 user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get()
-mlflow.set_experiment(f"/Workspace/Users/{user}/pricing_workbench_factory")
+mlflow.set_experiment("/Workspace/Shared/.bundle/pricing-workbench-gen2/experiments/factory")
 client = MlflowClient()
 
 print(f"Factory run: {factory_run_id}  |  max_variants={max_variants}")

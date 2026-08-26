@@ -44,7 +44,7 @@ from pyspark.sql.functions import col
 
 mlflow.set_registry_uri("databricks-uc")
 user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get()
-mlflow.set_experiment(f"/Workspace/Users/{user}/pricing_workbench_production_sev")
+mlflow.set_experiment("/Workspace/Shared/.bundle/pricing-workbench-gen2/experiments/sev")
 
 fe = FeatureEngineeringClient()
 
@@ -144,13 +144,20 @@ FEATURE_NAMES = list(X.columns)
 class GammaGLMWrapper(BaseEstimator, RegressorMixin):
     """Applies the same log + one-hot + standard-scale pipeline at inference
     that was used during training, then calls the fitted OLS-on-log model and
-    back-transforms with exp()."""
-    def __init__(self, result, feature_names, raw_features, log_cols, scaler):
+    back-transforms with exp().
+
+    OLS-on-log back-transformed with a naive exp() is BIASED low (Jensen's
+    inequality): E[y] = exp(mu) * E[exp(resid)] > exp(mu). We correct with the
+    (log-normal) smearing factor exp(0.5 * resid_var), captured once at fit time
+    and stored as `self.smearing`, so the back-transform is on the mean scale."""
+    def __init__(self, result, feature_names, raw_features, log_cols, scaler,
+                 smearing=1.0):
         self.result         = result
         self.feature_names  = feature_names
         self.raw_features   = raw_features
         self.log_cols       = log_cols
         self.scaler         = scaler
+        self.smearing       = float(smearing)
 
     def fit(self, X, y): return self
 
@@ -169,10 +176,13 @@ class GammaGLMWrapper(BaseEstimator, RegressorMixin):
         return Xd.values
 
     def predict(self, X):
-        return np.exp(self.result.predict(sm.add_constant(self._transform(X), has_constant="add")))
+        # Duan/log-normal smearing correction applied on the mean scale.
+        return self.smearing * np.exp(
+            self.result.predict(sm.add_constant(self._transform(X), has_constant="add")))
 
 tags = {"feature_table": f"{fqn}.unified_pricing_table_live",
-        "model_type": "GLM_Gamma", "simulated": "false", "story": "champion"}
+        "model_type": "OLS on log-severity (Gamma approximation)",
+        "simulated": "false", "story": "champion"}
 if sim_date:
     tags["simulation_date"] = sim_date
     tags["simulated"]       = "true"
@@ -190,7 +200,13 @@ with mlflow.start_run(run_name=f"sev_glm_{run_name}", tags=tags) as run:
     log_y_train = np.log(y_train.values)
     ols = sm.OLS(log_y_train, X_train_c).fit()
     res = ols
-    y_pred = np.exp(ols.predict(X_test_c))
+    # Duan/log-normal smearing constant: exp(0.5 * log-residual variance).
+    # Captured ONCE here at fit time; the wrapper multiplies every prediction by
+    # it so the exp() back-transform lands on the MEAN scale instead of ~20-27%
+    # low. mse_resid is the unbiased estimate of the log-residual variance.
+    resid_var    = float(res.mse_resid)
+    smearing     = float(np.exp(0.5 * resid_var))
+    y_pred = smearing * np.exp(ols.predict(X_test_c))
 
     mae = float(mean_absolute_error(y_test, y_pred))
     # Gini on severity
@@ -201,6 +217,9 @@ with mlflow.start_run(run_name=f"sev_glm_{run_name}", tags=tags) as run:
 
     r2 = float(res.rsquared) if hasattr(res, "rsquared") else float("nan")
     mlflow.log_metrics({"mae_gbp": mae, "gini": gini, "r2_log": r2})
+    # Governance transparency: record the smearing correction actually applied.
+    mlflow.log_params({"log_resid_var": round(resid_var, 6),
+                       "smearing_factor": round(smearing, 6)})
     print(f"Gini={gini:.4f}  MAE £{mae:,.0f}  R²(log)={r2:.3f}")
 
     rel = pd.DataFrame({"feature": ["intercept"] + FEATURE_NAMES,
@@ -210,7 +229,8 @@ with mlflow.start_run(run_name=f"sev_glm_{run_name}", tags=tags) as run:
     rel.to_csv("/tmp/sev_relativities.csv", index=False)
     mlflow.log_artifact("/tmp/sev_relativities.csv")
 
-    wrapper = GammaGLMWrapper(res, FEATURE_NAMES, FEATURES, LOG_COLS, SCALER)
+    wrapper = GammaGLMWrapper(res, FEATURE_NAMES, FEATURES, LOG_COLS, SCALER,
+                              smearing=smearing)
 
     # Pin explicit signature on raw features — wrapper replays the log / one-hot
     # / scaler pipeline internally, so pyfunc can be called on unencoded rows.

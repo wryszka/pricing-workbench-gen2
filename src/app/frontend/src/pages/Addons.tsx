@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Receipt, BookOpen, ArrowRight, Package, Radar, Network } from 'lucide-react';
+import { Page, PageHeader, OnThisPage, DemoDisclaimer } from '../components/ui';
 
 /**
  * Add-ons landing page — the home for useful tools that sit alongside the
@@ -8,16 +9,16 @@ import { Receipt, BookOpen, ArrowRight, Package, Radar, Network } from 'lucide-r
  */
 export default function Addons() {
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Package className="w-6 h-6 text-gray-700" /> Add-ons
-        </h2>
-        <p className="text-gray-500 mt-1">
-          Supporting tools and companion workflows. Not part of the main pricing flow, but things
-          different audiences reach for at specific moments.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Pricing Workbench"
+        title="Add-ons"
+        subtitle="Supporting tools and companion workflows. Not part of the main pricing flow, but things different audiences reach for at specific moments."
+        icon={Package}
+      />
+      <OnThisPage>
+        Each card opens a full feature underneath: <strong>Quote Review</strong> for transaction-level drill-down and replay, <strong>New Data Impact</strong> for external-data enrichment analysis, <strong>Rating Engine Integration</strong> for Radar/Earnix architecture patterns, and <strong>Agentic Distribution</strong> for AI-channel presence and MCP tooling.
+      </OnThisPage>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         <AddonCard
@@ -57,7 +58,12 @@ export default function Addons() {
           tags={['MCP server', 'Claude-driven journey', 'Real engine prices', 'Channel telemetry']}
         />
       </div>
-    </div>
+
+      <DemoDisclaimer>
+        Bricksurance SE is a fictional insurer. Pricing models, governance packs, audit logs and
+        scoring flows are real Databricks components; the portfolio and quote stream are synthetic.
+      </DemoDisclaimer>
+    </Page>
   );
 }
 

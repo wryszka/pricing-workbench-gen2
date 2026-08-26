@@ -124,6 +124,14 @@ export default function QuoteTester() {
           </div>
         </div>
       </div>
+
+      <footer className="border-t border-white/10 py-3">
+        <div className="max-w-5xl mx-auto px-8 text-[11px] text-slate-500">
+          About this demo — Bricksurance SE is a fictional insurer. The pricing models,
+          serving endpoints, governance and data are real Databricks components; the
+          portfolio is synthetic. Nothing here reflects a real insurer's rates or book.
+        </div>
+      </footer>
     </div>
   );
 }

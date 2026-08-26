@@ -165,10 +165,17 @@ def derived_features(answers: dict[str, Any]) -> dict[str, Any]:
     `at_fault_count_5y` and `open_claims_count` follow from the declared claim
     count; `prior_accidents_5y` mirrors it. A production integration would pull
     these from the claims system / MID rather than infer them.
+
+    Assumption: with no fault-split available at quote time we treat every
+    declared claim as at-fault (`at_fault_count_5y = claims`). This is the
+    conservative, defensible default — the previous `claims - 1` fudge silently
+    forgave one at-fault claim for every multi-claim customer with no rationale,
+    understating risk. A real integration replaces this with the MID/claims
+    fault flags.
     """
     claims = int(answers.get("claim_count_5y") or 0)
     return {
-        "at_fault_count_5y":  max(0, claims - 1) if claims > 1 else claims,
+        "at_fault_count_5y":  claims,
         "prior_accidents_5y": claims,
         "open_claims_count":  0,
     }

@@ -2,9 +2,9 @@
 
 Two modes, toggled via `/api/admin/ai-mode`:
 
-  - `live`: always call the real serving endpoint (default).
+  - `live`: always call the real serving endpoint.
   - `cached`: try the on-disk cache first; on miss, call live and write
-    the response back so a follow-up hit lands fast and identical.
+    the response back so a follow-up hit lands fast and identical (default).
 
 Cache is keyed by a stable hash of `(endpoint, question, custom_inputs)`
 and persisted to a UC Volume so it survives app restarts and is shared

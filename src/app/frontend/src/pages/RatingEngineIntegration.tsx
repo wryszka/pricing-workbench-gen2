@@ -5,6 +5,7 @@ import {
   Network, FileCheck2, Workflow, Layers, Boxes, Activity,
   ScrollText, Zap, Cpu, GitBranch, Repeat, BookOpen, ExternalLink,
 } from 'lucide-react';
+import { Page, PageHeader, OnThisPage, DemoDisclaimer } from '../components/ui';
 
 // Companion reference: the full actuarial-software integration guide (Google Doc).
 // Covers Radar, Earnix, RAFM, Igloo, Unify and the Prophet wrapper — the deep-dive
@@ -33,32 +34,31 @@ export default function RatingEngineIntegration() {
   const [pattern, setPattern] = useState<Pattern>('build');
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <Page>
       <Link to="/add-ons"
-            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 mb-2">
+            className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 -mb-1">
         <ArrowLeft className="w-3.5 h-3.5" /> Back to Add-ons
       </Link>
-
-      <div className="mb-5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Radar className="w-6 h-6 text-emerald-600" /> Rating Engine Integration
-          </h2>
+      <PageHeader
+        eyebrow="Add-ons · Pricing Workbench"
+        title="Rating Engine Integration"
+        subtitle="The workbench complements Willis Towers Watson Radar (and Earnix, or any in-house engine) across the model lifecycle. Three patterns, all governed end-to-end in Unity Catalog."
+        icon={Radar}
+        actions={
           <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
             Reference architectures
           </span>
-        </div>
-        <p className="text-gray-600 mt-2 text-sm max-w-3xl">
-          The workbench complements Willis Towers Watson Radar (and Earnix, or any in-house engine)
-          across the model lifecycle. Three patterns, all governed end-to-end in Unity Catalog.
-        </p>
-        <a href={ACTUARIAL_SW_INTEGRATIONS_DOC} target="_blank" rel="noopener noreferrer"
-           className="inline-flex items-center gap-1.5 mt-3 text-sm font-medium text-emerald-700 hover:text-emerald-900 hover:underline">
-          <BookOpen className="w-4 h-4 shrink-0" />
-          Actuarial Software Integrations — full integration guide (Radar, Earnix, RAFM, Igloo, Unify, Prophet)
-          <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-        </a>
-      </div>
+        }
+      />
+      <OnThisPage>
+        Three integration patterns: <strong>Build</strong> (data prep on Databricks → Radar builds via native ODBC → results back to UC), <strong>Batch what-if</strong> (parallel Radar runs with fan-out and Autoloader), and <strong>Live</strong> (quote-time enrichment). Each tab has an architecture diagram, step walkthrough, and governance side-panel. The Standards tab has sizing and SLO tables.
+      </OnThisPage>
+      <a href={ACTUARIAL_SW_INTEGRATIONS_DOC} target="_blank" rel="noopener noreferrer"
+         className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 hover:text-emerald-900 hover:underline">
+        <BookOpen className="w-4 h-4 shrink-0" />
+        Actuarial Software Integrations — full integration guide (Radar, Earnix, RAFM, Igloo, Unify, Prophet)
+        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+      </a>
 
       <div className="bg-white rounded-lg border border-gray-200 p-1 mb-6 inline-flex gap-1 flex-wrap">
         <PatternTab active={pattern === 'build'} onClick={() => setPattern('build')}
@@ -79,7 +79,11 @@ export default function RatingEngineIntegration() {
       {pattern === 'batch' && <BatchPattern />}
       {pattern === 'live'  && <LivePattern />}
       {pattern === 'standards' && <StandardsTab />}
-    </div>
+
+      <DemoDisclaimer>
+        Bricksurance SE is a fictional insurer used to illustrate these integration patterns. The Radar/Earnix connectors, Unity Catalog governance, and Databricks components shown are real; the sample data is synthetic.
+      </DemoDisclaimer>
+    </Page>
   );
 }
 

@@ -70,7 +70,7 @@ fe = FeatureEngineeringClient()
 
 import requests as _rq, json as _json
 _host = w.config.host.rstrip("/")
-_hdrs = lambda: {**w.config._header_factory(), "Content-Type": "application/json"}
+_hdrs = lambda: {**w.config.authenticate(), "Content-Type": "application/json"}
 
 try:
     store = w.feature_store.get_online_store(online_store)
@@ -218,7 +218,7 @@ if scorer_version:
         "workload_type": "CPU",
     }
     _host  = w.config.host.rstrip("/")
-    _hdrs  = {**w.config._header_factory(), "Content-Type": "application/json"}
+    _hdrs  = {**w.config.authenticate(), "Content-Type": "application/json"}
     try:
         existing = w.serving_endpoints.get(endpoint_name)
     except Exception:

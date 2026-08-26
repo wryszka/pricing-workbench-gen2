@@ -22,5 +22,9 @@ env:
     value: "pricing-workbench-gen2"
   - name: BUNDLE_TARGET
     value: "dev"
+  # Comma-separated emails allowed to run destructive admin actions (demo reset,
+  # sleep, AI-mode/cache) — so a random viewer can't wipe a live demo.
+  # IMPORTANT: every presenter must be listed here. Add their email before the
+  # session; an empty value locks everyone out (the guard is fail-closed).
   - name: ADMIN_USERS
-    value: "laurence.ryszka@databricks.com"
+    value: "laurence.ryszka@databricks.com,sa-presenter@databricks.com"

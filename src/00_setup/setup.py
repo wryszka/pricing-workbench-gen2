@@ -46,6 +46,19 @@ print(f"  Quotes:   {NUM_QUOTES:,}")
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn}")
 spark.sql(f"CREATE VOLUME IF NOT EXISTS {fqn}.{volume}")
 
+# Ensure the shared MLflow experiments parent directory exists. The training
+# notebooks set experiments under /Workspace/Shared/.bundle/pricing-workbench-gen2/
+# experiments/<family> so runs group by family under the deployment identity (not
+# a user home). mlflow.set_experiment() creates the leaf experiment but NOT the
+# intermediate workspace directory, so create the parent here (setup runs first
+# in full_build) — otherwise every training task fails NOT_FOUND on a fresh deploy.
+try:
+    from databricks.sdk import WorkspaceClient
+    WorkspaceClient().workspace.mkdirs("/Workspace/Shared/.bundle/pricing-workbench-gen2/experiments")
+    print("ensured MLflow experiments dir")
+except Exception as _e:
+    print(f"experiments dir mkdirs skipped: {_e}")
+
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {fqn}.audit_log (
         event_id        STRING      COMMENT 'UUID for the event',

@@ -181,9 +181,9 @@ async def list_datasets():
                     execute_query(f"""
                         SELECT decision, reviewer, reviewed_at, reviewer_notes
                         FROM {fqn('dataset_approvals')}
-                        WHERE dataset_name = '{ds_id}'
+                        WHERE dataset_name = :ds_id
                         ORDER BY reviewed_at DESC LIMIT 1
-                    """),
+                    """, {"ds_id": ds_id}),
                 )
                 raw_count      = int(raw_stats[0]["row_count"]) if raw_stats else 0
                 silver_count   = int(silver_stats[0]["row_count"]) if silver_stats else 0
@@ -1014,10 +1014,10 @@ async def get_approval_history(dataset_id: str):
         await ensure_approvals_table()
         history = await execute_query(f"""
             SELECT * FROM {fqn('dataset_approvals')}
-            WHERE dataset_name = '{dataset_id}'
+            WHERE dataset_name = :dataset_id
             ORDER BY reviewed_at DESC
             LIMIT 20
-        """)
+        """, {"dataset_id": dataset_id})
     except Exception:
         history = []
 
@@ -1037,9 +1037,18 @@ async def download_dataset(dataset_id: str, layer: str = Query("silver", enum=["
     ds = EXTERNAL_DATASETS[dataset_id]
     table = fqn(ds["raw_table"] if layer == "raw" else ds["silver_table"])
 
-    rows = await execute_query(f"SELECT * FROM {table}")
+    # Cap the inline export: the app container materialises the whole result in
+    # memory and serialises to CSV, so an unbounded SELECT * on a large book can
+    # exhaust the container. 100k rows is ample for a demo download; if the table
+    # is larger we flag the CSV as truncated rather than risk an OOM.
+    _EXPORT_CAP = 100_000
+    rows = await execute_query(f"SELECT * FROM {table} LIMIT {_EXPORT_CAP + 1}")
     if not rows:
         raise HTTPException(404, "No data found in table")
+    truncated = len(rows) > _EXPORT_CAP
+    if truncated:
+        rows = rows[:_EXPORT_CAP]
+        logger.warning("download_dataset %s/%s truncated to %d rows", dataset_id, layer, _EXPORT_CAP)
 
     # Build CSV in memory
     output = io.StringIO()
@@ -1233,10 +1242,10 @@ async def get_upload_history(dataset_id: str):
         uploads = await execute_query(f"""
             SELECT event_id, event_type, user_id, timestamp, details, source
             FROM {fqn('audit_log')}
-            WHERE event_type = 'manual_upload' AND entity_id = '{dataset_id}'
+            WHERE event_type = 'manual_upload' AND entity_id = :dataset_id
             ORDER BY timestamp DESC
             LIMIT 20
-        """)
+        """, {"dataset_id": dataset_id})
     except Exception:
         uploads = []
 

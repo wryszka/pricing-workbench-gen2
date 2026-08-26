@@ -49,7 +49,7 @@ def _invoke_sync(endpoint_name: str,
             return {"ok": False, "error": f"endpoint lookup failed: {e}"}
 
         host  = w.config.host.rstrip("/")
-        token = w.config._header_factory()
+        token = w.config.authenticate()  # public auth-headers dict (was _header_factory())
 
         messages = list(history) if history else []
         messages.append({"role": "user", "content": question})

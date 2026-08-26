@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, ArrowRight, Calculator, Loader2 } from 'lucide-react';
+import { Sparkles, ArrowRight, Calculator, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import {
   Page, OnThisPage, Card, CardTitle, Metric, Pill, Prov, DemoDisclaimer, SectionHead, Grid, AgentLead,
@@ -48,23 +48,25 @@ export default function Home() {
 // ---------------------------------------------------------------------------
 function ThreePillars() {
   const pillars = [
-    { e: '🏛️', t: 'One platform — one source of truth', to: '/pricing-table', c: '#2563eb',
+    { e: '🏛️', t: 'One platform — one source of truth', to: '/pricing-table',
+      borderCls: 'border-t-[3px] border-blue-600', textCls: 'text-blue-600',
       b: 'Ingestion, the modelling mart, models, champions, the rating engine and governance all read the same governed Delta tables — one platform instead of six systems and a swivel chair.' },
-    { e: '🛡️', t: 'Governance & control', to: '/governance', c: '#6d28d9',
+    { e: '🛡️', t: 'Governance & control', to: '/governance',
+      borderCls: 'border-t-[3px] border-violet-600', textCls: 'text-violet-600',
       b: 'Real Unity Catalog lineage, versioned constraints in git, an immutable audit log, a bias monitor — every pricing decision reproducible exactly as it was made.' },
-    { e: '🤖', t: 'AI agents that assist', to: '/pricing-ai', c: '#16a34a',
+    { e: '🤖', t: 'AI agents that assist', to: '/pricing-ai',
+      borderCls: 'border-t-[3px] border-green-600', textCls: 'text-green-600',
       b: 'A bench of specialists — Ask-the-Book, model validation, drift watch, rate-change — advising a named human who decides. Agents never set prices; a deterministic engine does, under versioned policy.' },
   ];
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {pillars.map((p) => (
         <Link key={p.to} to={p.to}
-          className="flex flex-col rounded-2xl border border-line bg-white p-5 hover:shadow-[0_8px_22px_rgba(15,23,42,.1)] transition"
-          style={{ borderTop: `3px solid ${p.c}` }}>
+          className={`flex flex-col rounded-2xl border border-line bg-white p-5 hover:shadow-[0_8px_22px_rgba(15,23,42,.1)] transition ${p.borderCls}`}>
           <div className="text-[26px]">{p.e}</div>
           <h3 className="text-[15px] font-bold text-ink mt-2">{p.t}</h3>
           <p className="text-[13px] text-mut leading-relaxed mt-1.5 flex-1">{p.b}</p>
-          <div className="text-[13px] font-bold mt-2.5" style={{ color: p.c }}>open →</div>
+          <div className={`text-[13px] font-bold mt-2.5 ${p.textCls}`}>open →</div>
         </Link>
       ))}
     </div>
@@ -156,7 +158,9 @@ function ControlTower() {
             <div key={s.key} className="flex items-stretch gap-2 flex-1">
               <Link to={stageRoute[s.key] || '/'} className="flex-1 rounded-xl border border-line bg-slate-50 hover:bg-blue-50 hover:border-blue-200 p-2.5 transition min-w-[120px]">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <span className={`w-2 h-2 rounded-full ${s.ok ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                  {s.ok
+                    ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    : <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
                   <span className="text-xs font-bold text-ink">{s.label}</span>
                 </div>
                 <div className="text-[11px] text-mut leading-snug">{s.metric}</div>
@@ -201,12 +205,12 @@ function ControlTower() {
 // ---------------------------------------------------------------------------
 function FlowRibbon() {
   const stages = [
-    { n: '1 · Sources', t: 'Data Ingestion', b: 'Internal book + vendor feeds + real public data, through an actuary approval gate.', to: '/datasets', c: '#2563eb' },
-    { n: '2 · Features', t: 'Modelling Mart', b: 'Every approved source joined on the active book — factor catalog with provenance + Genie.', to: '/pricing-table', c: '#0891b2' },
-    { n: '3 · Models', t: 'Model Development', b: 'Train, compare, promote — pack generation on promotion.', to: '/development', c: '#2563eb' },
-    { n: '4 · Champions', t: 'Deployment', b: 'UC alias-based versioning across all four families, one-click rollback.', to: '/deployment', c: '#6d28d9' },
-    { n: '5 · The price', t: 'Pricing Engine', b: 'The live rate book — rolling monthly releases; this month is live.', to: '/pricing-engine', c: '#16a34a' },
-    { n: '6 · Defend', t: 'Governance', b: 'Browse packs by model / date / policy, grounded LLM assistant, immutable audit.', to: '/governance', c: '#d97706' },
+    { n: '1 · Sources', t: 'Data Ingestion', b: 'Internal book + vendor feeds + real public data, through an actuary approval gate.', to: '/datasets', borderCls: 'border-t-[3px] border-blue-600', textCls: 'text-blue-600' },
+    { n: '2 · Features', t: 'Modelling Mart', b: 'Every approved source joined on the active book — factor catalog with provenance + Genie.', to: '/pricing-table', borderCls: 'border-t-[3px] border-cyan-600', textCls: 'text-cyan-600' },
+    { n: '3 · Models', t: 'Model Development', b: 'Train, compare, promote — pack generation on promotion.', to: '/development', borderCls: 'border-t-[3px] border-blue-600', textCls: 'text-blue-600' },
+    { n: '4 · Champions', t: 'Deployment', b: 'UC alias-based versioning across all four families, one-click rollback.', to: '/deployment', borderCls: 'border-t-[3px] border-violet-600', textCls: 'text-violet-600' },
+    { n: '5 · The price', t: 'Pricing Engine', b: 'The live rate book — rolling monthly releases; this month is live.', to: '/pricing-engine', borderCls: 'border-t-[3px] border-green-600', textCls: 'text-green-600' },
+    { n: '6 · Defend', t: 'Governance', b: 'Browse packs by model / date / policy, grounded LLM assistant, immutable audit.', to: '/governance', borderCls: 'border-t-[3px] border-amber-600', textCls: 'text-amber-600' },
   ];
   return (
     <>
@@ -218,12 +222,11 @@ function FlowRibbon() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {stages.map((s) => (
           <Link key={s.to} to={s.to}
-            className="flex flex-col rounded-xl border border-line bg-white p-3 hover:shadow-[0_8px_22px_rgba(15,23,42,.1)] hover:-translate-y-0.5 transition"
-            style={{ borderTop: `3px solid ${s.c}` }}>
+            className={`flex flex-col rounded-xl border border-line bg-white p-3 hover:shadow-[0_8px_22px_rgba(15,23,42,.1)] hover:-translate-y-0.5 transition ${s.borderCls}`}>
             <div className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide">{s.n}</div>
             <div className="text-[13.5px] font-bold text-ink mt-0.5">{s.t}</div>
             <div className="text-[11px] text-mut leading-snug mt-1.5 flex-1">{s.b}</div>
-            <div className="text-[11px] font-bold mt-2" style={{ color: s.c }}>open →</div>
+            <div className={`text-[11px] font-bold mt-2 ${s.textCls}`}>open →</div>
           </Link>
         ))}
       </div>

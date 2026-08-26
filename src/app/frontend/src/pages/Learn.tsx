@@ -4,6 +4,7 @@ import {
   BookOpen, Database, Table2, Code, Rocket, Calculator, Shield, Sparkles,
   GitBranch, RefreshCw, Lock, ArrowRight,
 } from 'lucide-react';
+import { Page, PageHeader, OnThisPage } from '../components/ui';
 
 // Self-contained "Learn" page — the accelerator's guide. Sticky TOC on the
 // left, scrollable panels on the right. No external deps (matches the other
@@ -36,18 +37,16 @@ export default function Learn() {
   }, []);
 
   return (
-    <div className="max-w-[1180px] px-8 py-7">
-      <div className="mb-6">
-        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-brand">Bricksurance SE · Pricing Workbench</div>
-        <h1 className="text-2xl font-bold text-ink flex items-center gap-2 mt-1">
-          <BookOpen className="w-6 h-6 text-brand" /> Learn — Pricing Workbench
-        </h1>
-        <p className="text-mut mt-1 text-sm max-w-3xl">
-          How the accelerator is put together: the end-to-end pricing flow, the
-          rolling rate book, the governed AI agents, and the Databricks platform
-          it runs on. Every page links back here.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Bricksurance SE · Pricing Workbench"
+        title="Learn — Pricing Workbench"
+        subtitle="How the accelerator is put together: the end-to-end pricing flow, the rolling rate book, the governed AI agents, and the Databricks platform it runs on."
+        icon={BookOpen}
+      />
+      <OnThisPage>
+        Use the sticky TOC on the left to jump to any section. Six topics: what this demo is, the six-stage pricing spine, the rolling rate book mechanics, how the real AI agents work, governance and bias monitoring, and how to deploy on your own workspace.
+      </OnThisPage>
 
       <div className="grid grid-cols-12 gap-6">
         {/* Sticky TOC */}
@@ -167,7 +166,7 @@ export default function Learn() {
           </Panel>
         </div>
       </div>
-    </div>
+    </Page>
   );
 }
 

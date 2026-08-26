@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from server.audit import log_audit_event
 from server.config import fqn, get_catalog, get_current_user, get_schema, get_workspace_client, get_workspace_host
+from server.routes.admin import _require_admin
 from server.sql import execute_query
 
 logger = logging.getLogger(__name__)
@@ -232,14 +233,14 @@ async def champion_history(family: str, limit: int = 10) -> dict:
         rows = await execute_query(f"""
             SELECT event_type, entity_version, user_id, timestamp, details
             FROM {fqn('audit_log')}
-            WHERE entity_id = '{family}'
+            WHERE entity_id = :family
               AND event_type IN (
                 'model_trained', 'governance_pack_generated',
                 'model_promoted', 'model_rollback', 'model_rolled_back'
               )
             ORDER BY timestamp DESC
             LIMIT {limit}
-        """)
+        """, {"family": family})
     except Exception as e:
         logger.warning("history query failed for %s: %s", family, e)
         return {"family": family, "events": []}
@@ -336,6 +337,12 @@ class RollbackRequest(BaseModel):
 
 @router.post("/rollback")
 async def rollback_champion(req: RollbackRequest) -> dict:
+    # Champion-alias moves are production pricing changes: admin-gated (RBAC),
+    # same guard as the optimiser deploy. Full maker/checker segregation (a
+    # distinct approver identity from the requester) is a roadmap item — see
+    # DEMO_QA tab 2. The audit row below stamps requested_by/approved_by so the
+    # control point is captured today.
+    _require_admin("rollback-champion")
     if not req.note or len(req.note.strip()) < 10:
         raise HTTPException(400, "A rollback justification of at least 10 characters is required.")
     if req.family not in {f["key"] for f in PRODUCTION_FAMILIES}:
@@ -404,7 +411,9 @@ async def rollback_champion(req: RollbackRequest) -> dict:
 @router.post("/champions/{family}/set")
 async def set_champion(family: str, version: str) -> dict:
     """Directly set the champion alias to a version. Used during bootstrap
-    when there's no previous_champion yet."""
+    when there's no previous_champion yet. Admin-gated — flipping the champion
+    is a production pricing change, not a viewer action."""
+    _require_admin("promote-champion")
     if family not in {f["key"] for f in PRODUCTION_FAMILIES}:
         raise HTTPException(400, f"Unknown family {family}")
     w = get_workspace_client()

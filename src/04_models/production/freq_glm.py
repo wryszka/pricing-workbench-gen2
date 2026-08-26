@@ -47,7 +47,7 @@ from databricks.feature_engineering import FeatureEngineeringClient, FeatureLook
 
 mlflow.set_registry_uri("databricks-uc")
 user = dbutils.notebook.entry_point.getDbutils().notebook().getContext().userName().get()
-mlflow.set_experiment(f"/Workspace/Users/{user}/pricing_workbench_production_freq")
+mlflow.set_experiment("/Workspace/Shared/.bundle/pricing-workbench-gen2/experiments/freq")
 
 fe = FeatureEngineeringClient()
 
@@ -69,6 +69,14 @@ FEATURES = [
     "director_stability_score", "employee_count_est",
     "distance_to_coast_km", "neighbourhood_claim_frequency",
 ]
+# NB: `claim_count_5y` is a FIVE-YEAR claim count, and every policy shares the
+# same 5-year observation window (there is no per-policy exposure/term column in
+# the mart), so exposure is a constant. We therefore do NOT add a per-row
+# `offset=np.log(exposure_years)` to the Poisson fit — a constant offset only
+# shifts the intercept and would be redundant with the annualisation the scorer
+# already applies. The scorer divides this model's output by `freq_exposure_years`
+# (=5) before multiplying by per-claim severity so the technical premium is on a
+# 1-year basis. Retrain on a genuine 1-year count → set that divisor to 1.0.
 TARGET = "claim_count_5y"
 KEY    = "policy_id"
 

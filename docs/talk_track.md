@@ -14,6 +14,32 @@ serving, and auditability.
 
 ## EXECUTIVE VERSION (30 minutes, app-focused)
 
+### Before the app opens — The Problem (~1 min)
+
+**What to say (before screen-share starts):**
+> "Before I show you the demo, here's what we're solving. Right now, when new
+> flood or market data arrives, pricing teams typically spend weeks validating
+> the portfolio impact manually — spreadsheets, emails, a sign-off chain with no
+> audit trail. When a regulator asks 'why did this customer's premium change last
+> April?', the answer is often a best guess.
+>
+> Consumer Duty and the FCA's fair-value rules have put this squarely on the
+> CDO and Chief Actuary's desk — not just 'are our prices right?' but 'can we
+> prove they're right, decision by decision, with a traceable audit trail?'
+>
+> The cost of doing nothing: weeks per vendor data cycle, a governance gap that's
+> a regulatory finding waiting to happen, and pricing decisions that can't be
+> reproduced. What I'm about to show you replaces that with a governed, automated
+> loop — same data, same models, same decisions, in seconds instead of weeks."
+
+**Positioning (say once, up front):**
+> "One more framing point: this platform sits *around* your existing rating
+> engine — Radar, Earnix, whatever you use. Think enrich, wrap, replace — in that
+> order, at your pace. Today we prove the data enrichment and governance layers.
+> The rating-engine integration story comes second."
+
+---
+
 ### Opening (2 min)
 
 **What to show:** Landing page of the app
@@ -38,10 +64,14 @@ every table is real (synthetic) data, every model is trained and serving.
 > engine, the system has already joined this data to our 50,000 active policies
 > and re-rated every single one. Watch this..."
 
-**WOW MOMENT — Shadow Pricing:**
+**Hero moment — Shadow Pricing:**
 > "6,018 policies are affected. The total premium impact is £X. 342 policies
 > face a premium increase of more than 10%. And the actuary can see all of this
 > before clicking Approve."
+
+**Headline value to land:** Geospatial enrichment lifts the model's Gini from
+0.11 to 0.25 — that's the discrimination improvement visible in the Model Factory
+leaderboard. Not a prototype claim; it's in the live data.
 
 **Expected questions:**
 - "How long does this shadow pricing take?" → "Seconds. It runs automatically
@@ -65,12 +95,12 @@ every table is real (synthetic) data, every model is trained and serving.
 > captures what the GLM missed. They're ranked on insurance-specific metrics:
 > Gini, PSI for stability, and a regulatory suitability score."
 
-**WOW MOMENT — PDF Report:**
+**Hero moment — PDF Report:**
 > "Click this PDF button — you get a regulatory-grade model validation report.
 > Model identity, performance metrics, data lineage, approval chain. Ready for
 > your regulator."
 
-**Optional WOW — AI Agent:**
+**Talking point — AI Agent:**
 > "There's an optional AI assistant that can analyse the feature table and
 > recommend which models to train. It's turned off by default — actuaries
 > decide. But it shows what's possible."
@@ -94,17 +124,26 @@ every table is real (synthetic) data, every model is trained and serving.
 > table for model training. Online, it's a Lakebase store with sub-10ms lookups.
 > Same data, different access pattern."
 
-**WOW MOMENT — Auto Feature Lookup:**
+**Hero moment — Auto Feature Lookup:**
 > "When we deploy a model, you send just a policy_id and get a price back.
 > The endpoint automatically looks up all 90 features from the online store.
 > No custom integration code. The model knows which features it needs because
 > we captured that lineage at training time."
 
+**Rating-engine positioning (say this here):**
+> "Important framing: the rating formula you see here is a **demonstration
+> arithmetic layer** — six parameters to make the demo self-contained. On your
+> estate, Databricks is the **data and governance layer around Radar or Earnix**,
+> not a replacement for your rate-file GLM. The REST endpoint here is the seam
+> point: your rating engine calls it, gets back an enriched score, and applies
+> its own relativities. Enrich first, integrate later, replace only if you choose."
+
 **Expected questions:**
 - "What's the latency?" → "Sub-100ms end-to-end including feature lookup."
-- "How does this compare to Radar/Earnix?" → "Those tools are great at what
-  they do. This extends the capability upstream — data preparation, feature
-  engineering, model training — and provides a REST API they can call."
+- "How does this compare to Radar/Earnix?" → "Those tools own the rate-file
+  and the relativities — we sit upstream. Data prep, feature engineering, model
+  training, and a governed REST API your rating engine can call. See DEMO_QA Q31
+  for the full framing."
 
 **Pause for questions.**
 
@@ -120,7 +159,7 @@ every table is real (synthetic) data, every model is trained and serving.
 > can reconstruct the exact state of any model, its training data, and the
 > human decisions that approved it."
 
-**WOW MOMENT — Full Audit Trail:**
+**Hero moment — Full Audit Trail:**
 > "This isn't a separate governance tool. It's the same platform. Unity Catalog
 > tracks lineage automatically. The audit log adds the human decisions on top.
 > Delta Time Travel lets you go back to any point in history."

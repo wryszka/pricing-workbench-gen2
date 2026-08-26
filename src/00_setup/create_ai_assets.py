@@ -32,9 +32,18 @@ import json
 from databricks.sdk import WorkspaceClient
 w = WorkspaceClient()
 
+def _is_running(x) -> bool:
+    # Robust against SDK enum repr drift: the State enum stringifies as
+    # "State.RUNNING" (not "WarehouseState.RUNNING"), so the old exact-string
+    # compare never matched and every warehouse looked stopped. Match on the
+    # enum .value / trailing token instead.
+    state = getattr(x, "state", None)
+    return str(getattr(state, "value", state) or "").upper().endswith("RUNNING")
+
 if not wh:
-    running = [x for x in w.warehouses.list() if str(x.state) == "WarehouseState.RUNNING"]
-    wh = (running or list(w.warehouses.list()))[0].id
+    all_whs = list(w.warehouses.list())
+    running = [x for x in all_whs if _is_running(x)]
+    wh = (running or all_whs)[0].id
     print(f"warehouse auto-selected: {wh}")
 
 def _read(fname: str) -> dict:
@@ -81,6 +90,11 @@ for fname in genie_files:
         "parent_path": parent,
         "serialized_space": _retarget(d["serialized_space"]),
     }
+    # Deliberately the raw REST POST, NOT w.genie.create_space(). The typed SDK
+    # method re-serializes `serialized_space`, which double-encodes it and
+    # produces a broken/empty space — a known gotcha for this project. The raw
+    # `POST /api/2.0/genie/spaces` with the already-serialized string is the one
+    # reliable path, so keep it even though the typed method now exists.
     created = w.api_client.do("POST", "/api/2.0/genie/spaces", body=body)
     sid = created.get("space_id")
     genie_ids[title] = sid
