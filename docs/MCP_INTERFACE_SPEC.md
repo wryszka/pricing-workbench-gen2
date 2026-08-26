@@ -2,7 +2,7 @@
 
 > How to give any workbench a **Model Context Protocol** server the same way the Pricing Workbench does: one tool surface that backs the app, the notebooks *and* external agents; governed and gated server-side; and a manifest-driven UI tab so the surface is visible and never drifts from what's actually served.
 >
-> Reference implementation (copy from here): `src/app/server/routes/mcp.py` (transport + manifest), `src/app/server/optimisation_mcp.py` (a tool module), `src/app/frontend/src/pages/Supervisor.tsx` (the MCP tab), `src/app/frontend/src/pages/Addons.tsx` (the Toolkit tile). Verified live: server `bricksurance-motor-distribution` v1.0.0, MCP protocol `2025-06-18`, 21 tools.
+> Reference implementation (copy from here): `src/app/server/routes/mcp.py` (transport + manifest + merge), `src/app/server/optimisation_mcp.py` (a domain tool module), `src/app/server/workbench_mcp.py` (the **full app surface** as delegating tools — §3.2b), `src/app/frontend/src/pages/Supervisor.tsx` (the MCP tab), `src/app/frontend/src/pages/Addons.tsx` (the Toolkit tile). Verified live: server `bricksurance-motor-distribution` v1.0.0, MCP protocol `2025-06-18`, **71 tools** across 10 groups (the whole app surface — quote/MTA, deploy, governance, ingestion, factory, mart, book, review, optimisation, distribution).
 
 ---
 
@@ -76,6 +76,30 @@ XYZ_TOOL_IMPLS: dict[str, callable] = {
 ```
 
 **The `description` is the API.** It's the only thing the agent sees when choosing a tool — write it as an instruction, name the ordering ("Call this FIRST…"), and state honestly what a tool *can't* do (see the real `get_quote_requirements` / `price_motor_risk` descriptions).
+
+### 3.2b Fast path to FULL parity — delegate to the route handler
+To expose *everything the app can do* without duplicating logic, make each tool a thin wrapper that **calls the existing route handler** — you inherit its logic *and* its server-side gate for free, and the surface can never drift from the app. Reference: `src/app/server/workbench_mcp.py` (7 domain groups, ~50 tools, all delegating).
+
+```python
+from server.routes import pricing, deployment, governance   # the route modules
+from fastapi import HTTPException
+
+async def _call(coro):                       # normalise handler → {"ok": ...}
+    try:    r = await coro
+    except HTTPException as e:                # a 403 from a gate becomes a clean result
+        return {"ok": False, **({"gated": True} if e.status_code in (401,403) else {}), "error": f"{e.status_code}: {e.detail}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+    return {"ok": True, **r} if isinstance(r, dict) else {"ok": True, "data": r}
+
+async def _t_price_mta(a, s, ag):             # read/compute tool
+    return await _call(pricing.simulate_mta(pricing.MtaRequest(policy_id=a["policy_id"], changes=a["changes"])))
+
+async def _t_deploy_rollback(a, s, ag):       # gated action — the handler's _require_admin still fires
+    return await _call(deployment.rollback_champion(deployment.RollbackRequest(family=a["family"], note=a["note"])))
+```
+
+Why this works: the tool runs **inside** the authenticated `/api/mcp` request, so the same middleware context is present — `get_current_user()` and `_require_admin(...)` inside the delegated handler behave exactly as they do for the app. A gated route stays gated; you write the gate **once**, in the route. Build tools by walking the app's route list and wrapping every business handler; skip only pure demo/infra ops (reset, sleep, cache, stream, load-test) — those operate the rig, not the domain.
 
 ### 3.3 Three kinds of tool
 - **read** — `SELECT` from a governed table / view / UC function. Idempotent, ungated. The bulk of the surface.

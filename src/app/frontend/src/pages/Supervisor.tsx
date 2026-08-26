@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Bot, Send, Loader2, Sparkles, ChevronDown, ChevronUp, Wrench,
   Database, Shield, Scale, Workflow, FlaskConical, ExternalLink,
-  Server, Plug, Target,
+  Server,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import {
@@ -183,9 +183,21 @@ function McpTab() {
   if (!m) return <Loading label="Reading the MCP server manifest…" />;
 
   const tools: any[] = m.tools || [];
-  const dist = tools.filter(t => !t.name.startsWith('opt_'));
-  const opt  = tools.filter(t => t.name.startsWith('opt_'));
   const rpcUrl = `${origin}/api/mcp`;
+  const GROUPS: { prefix: string; label: string; blurb: string }[] = [
+    { prefix: '',         label: 'Distribution', blurb: 'The agentic-distribution surface — an AI channel discovers requirements and quotes a motor risk through the live engine.' },
+    { prefix: 'price_',   label: 'Pricing engine & MTA', blurb: 'Run a commercial quote, mid-term adjustment, and read the rate book / releases / rating config.' },
+    { prefix: 'deploy_',  label: 'Model deployment', blurb: 'Champions, promote / rollback, and the monthly rate-engine release. Write actions are admin-gated server-side.' },
+    { prefix: 'gov_',     label: 'Governance', blurb: 'Packs, the grounded governance agent, and the bias + premium-adequacy monitors.' },
+    { prefix: 'ingest_',  label: 'Data ingestion', blurb: 'Sources, diff / impact / quality, and the actuary approval gate.' },
+    { prefix: 'factory_', label: 'Model factory', blurb: 'Plan → approve / train → leaderboard → package candidate models.' },
+    { prefix: 'mart_',    label: 'Modelling mart', blurb: 'Feature catalog / profile / sources; rebuild + online-store arm / pause.' },
+    { prefix: 'book_',    label: 'Book & analytics', blurb: 'The live rate book, quote-stream analytics, and comparison scenarios.' },
+    { prefix: 'review_',  label: 'Model review', blurb: 'Families, versions, explainability, and generate a governance pack.' },
+    { prefix: 'opt_',     label: 'Price optimisation', blurb: 'Optimiser stages + every governed read. opt_deploy_factors is gated server-side (RBAC + corridor) — an agent can’t bypass it.' },
+  ];
+  const prefixes = GROUPS.map(g => g.prefix).filter(Boolean);
+  const groupOf = (name: string) => prefixes.find(p => name.startsWith(p)) || '';
 
   return (
     <div className="space-y-5">
@@ -194,9 +206,10 @@ function McpTab() {
           <div>
             <CardTitle>MCP server — live</CardTitle>
             <p className="text-[13px] text-ink leading-relaxed mt-1 max-w-2xl">
-              The workbench publishes its pricing capabilities as a <strong>Model Context Protocol</strong> server, so an
-              outside agent can discover requirements, get a real engine price, and run the optimiser — the same tools the
-              app and notebooks use (MCP-first: one surface, no logic built twice). Read live from the running server's manifest.
+              The workbench publishes its <strong>whole surface</strong> as a <strong>Model Context Protocol</strong> server, so an
+              outside agent can operate it end to end — quote &amp; mid-term-adjust, deploy, govern, ingest, run the factory and the
+              optimiser — the same tools the app and notebooks use (MCP-first: one surface, no logic built twice). Every write action
+              carries the same server-side gate as the app. Read live from the running server's manifest.
             </p>
           </div>
           <div className="flex flex-col gap-1.5 items-end">
@@ -225,25 +238,20 @@ function McpTab() {
         </div>
       </Card>
 
-      <Card>
-        <div className="flex items-center gap-2 mb-2">
-          <Plug className="w-4 h-4 text-[#2563eb]" />
-          <CardTitle>Distribution tools</CardTitle>
-          <span className="text-[11px] text-mut ml-auto">{dist.length}</span>
-        </div>
-        <p className="text-[12.5px] text-mut mb-3">The agentic-distribution surface — an AI channel can quote a motor risk through the live engine.</p>
-        <McpToolList tools={dist} />
-      </Card>
-
-      <Card>
-        <div className="flex items-center gap-2 mb-2">
-          <Target className="w-4 h-4 text-[#2563eb]" />
-          <CardTitle>Price-optimisation tools</CardTitle>
-          <span className="text-[11px] text-mut ml-auto">{opt.length}</span>
-        </div>
-        <p className="text-[12.5px] text-mut mb-3">Run the optimiser stages and read every governed output. <code className="font-mono text-[11px] bg-slate-100 border border-line px-1 rounded">opt_deploy_factors</code> is gated server-side (RBAC + corridor) — an agent can't bypass it.</p>
-        <McpToolList tools={opt} />
-      </Card>
+      {GROUPS.map((g) => {
+        const gt = tools.filter(t => groupOf(t.name) === g.prefix);
+        if (!gt.length) return null;
+        return (
+          <Card key={g.label}>
+            <div className="flex items-center gap-2 mb-2">
+              <CardTitle>{g.label}</CardTitle>
+              <span className="text-[11px] text-mut ml-auto">{gt.length}</span>
+            </div>
+            <p className="text-[12.5px] text-mut mb-3">{g.blurb}</p>
+            <McpToolList tools={gt} />
+          </Card>
+        );
+      })}
 
       <UnderTheHood
         title="MCP server"

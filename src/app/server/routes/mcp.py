@@ -344,8 +344,11 @@ TOOL_IMPLS = {
 # Price-optimisation stages + reads as MCP tools (Principle 8 — MCP-first: app,
 # notebook and agent are all clients of one surface). Merged into the same server.
 from server.optimisation_mcp import OPTIMISATION_TOOL_SCHEMAS, OPTIMISATION_TOOL_IMPLS  # noqa: E402
-TOOL_SCHEMAS = TOOL_SCHEMAS + OPTIMISATION_TOOL_SCHEMAS
-TOOL_IMPLS = {**TOOL_IMPLS, **OPTIMISATION_TOOL_IMPLS}
+# Full app surface as tools (price / deploy / gov / ingest / factory / mart / book / review),
+# each delegating to its app route handler so logic + server-side gates are reused.
+from server.workbench_mcp import WORKBENCH_TOOL_SCHEMAS, WORKBENCH_TOOL_IMPLS  # noqa: E402
+TOOL_SCHEMAS = TOOL_SCHEMAS + OPTIMISATION_TOOL_SCHEMAS + WORKBENCH_TOOL_SCHEMAS
+TOOL_IMPLS = {**TOOL_IMPLS, **OPTIMISATION_TOOL_IMPLS, **WORKBENCH_TOOL_IMPLS}
 
 
 # ---------------------------------------------------------------------------

@@ -47,9 +47,9 @@ export default function Addons() {
           icon={Server}
           accent="violet"
           title="MCP Server"
-          description="The workbench's pricing capabilities published as a Model Context Protocol server — discovery, a real engine price, and the optimiser stages/reads exposed as callable tools for outside agents. Opens the live tool surface on the Pricing AI page."
+          description="The workbench's whole surface published as a Model Context Protocol server — quote & mid-term adjustment, deployment, governance, ingestion, the factory and the optimiser, all as callable tools for outside agents (write actions gated like the app). Opens the live tool surface on the Pricing AI page."
           audience="platform · distribution · agent developers"
-          tags={['JSON-RPC /api/mcp', '21 live tools', 'Server-side deploy gate']}
+          tags={['JSON-RPC /api/mcp', 'Full app surface', 'Server-side gates']}
         />
       </div>
 
