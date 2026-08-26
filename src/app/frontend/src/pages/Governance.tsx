@@ -325,15 +325,16 @@ function ByDate({ onPick }: { onPick: (p: Pack) => void }) {
       .catch(() => setPacks([])).finally(() => setLoading(false));
   }, [date]);
 
-  const getRelativeDate = (monthsAgo: number) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - monthsAgo, 25);
-    return d.toISOString().substring(0, 10);
-  };
+  // The governance-pack history is a FIXED seeded series (backdate_versions.py
+  // registers monthly versions 2025-05 → 2026-03, not date-shifted by reset), so
+  // the by-date quick-picks must land inside that range — anchoring them to
+  // wall-clock ("N months ago") would fall past the last pack and collapse two
+  // picks onto the same champion. Each date below resolves to a distinct seeded
+  // champion via the as-of (`generated_at <= :date`) lookup.
   const examples = [
-    { label: 'Initial baseline',  date: getRelativeDate(6) },
-    { label: 'Mid-cycle refit',   date: getRelativeDate(3) },
-    { label: 'Most recent',       date: getRelativeDate(1) },
+    { label: 'Initial baseline',  date: '2025-06-01' },
+    { label: 'Mid-cycle refit',   date: '2025-11-01' },
+    { label: 'Most recent',       date: '2026-03-01' },
   ];
 
   return (

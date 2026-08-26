@@ -440,7 +440,12 @@ class PricingScorer(PythonModel):
         # Price up to (not including) the demand adjustment first, so demand can
         # be evaluated at the price we're actually proposing for this quote
         # rather than the stale in-force premium.
-        technical, loaded, fraud_load = self._apply_rules(freq, sev, fraud)
+        # `technical` = the pure annualised freq×sev cost (margin floor); `loaded`
+        # adds expense+commission. Per this codebase's convention the exported
+        # `technical_premium` column is the LOADED break-even price (see DECISIONS.md
+        # — "technical price = loaded"), so `_technical` is retained only as the
+        # documented cost floor and is intentionally not exported separately.
+        _technical, loaded, fraud_load = self._apply_rules(freq, sev, fraud)
         proposed_premium = loaded + fraud_load
         demand = self._score_lgb(
             self.demand, self._build_demand_input(features_df, proposed_premium))

@@ -193,11 +193,11 @@ async def packs_on_date(date: str) -> dict:
                 SELECT *, row_number() OVER (PARTITION BY model_family
                                              ORDER BY generated_at DESC) AS rn
                 FROM {fqn('governance_packs_index')}
-                WHERE CAST(generated_at AS DATE) <= DATE('{date.replace("'", "''")}')
+                WHERE CAST(generated_at AS DATE) <= DATE(:date)
             )
             WHERE rn = 1
             ORDER BY model_family
-        """)
+        """, {"date": date})
     except Exception as e:
         logger.warning("by-date query failed: %s", e)
         return {"date": date, "packs": []}

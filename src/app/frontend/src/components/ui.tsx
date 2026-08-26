@@ -310,11 +310,12 @@ export function AiModeBadge({ theme = 'dark' }: { theme?: 'dark' | 'light' }) {
   const [mode, setMode] = useState<'live' | 'cached' | null>(null);
   const [busy, setBusy] = useState(false);
   const [entries, setEntries] = useState<number>(0);
+  const [denied, setDenied] = useState(false);   // toggle is admin-only (403)
 
   useEffect(() => {
     fetch('/api/admin/ai-mode')
       .then((r) => r.json())
-      .then((d) => { setMode(d.mode); setEntries(d.entries ?? 0); })
+      .then((d) => { if (d?.mode === 'live' || d?.mode === 'cached') setMode(d.mode); setEntries(d.entries ?? 0); })
       .catch(() => setMode('live'));
   }, []);
 
@@ -328,9 +329,17 @@ export function AiModeBadge({ theme = 'dark' }: { theme?: 'dark' | 'light' }) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ mode: next }),
       });
+      if (!r.ok) {
+        // Flipping the global AI mode is admin-only (POST is _require_admin-gated);
+        // a non-admin viewer gets 403. Leave the displayed mode unchanged and mark
+        // it read-only rather than blanking the badge (which would disable it for good).
+        if (r.status === 403) setDenied(true);
+        return;
+      }
       const d = await r.json();
-      setMode(d.mode);
-      setEntries(d.entries ?? 0);
+      if (d?.mode === 'live' || d?.mode === 'cached') { setMode(d.mode); setEntries(d.entries ?? 0); }
+    } catch {
+      /* network hiccup — keep the current mode, don't blank the badge */
     } finally {
       setBusy(false);
     }
@@ -351,7 +360,9 @@ export function AiModeBadge({ theme = 'dark' }: { theme?: 'dark' | 'light' }) {
       type="button"
       onClick={flip}
       disabled={!mode || busy}
-      title={isCached
+      title={denied
+        ? `AI mode is ${mode} (switching is admin-only for this shared demo).`
+        : isCached
         ? `Serving cached AI responses (${entries} stored). Click to switch to live.`
         : 'Calling real serving endpoints. Click to switch to cached / consistent / fast.'}
       className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors disabled:opacity-50 ${colour}`}
