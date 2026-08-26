@@ -65,7 +65,14 @@ The value: it exposed the honesty gap and the real Phase-2 edges.
 - **Honesty** — constraint-YAML enforcement model documented; DEMO_QA Q8/Q19–Q25 added (incl. all incumbent-champion "yes-but"s per the v2.1 rule).
 - DECISIONS.md updated (MCP authz design, GIPP enforcement model, this panel).
 
-## Open / roadmapped
-- Renewal optimisation + in-solver GIPP; portfolio-level constraints; finer segmentation; live sensitivity widget (incumbent champion + decision-maker).
-- C-suite narrative: risk-of-inaction opening, incumbent-contrast on-screen artifact.
-- GATE-1 lineage edge; React poll cleanup + heavy-mode `del`; runsheet non-author smoke; verify FM endpoint per target workspace.
+## Roadmap — CLEARED 2026-08-26 (commit 45cc29f)
+- ✅ **Renewal optimisation + solve-time GIPP** — `optimisation_renewal_solver`: renewal priced `min(prior×factor, equiv_new_business)` → GIPP by construction (0 breaches, +£1.35m). Chained into the spine; `/renewal-factors` + Renewals section + MCP tool.
+- ✅ **Portfolio (cross-segment) constraint** — solver greedy-repair to hold total volume ≥ `portfolio.min_volume_ratio` (binding='portfolio_volume').
+- ✅ **Sensitivity** — real re-solve at 0.5–1.5× elasticity → `optimisation_sensitivity`; `/sensitivity` endpoint + Optimiser panel.
+- ✅ **Incumbent-contrast artifact + risk-of-inaction** — How-it-works "vs a black-box appliance" comparison table.
+- ✅ **Polish** — heavy-mode array freed; GATE-1 status audited (`optimisation_technical_scored.lineage_edge_emitted`); React poll unmount guard.
+
+## Still open (labelled)
+- **Finer segmentation** — the 9-segment grid is illustrative; solver is linear in segment count (config choice on a real book).
+- **GATE-1 lineage edge** — champion scoring is correct; whether the `spark_udf` path emits the UC model→table edge (vs inner-artifact fallback) is now recorded per-run in the audit log; closing it fully needs the FE/pyfunc load path.
+- **Runsheet non-author smoke; verify FM endpoint per target workspace** (process/deploy checks).
