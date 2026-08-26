@@ -65,8 +65,11 @@ _NUM_COLS = {
     "factor_min", "factor_max", "factor_spread_pp", "agreement", "n_models",
     "mean_profit", "p5_profit", "p95_profit", "mean_volume", "prob_below_plan",
     "grid_points", "n_draws", "policies", "total_evaluations", "wallclock_s", "est_cost_usd",
+    "renewal_factor", "renewal_factor_pct", "retention_hold", "retention_opt",
+    "margin_hold", "margin_opt", "margin_uplift", "gipp_breaches",
+    "elasticity_scale", "vs_base_pct",
 }
-_BOOL_COLS = {"within_corridor", "pareto", "outside_corridor", "pass", "overall_pass"}
+_BOOL_COLS = {"within_corridor", "pareto", "outside_corridor", "pass", "overall_pass", "gipp_enforced"}
 
 
 def _coerce(rows):
@@ -132,6 +135,34 @@ async def summary():
         "scenario_meta": (_coerce(scen_meta) or [None])[0],
         "monitoring_headline": (_coerce(mon) or [None])[0],
     }
+
+
+@router.get("/sensitivity")
+async def sensitivity():
+    """How the uplift moves if the elasticity estimate is off — a real re-solve at
+    scaled elasticity (answers the CFO's 'how sensitive to the assumption?')."""
+    rows = await _safe(f"""SELECT elasticity_scale, profit_uplift, vs_base_pct
+                           FROM {fqn('optimisation_sensitivity')} ORDER BY elasticity_scale""")
+    if rows is None:
+        return {"available": False, "points": []}
+    return {"available": True, "points": _coerce(rows) or []}
+
+
+@router.get("/renewal-factors")
+async def renewal_factors():
+    """§6 renewal solve — per-segment renewal factors with GIPP enforced by a
+    per-policy clamp (renewal ≤ equivalent new business), retention-weighted."""
+    rows = await _safe(f"""
+        SELECT segment, policies, renewal_factor_pct, retention_hold, retention_opt,
+               margin_uplift, gipp_breaches, gipp_enforced
+        FROM {fqn('optimisation_renewal_factor_table')} ORDER BY segment
+    """)
+    if rows is None:
+        return {"available": False, "segments": []}
+    rows = _coerce(rows)
+    return {"available": True, "segments": rows,
+            "total_gipp_breaches": sum(int(r.get("gipp_breaches") or 0) for r in rows),
+            "margin_uplift": round(sum(r.get("margin_uplift") or 0 for r in rows), 2)}
 
 
 @router.get("/scenarios")

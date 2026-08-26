@@ -17,11 +17,12 @@
 #     only on the age×vehicle segment, so protected characteristics are never
 #     optimisation levers in the first place; proxy_correlation_max is then
 #     verified post-solve by the fairness job (optimisation_fairness).
-#   * MONITORED, NOT YET SOLVE-TIME ENFORCED: the renewal/GIPP rule. Phase 1
-#     optimises NEW-BUSINESS factors; it does not reprice renewals, so GIPP is
-#     tracked by the monitoring/fairness jobs (breach tile) rather than enforced
-#     inside the solver. Renewal optimisation with in-solver GIPP is Phase 2.
-#     (See docs/DEMO_QA.md and docs/optimisation_runbook.md.)
+#   * SOLVE-TIME ENFORCED (renewals): the GIPP rule. The renewal solver
+#     (optimisation_renewal_solver) prices each renewal as min(prior × factor,
+#     equivalent_new_business), so a renewal can NEVER exceed its fresh
+#     new-business quote — GIPP holds by construction, per policy (0 breaches in
+#     the solved renewal factor table). The monitoring/fairness jobs still track
+#     the realised book as a check. (See docs/DEMO_QA.md Q19.)
 # ---------------------------------------------------------------------------
 version: "v1"
 effective_from: "auto"          # resolved to the current rate-book month at solve time
@@ -90,3 +91,13 @@ objective:
   maximise: "expected_profit"     # expected_profit | expected_gwp | retention_weighted_profit
   # expected_profit = sum over segments of P(convert|price) * (price - technical_cost)
   retention_weight: 0.0           # >0 tilts toward volume/retention over pure margin
+
+# --- Portfolio-level (cross-segment) constraint -----------------------------
+# A per-segment argmax can trade away too much volume for margin. This couples
+# the segments: total expected volume must stay >= min_volume_ratio of today's
+# book. The solver greedily walks back the least profit-efficient increases until
+# the floor holds (binding == 'portfolio_volume' on any segment it pulled back).
+# Default 0.90 = non-binding on the launch book; raise toward 0.99 to demand the
+# optimiser "hold volume while lifting profit".
+portfolio:
+  min_volume_ratio: 0.90

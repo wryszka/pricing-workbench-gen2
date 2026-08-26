@@ -174,6 +174,7 @@ for i in range(GRID):
     draws = (rng.random((DRAWS, N)) < p)                    # DRAWS x N Bernoulli
     profit_draws = draws @ margin                            # DRAWS portfolio profits
     volume_draws = draws.sum(axis=1)
+    del draws                                                # free the (DRAWS×N) matrix before the next candidate
     eval_count += DRAWS * N
     stoch_rows.append({
         "candidate_id": "hold" if i == 0 else f"cand_{i:05d}", "avg_factor": round(factor, 4),

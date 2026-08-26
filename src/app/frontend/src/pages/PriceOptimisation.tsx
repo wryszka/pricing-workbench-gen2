@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Target, ChevronDown, ChevronUp, ShieldCheck, Info, Cpu, Database,
          Layers, GitBranch, LineChart, ExternalLink, Play, Loader2, CheckCircle2,
          Activity, Zap, AlertTriangle, ScrollText, TrendingUp, Gauge, Bot } from 'lucide-react';
@@ -89,6 +89,8 @@ export default function PriceOptimisation() {
   const [showHelp, setShowHelp] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const [scen, setScen] = useState<any>(null);
+  const [renewal, setRenewal] = useState<any>(null);
+  const [sensitivity, setSensitivity] = useState<any>(null);
   const [elast, setElast] = useState<any>(null);
   const [mon, setMon] = useState<any>(null);
   const [redteam, setRedteam] = useState<any>(null);
@@ -111,9 +113,15 @@ export default function PriceOptimisation() {
   const [advState, setAdvState] = useState<string | null>(null);
   const [advResult, setAdvResult] = useState<any>(null);
 
+  // Guard async poll loops against setState-after-unmount (tab switch / navigate).
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
+
   const loadAll = () => {
     api.optimisationSummary().then(setSummary).catch((e) => setErr(String(e)));
     api.optScenarios().then(setScen).catch(() => {});
+    api.optRenewalFactors().then(setRenewal).catch(() => {});
+    api.optSensitivity().then(setSensitivity).catch(() => {});
     api.optElasticity().then((d) => { setElast(d); if (d?.curves?.length) setSegSel((p) => p || d.curves[0].segment); }).catch(() => {});
     api.optMonitoring().then(setMon).catch(() => {});
     api.optRedteam().then(setRedteam).catch(() => {});
@@ -138,6 +146,7 @@ export default function PriceOptimisation() {
       if (!r?.ok) { setRun({ error: r?.error || 'run failed' }); setBusy(false); return; }
       let polls = 0; let lastUrl: string | undefined;
       const poll = async () => {
+        if (!mounted.current) return;
         if (++polls > 80) { setRun({ state: 'TIMEOUT', url: lastUrl }); setBusy(false); return; }
         const s = await api.optRunStatus(r.run_id);
         lastUrl = s.run_page_url || lastUrl;
@@ -157,6 +166,7 @@ export default function PriceOptimisation() {
       if (!r?.ok) { setAdvState('error: ' + (r?.error || 'failed')); setAdvBusy(false); return; }
       let polls = 0;
       const poll = async () => {
+        if (!mounted.current) return;
         if (++polls > 80) { setAdvState('TIMEOUT'); setAdvBusy(false); return; }
         const s = await api.optRunStatus(r.run_id);
         setAdvState(s.result_state || s.life_cycle_state);
@@ -280,6 +290,21 @@ export default function PriceOptimisation() {
             <FrontierChart frontier={scen?.frontier || []} />
           </Section>
 
+          {sensitivity?.available && sensitivity.points?.length > 0 && (
+            <Section title="Sensitivity — what if our elasticity estimate is off?" icon={<Gauge className="w-4 h-4 text-emerald-600" />}
+              sub="A real re-solve of the whole book at scaled elasticity. If demand is half as price-sensitive as we think, the uplift is the 0.5× column — the pattern holds, the magnitude scales.">
+              <div className="flex gap-2 flex-wrap">
+                {sensitivity.points.map((p: any) => (
+                  <div key={p.elasticity_scale} className={`rounded-lg border px-4 py-3 ${Number(p.elasticity_scale) === 1 ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50 border-gray-200'}`}>
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">{Number(p.elasticity_scale)}× elasticity{Number(p.elasticity_scale) === 1 ? ' (base)' : ''}</div>
+                    <div className="text-lg font-semibold text-gray-900">{gbpM(p.profit_uplift)}</div>
+                    {p.vs_base_pct != null && Number(p.elasticity_scale) !== 1 && <div className="text-[11px] text-gray-500">{signPct(p.vs_base_pct)} vs base</div>}
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
           <Section title="Per-segment decision (waterfall)" icon={<Layers className="w-4 h-4 text-emerald-600" />}
             sub="What the solver did to each age·vehicle segment and why it stopped there (interior optimum, segment cap, or corridor edge).">
             <Waterfall factors={factors} />
@@ -309,6 +334,38 @@ export default function PriceOptimisation() {
               </table>
             </div>
           </Section>
+
+          {renewal?.available && (
+            <Section title="Renewals — GIPP enforced in the solve" icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />}
+              sub="The renewal book, retention-weighted. Each renewal is priced at min(prior × factor, equivalent new business), so no renewal exceeds its fresh new-business quote — UK GIPP holds by construction, per policy.">
+              <div className="flex gap-3 flex-wrap mb-3">
+                <Kpi label="Renewal margin uplift" value={gbpM(renewal.margin_uplift)} tone="good" />
+                <Kpi label="GIPP breaches" value={String(renewal.total_gipp_breaches)}
+                  tone={renewal.total_gipp_breaches === 0 ? 'good' : 'warn'} hint="enforced by per-policy clamp" />
+                <Kpi label="Segments" value={String(renewal.segments.length)} />
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-left text-gray-500 border-b">
+                    <th className="py-1.5 pr-3">Segment</th><th className="pr-3">Policies</th><th className="pr-3">Renewal factor</th>
+                    <th className="pr-3">Retention hold→opt</th><th className="pr-3">Margin uplift</th><th>GIPP</th>
+                  </tr></thead>
+                  <tbody>
+                    {renewal.segments.map((r: any) => (
+                      <tr key={r.segment} className="border-b border-gray-100">
+                        <td className="py-1.5 pr-3 font-medium text-gray-800">{r.segment}</td>
+                        <td className="pr-3">{Number(r.policies).toLocaleString()}</td>
+                        <td className={`pr-3 font-medium ${r.renewal_factor_pct >= 0 ? 'text-emerald-700' : 'text-amber-700'}`}>{signPct(r.renewal_factor_pct)}</td>
+                        <td className="pr-3 text-gray-600">{pct(r.retention_hold, 0)} → {pct(r.retention_opt, 0)}</td>
+                        <td className="pr-3">{gbp(r.margin_uplift)}</td>
+                        <td>{r.gipp_breaches === 0 ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-amber-600" />}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
 
           <Section title="Approve → deploy" icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />}
             sub="The human sets policy; the gate enforces it. On approve, the corridor is re-checked SERVER-SIDE (a future agent cannot bypass it), then the factor set is stamped to optimisation_deployment + the immutable audit log.">
@@ -485,6 +542,32 @@ export default function PriceOptimisation() {
       {/* --------------------------------------------------------- HOW IT WORKS */}
       {tab === 'how' && (
         <>
+          <Section title="Where this wins — vs a black-box appliance" icon={<TrendingUp className="w-4 h-4 text-emerald-600" />}
+            sub="We concede sophistication on any single formula. We win on breadth, openness and cost — and on the things a regulated buyer actually needs. The risk of inaction is a per-seat licence you can't audit, can't extend, and can't point a regulator at.">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-gray-500 border-b">
+                  <th className="py-1.5 pr-3"></th><th className="pr-3">Black-box appliance</th><th>This workbench</th>
+                </tr></thead>
+                <tbody>
+                  {[['Decision logic', 'vendor-owned, opaque', 'open code — you own & extend it'],
+                    ['Audit trail', 'a recommendation, no "why"', 'every price → rule version + inputs + approver'],
+                    ['Your own models', "can't bring them", 'your demand models, your constraints'],
+                    ['Change a rule', 'vendor roadmap (quarters)', 'a pull request (days)'],
+                    ['Cost', 'per-seat licence', 'serverless, scale-to-zero'],
+                    ['Cross-domain', 'a pricing silo', 'one lakehouse (claims, capital, fraud)']].map((r) => (
+                    <tr key={r[0]} className="border-b border-gray-100">
+                      <td className="py-1.5 pr-3 font-medium text-gray-700">{r[0]}</td>
+                      <td className="pr-3 text-amber-700">{r[1]}</td>
+                      <td className="text-emerald-700">{r[2]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2">Enrich it, wrap it, or replace it — modular by design. We don't out-formula a specialist; we out-own, out-audit and out-cost it.</p>
+          </Section>
+
           <Section title="The governed loop" icon={<GitBranch className="w-4 h-4 text-emerald-600" />}>
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {['Quote & renewal data', 'Monotone elasticity', 'Simulation (N sets)', 'Constrained solver', 'Factor table', 'Monitoring'].map((s, i, a) => (

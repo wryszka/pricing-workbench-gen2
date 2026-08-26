@@ -323,4 +323,24 @@ print(f"optimisation_portfolio_snapshot: {len(snap):,} in-force policies")
 
 # COMMAND ----------
 
+# GATE-1 transparency: record how technical premium was scored + whether the
+# spark_udf path emitted a model→table UC lineage edge (vs the inner-artifact
+# fallback), so the governance status is explicit in the audit log — not silent.
+try:
+    _le = bool(lineage_ok)          # set in the champion branch; NameError under 'transparent'
+except NameError:
+    _le = False
+try:
+    import json as _j
+    _d = _j.dumps({"technical_source": TECH_SOURCE, "lineage_edge_emitted": _le,
+                   "note": "GATE-1: champion-scored; lineage edge via spark_udf when available, else inner-artifact fallback"}).replace("'", "''")
+    spark.sql(f"""
+      INSERT INTO {fqn}.audit_log (event_id, event_type, entity_type, entity_id, entity_version,
+                                   user_id, timestamp, details, source)
+      SELECT uuid(), 'optimisation_technical_scored', 'table', 'optimisation_quote_response', '-',
+             'optimiser', current_timestamp(), '{_d}', 'optimisation_motor_data'
+    """)
+except Exception as e:
+    print(f"GATE-1 audit skipped: {e}")
+
 print("Block 1 complete → optimisation_quote_response, optimisation_renewal_response, optimisation_portfolio_snapshot")

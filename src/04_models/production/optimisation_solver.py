@@ -131,30 +131,62 @@ def neg_objective(f, s):
         return -(profit + ret_w * p * n * float(gwp / max(1, n)))  # tilt toward retained volume
     return -profit
 
-# COMMAND ----------
+# --- per-segment unconstrained argmax ---
+solved = [s for s in segments if int(agg.loc[s, "n"]) >= 5]
+bounds = {s: seg_bounds(s) for s in solved}
+chosen = {}
+for s in solved:
+    lo, hi = bounds[s]
+    if elasticity_on:
+        chosen[s] = float(minimize_scalar(neg_objective, bounds=(lo, hi), args=(s,), method="bounded").x)
+    else:
+        chosen[s] = 1.0
+
+def seg_vol(s, f):    return conv_at(s, f) * agg.loc[s, "n"]
+def seg_profit(s, f): return conv_at(s, f) * (agg.loc[s, "gwp"] * f - agg.loc[s, "cost"])
+
+# --- §6 PORTFOLIO CONSTRAINT: hold total expected volume >= min_volume_ratio of
+# today's book. A per-segment argmax can trade too much volume for margin; this
+# couples the segments. Greedy repair: while under the floor, walk back the raised
+# segment that recovers the most volume per £ of profit given up, a step at a time.
+min_vol_ratio = float(constraints.get("portfolio", {}).get("min_volume_ratio", 0.90))
+hold_vol = sum(seg_vol(s, 1.0) for s in solved)
+floor = min_vol_ratio * hold_vol
+_repair_steps = 0
+def total_vol(): return sum(seg_vol(s, chosen[s]) for s in solved)
+while total_vol() < floor - 1e-9 and _repair_steps < 500:
+    best_s, best_ratio = None, -np.inf
+    for s in solved:
+        if chosen[s] <= 1.0 + 1e-6:      # only walk back segments we raised
+            continue
+        f0 = chosen[s]; f1 = max(1.0, f0 - 0.005)
+        dvol = seg_vol(s, f1) - seg_vol(s, f0)          # >0 (recovering volume)
+        dprof = seg_profit(s, f0) - seg_profit(s, f1)   # profit given up (>=0)
+        ratio = dvol / dprof if dprof > 1e-9 else dvol * 1e9
+        if ratio > best_ratio:
+            best_ratio, best_s = ratio, s
+    if best_s is None:
+        break
+    chosen[best_s] = max(1.0, chosen[best_s] - 0.005)
+    _repair_steps += 1
+portfolio_bound = _repair_steps > 0
+print(f"portfolio floor {min_vol_ratio:.0%} of {hold_vol:,.0f}: "
+      f"{'repaired in ' + str(_repair_steps) + ' steps' if portfolio_bound else 'non-binding'}, "
+      f"final volume {total_vol():,.0f}")
 
 rows = []
-for s in segments:
-    if int(agg.loc[s, "n"]) < 5:
-        continue
-    lo, hi = seg_bounds(s)
-    if elasticity_on:
-        res = minimize_scalar(neg_objective, bounds=(lo, hi), args=(s,), method="bounded")
-        factor = float(res.x)
-    else:
-        factor = 1.0
-    prof_hold = -( conv_at(s, 1.0) * (agg.loc[s, "gwp"] * 1.0 - agg.loc[s, "cost"]) )
-    prof_opt  = -( conv_at(s, factor) * (agg.loc[s, "gwp"] * factor - agg.loc[s, "cost"]) )
-    # which bound (if any) is binding — surfaced in the app as "capped by segment cap"
+for s in solved:
+    factor = chosen[s]; lo, hi = bounds[s]
     capped = "corridor" if abs(factor - (1 + corr_hi)) < 1e-3 or abs(factor - (1 + corr_lo)) < 1e-3 else \
-             ("segment_cap" if abs(factor - hi) < 1e-3 or abs(factor - lo) < 1e-3 else "interior")
+             ("portfolio_volume" if portfolio_bound and abs(factor - 1.0) < 1e-6 else
+              ("segment_cap" if abs(factor - hi) < 1e-3 or abs(factor - lo) < 1e-3 else "interior"))
     rows.append({
         "constraint_version": cver, "segment": s, "policies": int(agg.loc[s, "n"]),
         "factor": round(factor, 4), "factor_pct": round((factor - 1) * 100, 2),
         "conversion_hold": round(conv_at(s, 1.0), 4), "conversion_opt": round(conv_at(s, factor), 4),
         "gwp_current": round(float(agg.loc[s, "gwp"]), 2),
-        "expected_profit_hold": round(-prof_hold, 2), "expected_profit_opt": round(-prof_opt, 2),
-        "profit_uplift": round(-prof_opt - (-prof_hold), 2),
+        "expected_profit_hold": round(seg_profit(s, 1.0), 2), "expected_profit_opt": round(seg_profit(s, factor), 2),
+        "profit_uplift": round(seg_profit(s, factor) - seg_profit(s, 1.0), 2),
         "bound_lo": round(lo, 4), "bound_hi": round(hi, 4), "binding": capped,
         "within_corridor": bool(1 + corr_lo - 1e-6 <= factor <= 1 + corr_hi + 1e-6),
     })
@@ -194,6 +226,44 @@ try:
     print("audit row written")
 except Exception as e:
     print(f"audit_log insert skipped: {e}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Sensitivity — how the uplift moves if our elasticity estimate is off
+# MAGIC Re-solve the whole book under a scaled elasticity (the conversion swing away
+# MAGIC from today's price is multiplied by `scale`) so the room can see "if demand
+# MAGIC is half as elastic as we think, the uplift is £X". Answers the CFO's "how
+# MAGIC sensitive is this to the assumption?" with a real re-solve, not a guess.
+
+# COMMAND ----------
+
+def conv_scaled(s, f, scale):
+    base = conv_at(s, 1.0)
+    return float(np.clip(base + scale * (conv_at(s, f) - base), 0.0, 1.0))
+
+sens_rows = []
+for scale in [0.5, 0.75, 1.0, 1.25, 1.5]:
+    tot = 0.0
+    for s in solved:
+        lo, hi = bounds[s]
+        if elasticity_on:
+            negp = lambda f, s=s: -(conv_scaled(s, f, scale) * (agg.loc[s, "gwp"] * f - agg.loc[s, "cost"]))
+            f = float(minimize_scalar(negp, bounds=(lo, hi), method="bounded").x)
+        else:
+            f = 1.0
+        opt = conv_scaled(s, f, scale) * (agg.loc[s, "gwp"] * f - agg.loc[s, "cost"])
+        hold = conv_scaled(s, 1.0, scale) * (agg.loc[s, "gwp"] - agg.loc[s, "cost"])
+        tot += (opt - hold)
+    sens_rows.append({"elasticity_scale": scale, "profit_uplift": round(tot, 2),
+                      "vs_base_pct": None})
+_base = next((r["profit_uplift"] for r in sens_rows if r["elasticity_scale"] == 1.0), None)
+for r in sens_rows:
+    r["vs_base_pct"] = round((r["profit_uplift"] / _base - 1) * 100, 1) if _base else None
+(spark.createDataFrame(pd.DataFrame(sens_rows)).write.mode("overwrite").option("overwriteSchema", "true")
+     .saveAsTable(f"{fqn}.optimisation_sensitivity"))
+print(f"optimisation_sensitivity: uplift at 0.5×/1×/1.5× elasticity = "
+      f"£{sens_rows[0]['profit_uplift']:,.0f} / £{_base:,.0f} / £{sens_rows[-1]['profit_uplift']:,.0f}")
 
 # COMMAND ----------
 

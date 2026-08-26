@@ -322,6 +322,8 @@ export const api = {
   // Price optimisation (motor offline spine)
   optimisationSummary: () => fetchJson<any>('/optimisation/summary'),
   optScenarios:   () => fetchJson<any>('/optimisation/scenarios'),
+  optRenewalFactors: () => fetchJson<any>('/optimisation/renewal-factors'),
+  optSensitivity:    () => fetchJson<any>('/optimisation/sensitivity'),
   optElasticity:  () => fetchJson<any>('/optimisation/elasticity'),
   optMonitoring:  () => fetchJson<any>('/optimisation/monitoring'),
   optRedteam:     () => fetchJson<any>('/optimisation/redteam'),

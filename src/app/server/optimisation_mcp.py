@@ -128,6 +128,11 @@ async def _t_read_factors(args, session_id, agent_id):
                         FROM {fqn('optimisation_factor_table')} ORDER BY segment""")
     return {"ok": True, "factors": rows}
 
+async def _t_read_renewal_factors(args, session_id, agent_id):
+    rows = await _q(f"""SELECT segment, policies, renewal_factor_pct, retention_hold, retention_opt,
+                        margin_uplift, gipp_breaches FROM {fqn('optimisation_renewal_factor_table')} ORDER BY segment""")
+    return {"ok": True, "renewal_factors": rows}
+
 async def _t_read_monitoring(args, session_id, agent_id):
     drift = await _q(f"""SELECT cast(quote_month as string) month, actual_conversion, expected_conversion, drift
                          FROM {fqn('optimisation_monitoring')} ORDER BY quote_month""")
@@ -202,6 +207,7 @@ OPTIMISATION_TOOL_SCHEMAS: list[dict[str, Any]] = [
             {"deployment_id": {"type": "string"}}),
     _schema("opt_read_scenarios", "Read the efficient frontier (Pareto-optimal candidates + hold)."),
     _schema("opt_read_factors", "Read the solved per-segment factor table."),
+    _schema("opt_read_renewal_factors", "Read the renewal factor table (GIPP-enforced, retention-weighted)."),
     _schema("opt_read_monitoring", "Read conversion-drift over months + corridor/GIPP breach rates."),
     _schema("opt_read_fairness", "Read the fair-value evidence pack (proxy-correlation / disparate-impact / vulnerability checks)."),
     _schema("opt_read_disagreement", "Read the ensemble disagreement map (per-segment factor spread/agreement across candidate demand models)."),
@@ -220,6 +226,7 @@ OPTIMISATION_TOOL_IMPLS = {
     "opt_get_decision_record": _t_get_decision_record,
     "opt_read_scenarios": _t_read_scenarios,
     "opt_read_factors":   _t_read_factors,
+    "opt_read_renewal_factors": _t_read_renewal_factors,
     "opt_read_monitoring": _t_read_monitoring,
     "opt_read_fairness":  _t_read_fairness,
     "opt_read_disagreement": _t_read_disagreement,
