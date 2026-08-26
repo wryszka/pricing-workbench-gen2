@@ -83,6 +83,58 @@ a real governed run, not a client-side illusion.
 - **How it works** — the governed loop, the live constraint YAML, deep-links to every
   table / model / job / agent, and the data/model/platform explainer.
 
+## The "Grandma-in-a-BMW" walkthrough (the memorable one)
+
+The example that resonates: a presenter walks in and says *"I want to optimise my system so I win
+most grandmas who drive BMWs."* It lands because it exposes the core tension of the whole demo —
+**the machine optimises; the human sets the policy for what "optimal" means.** Fully presentable by
+someone who wasn't in the build. Numbers below are live on pricingv2 (motor book, 2026-08).
+
+**Two honest translations (say them out loud):**
+- **"Grandma"** → the **`70+`** driver-age band. Real segment dimension.
+- **"BMW"** → a **higher vehicle group** (`grpHigh`, ABI group ≥ 30) — the data has vehicle *group*,
+  not make/model, so "higher-group cars, where a BMW sits", never literally "BMW".
+- So the segment is **`70+ · grpHigh`** — a real, on-screen segment (~**340 policies**). It's a
+  memorable *teaching* example, not the headline-uplift segment.
+
+**The twist (this is why it works).** Told "maximise profit", the optimiser **raises** this segment
+**+5%** (conversion 0.73 → 0.68) — it's happy to lose a few because grandmas are loyal and
+price-insensitive. Your sentence — *"no, I want to **win** them"* — is you **overruling the machine
+with a business policy.** "Win most" is a volume/market-share goal, **not** the profit objective's
+default; the lever is the constraint set, not the objective front door.
+
+**The elasticity fact you point at:** cut their price and conversion climbs — `0.85× → 92%`,
+`1.0× → 73%`, `1.15× → 48%`. To win them you move **down**, not up.
+
+### Beats — GO · DO · SAY · IF ASKED
+
+**G1 · The grandmas today** — Optimiser tab → factor table.
+- **DO:** point at `70+ · grpHigh` (+5%).
+- **SAY:** "The profit engine **raised** our grandmas-in-BMWs +5% — it'll lose a few, they're loyal."
+- **IF ASKED** "how many?": ~340 policies — a small, vivid segment, not where the big money is.
+
+**G2 · Why winning means cutting** — Demand & red-team tab → elasticity curve → select `70+ · grpHigh`.
+- **DO:** trace the curve down.
+- **SAY:** "Cut their price and conversion goes **73% → 92%**. If I want to *win* them, I go the other way to the machine."
+
+**G3 · Set the policy** — the human's call.
+- **DO:** either (a) ask the **`constraint_author`** agent *"cap increases and allow a cut for 70+ high-group"* → it drafts the constraint-YAML override, or (b) hand-edit `optimisation_constraints/default.yaml` (segment override on `70+ · grpHigh`), or (c) tilt the objective to **retention-weighted** in the front door.
+- **SAY:** "The machine doesn't decide this — **I** do. I set the policy; the solver obeys it."
+- **IF FAILS / SEAM:** `constraint_author` is an agent persona (via the agent API), **not yet a UI button** — for a pure click-path use the objective tilt or the pre-edited YAML. *(Roadmap: a "win this segment" button.)*
+
+**G4 · Re-solve under the new policy** — Optimiser → Re-solve (solver-only, ~1 min).
+- **SAY:** "Same governed solver, new policy — `70+ · grpHigh` now moves **down**, conversion up."
+
+**G5 · Did it work** — Monitoring → Advance one month.
+- **SAY:** "Next cycle, realised conversion in that segment is up — the book reacted to the decision."
+
+**G6 · Explain it (closing beat)** — Optimiser → Explain this price → "use the grandma-in-a-BMW demo case" (live quote e.g. `MQ-00025204`, age 72, group 40).
+- **SAY:** "And here's **exactly why this grandma pays what she pays** — risk price, the factor we chose, the corridor that bounds it — every number traceable, and it drops into a decision record."
+
+**The line to leave them with:** *"Watch the machine try to raise grandmas' prices — then watch me overrule it with policy. That's the product: the machine runs the cycle, the human sets when it may act alone."*
+
+---
+
 ## Positioning (say this first)
 
 This is a **module of the pricing workbench, not a separate programme.** It inherits the same
