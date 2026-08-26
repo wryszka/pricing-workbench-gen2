@@ -30,19 +30,18 @@ const NAV_ITEMS = [
   { to: '/pricing-table', label: 'Modelling Mart',    icon: Table2,       match: (p: string) => p.startsWith('/pricing-table') },
   { to: '/development',   label: 'Model Development', icon: Code,         match: (p: string) => p.startsWith('/development') },
   { to: '/deployment',    label: 'Model Deployment',  icon: Rocket,       match: (p: string) => p.startsWith('/deployment') },
-  { to: '/pricing-engine',label: 'Pricing Engine',    icon: Calculator,   match: (p: string) => p.startsWith('/pricing-engine') },
   { to: '/optimisation',  label: 'Price Optimisation',icon: Target,       match: (p: string) => p.startsWith('/optimisation') },
   { to: '/governance',    label: 'Model Governance',  icon: Shield,       match: (p: string) => p.startsWith('/governance') },
   { to: '/pricing-ai',    label: 'Pricing AI',        icon: Sparkles,     match: (p: string) => p.startsWith('/pricing-ai') || p.startsWith('/supervisor') || p.startsWith('/regulatory-ai') },
   { to: '/models',        label: 'Model Factory',     icon: FlaskConical, match: (p: string) => p.startsWith('/models') },
-  { to: '/add-ons',       label: 'Add-ons',           icon: Package,      match: (p: string) => p.startsWith('/add-ons') || p.startsWith('/quote-review') },
+  { to: '/toolkit',       label: 'Toolkit',           icon: Package,      match: (p: string) => p.startsWith('/toolkit') || p.startsWith('/add-ons') || p.startsWith('/pricing-engine') || p.startsWith('/quote-review') },
 ];
 
 function Sidebar() {
   const { pathname } = useLocation();
 
   return (
-    <aside className="w-[264px] shrink-0 min-h-screen flex flex-col text-[#cbd5e1] border-r border-white/[0.06] bg-[linear-gradient(180deg,#1e293b_0%,#172033_100%)]">
+    <aside className="w-[264px] shrink-0 sticky top-0 self-start h-screen flex flex-col text-[#cbd5e1] border-r border-white/[0.06] bg-[linear-gradient(180deg,#1e293b_0%,#172033_100%)]">
       {/* Brand */}
       <Link to="/" className="flex items-center gap-3 px-4 py-4 border-b border-white/[0.08] hover:bg-white/[0.03] transition">
         <div className="w-[34px] h-[34px] rounded-[9px] flex items-center justify-center shrink-0 bg-[linear-gradient(135deg,#2563eb,#60a5fa)] shadow-[0_2px_10px_rgba(37,99,235,.4)]">
@@ -286,6 +285,7 @@ export default function App() {
             <Route path="/pricing-ai"   element={<Supervisor />} />
             <Route path="/supervisor"   element={<Supervisor />} />  {/* legacy URL */}
             <Route path="/regulatory-ai" element={<Supervisor />} />  {/* legacy URL */}
+            <Route path="/toolkit" element={<Addons />} />
             <Route path="/add-ons" element={<Addons />} />
             <Route path="/add-ons/quote-review" element={<QuoteReview />} />
             <Route path="/add-ons/new-data-impact" element={<NewDataImpact />} />

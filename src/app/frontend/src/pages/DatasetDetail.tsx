@@ -243,7 +243,6 @@ function AiImpactLead({ datasetId, pi }: { datasetId: string; pi: any }) {
       ]}
       onAsk={onAsk}
       placeholder="Ask a detailed question about this impact…"
-      seedQuestion={seedQ}
     />
   );
 }

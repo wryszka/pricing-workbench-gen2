@@ -162,35 +162,47 @@ async def list_datasets():
         raw_count = silver_count = 0
         last_ingested = None
         approval_row: dict | None = None
+        errors: list[str] = []
+
+        async def _count(table: str) -> int:
+            r = await execute_query(f"SELECT count(*) AS row_count FROM {fqn(table)}")
+            return int(r[0]["row_count"]) if r else 0
+
+        # Counts are queried INDEPENDENTLY. Previously one query pulled count(*)
+        # AND max(_ingested_at) together, so a table without an _ingested_at
+        # column (the internal one-shot builds don't have it) threw and zeroed
+        # BOTH counts — the dataset then looked empty with no last-ingested. Now a
+        # missing column only drops last_ingested, and any real failure surfaces
+        # in `stats_error` instead of masquerading as an empty dataset.
         try:
-            if is_reference:
-                stats = await execute_query(f"""
-                    SELECT count(*) as row_count FROM {fqn(ds_info['silver_table'])}
-                """)
-                raw_count = silver_count = int(stats[0]["row_count"]) if stats else 0
-            else:
-                raw_stats, silver_stats, approvals = await asyncio.gather(
-                    execute_query(f"""
-                        SELECT count(*) as row_count,
-                               max(_ingested_at) as last_ingested
-                        FROM {fqn(ds_info['raw_table'])}
-                    """),
-                    execute_query(f"""
-                        SELECT count(*) as row_count FROM {fqn(ds_info['silver_table'])}
-                    """),
-                    execute_query(f"""
-                        SELECT decision, reviewer, reviewed_at, reviewer_notes
-                        FROM {fqn('dataset_approvals')}
-                        WHERE dataset_name = :ds_id
-                        ORDER BY reviewed_at DESC LIMIT 1
-                    """, {"ds_id": ds_id}),
-                )
-                raw_count      = int(raw_stats[0]["row_count"]) if raw_stats else 0
-                silver_count   = int(silver_stats[0]["row_count"]) if silver_stats else 0
-                last_ingested  = raw_stats[0].get("last_ingested") if raw_stats else None
-                approval_row   = approvals[0] if approvals else None
+            silver_count = await _count(ds_info["silver_table"])
         except Exception as e:
-            logger.warning("Failed to query stats for %s: %s", ds_id, e)
+            errors.append(f"silver: {str(e)[:120]}"); logger.warning("silver stats %s: %s", ds_id, e)
+
+        if is_reference:
+            raw_count = silver_count
+        else:
+            try:
+                raw_count = await _count(ds_info["raw_table"])
+            except Exception as e:
+                errors.append(f"raw: {str(e)[:120]}"); logger.warning("raw stats %s: %s", ds_id, e)
+            # last_ingested is best-effort — many raw tables have no _ingested_at column.
+            try:
+                r = await execute_query(
+                    f"SELECT max(_ingested_at) AS last_ingested FROM {fqn(ds_info['raw_table'])}")
+                last_ingested = r[0].get("last_ingested") if r else None
+            except Exception:
+                last_ingested = None
+            try:
+                approvals = await execute_query(f"""
+                    SELECT decision, reviewer, reviewed_at, reviewer_notes
+                    FROM {fqn('dataset_approvals')}
+                    WHERE dataset_name = :ds_id
+                    ORDER BY reviewed_at DESC LIMIT 1
+                """, {"ds_id": ds_id})
+                approval_row = approvals[0] if approvals else None
+            except Exception as e:
+                logger.warning("approvals %s: %s", ds_id, e)
         return {
             "id": ds_id,
             **ds_info,
@@ -199,6 +211,7 @@ async def list_datasets():
             "rows_dropped_by_dq":  max(0, raw_count - silver_count),
             "last_ingested":       last_ingested,
             "approval":            approval_row,
+            "stats_error":         "; ".join(errors) or None,
         }
 
     return await asyncio.gather(*[

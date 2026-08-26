@@ -27,7 +27,7 @@ export default function ModelDevelopment() {
         icon={Code}
       />
 
-      <AgentLead
+      <AgentLead compact
         persona="model_review"
         title="Model Validation"
         subtitle="An independent validation read of the current champion models."

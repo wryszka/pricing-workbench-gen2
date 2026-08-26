@@ -1,25 +1,50 @@
 import { Link } from 'react-router-dom';
-import { Receipt, BookOpen, ArrowRight, Package, Radar, Network } from 'lucide-react';
-import { Page, PageHeader, OnThisPage, DemoDisclaimer } from '../components/ui';
+import { Receipt, BookOpen, ArrowRight, Package, Radar, Network, Calculator } from 'lucide-react';
+import { Page, PageHeader, OnThisPage, DemoDisclaimer, SectionHead } from '../components/ui';
 
 /**
- * Add-ons landing page — the home for useful tools that sit alongside the
- * core pricing flow but aren't part of the train → promote → deploy →
- * govern spine. Each tile opens a full feature underneath.
+ * Toolkit landing page — one home for everything that sits alongside the core
+ * train → promote → deploy → govern spine: the interactive pricing engine, the
+ * rating-engine integration patterns, and the companion use-cases different
+ * audiences reach for. Grouped and labelled so it's clear what each one is.
+ * (Consolidates the former "Pricing Engine" and "Add-ons" tabs.)
  */
 export default function Addons() {
   return (
     <Page>
       <PageHeader
         eyebrow="Pricing Workbench"
-        title="Add-ons"
-        subtitle="Supporting tools and companion workflows. Not part of the main pricing flow, but things different audiences reach for at specific moments."
+        title="Toolkit"
+        subtitle="Everything that sits alongside the core pricing flow — the interactive pricing engine, rating-engine integration patterns, and companion use-cases people ask about at specific moments."
         icon={Package}
       />
       <OnThisPage>
-        Each card opens a full feature underneath: <strong>Quote Review</strong> for transaction-level drill-down and replay, <strong>New Data Impact</strong> for external-data enrichment analysis, <strong>Rating Engine Integration</strong> for Radar/Earnix architecture patterns, and <strong>Agentic Distribution</strong> for AI-channel presence and MCP tooling.
+        Grouped by purpose. <strong>Pricing tools & integrations</strong>: the interactive <strong>Pricing Engine</strong> (score a risk through the live rate build) and <strong>Rating Engine Integration</strong> (Radar/Earnix enrichment patterns). <strong>Companion use-cases</strong>: <strong>Quote Review</strong> (transaction drill-down + replay), <strong>New Data Impact</strong> (external-data enrichment analysis), and <strong>Agentic Distribution</strong> (AI-channel presence + MCP).
       </OnThisPage>
 
+      <SectionHead>Pricing tools & integrations</SectionHead>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <AddonCard
+          to="/pricing-engine"
+          icon={Calculator}
+          accent="blue"
+          title="Pricing Engine"
+          description="Score a commercial or motor risk through the live rate build — the four predictive models plus the versioned rating engine — and see the technical→loaded→final premium waterfall, factor by factor."
+          audience="pricing actuaries · underwriters"
+          tags={['Live rate build', 'Premium waterfall', 'Versioned rating config']}
+        />
+        <AddonCard
+          to="/add-ons/rating-engine"
+          icon={Radar}
+          accent="emerald"
+          title="Rating Engine Integration"
+          description="The workbench acts as an enrichment layer for commercial rating engines like Willis Towers Watson Radar and Earnix — delivering scored factors, features, and loading signals into the rating engine without disrupting the actuary's existing workflow."
+          audience="pricing actuaries · rating-engine administrators"
+          tags={['Radar / Earnix', 'Feature enrichment', 'Reference architecture']}
+        />
+      </div>
+
+      <SectionHead>Companion use-cases</SectionHead>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         <AddonCard
           to="/add-ons/quote-review"
@@ -38,15 +63,6 @@ export default function Addons() {
           description="For data scientists and actuaries: six notebooks that answer 'does adding real external data make pricing models better?'. Builds ~1.5M-row postcode enrichment, trains standard vs enriched models, quantifies the lift."
           audience="data scientists · senior actuaries"
           tags={['Gini 0.11 → 0.25', 'ONSPD + IMD enrichment', 'Claude review agent', 'Governance PDF']}
-        />
-        <AddonCard
-          to="/add-ons/rating-engine"
-          icon={Radar}
-          accent="emerald"
-          title="Rating Engine Integration"
-          description="The workbench acts as an enrichment layer for commercial rating engines like Willis Towers Watson Radar and Earnix — delivering scored factors, features, and loading signals into the rating engine without disrupting the actuary's existing workflow."
-          audience="pricing actuaries · rating-engine administrators"
-          tags={['Radar / Earnix', 'Feature enrichment', 'Reference architecture']}
         />
         <AddonCard
           to="/add-ons/agentic-distribution"

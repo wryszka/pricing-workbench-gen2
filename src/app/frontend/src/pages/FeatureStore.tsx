@@ -120,7 +120,7 @@ export default function FeatureStore() {
         icon={Table2}
       />
 
-      <AgentLead
+      <AgentLead compact
         persona="ask_the_book"
         title="Ask the Book"
         subtitle="Your pricing analyst over the governed mart."

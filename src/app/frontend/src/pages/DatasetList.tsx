@@ -35,7 +35,7 @@ export default function DatasetList() {
       />
 
       {/* Lead with the agent — Ingestion Impact explains the current state then answers follow-ups */}
-      <AgentLead
+      <AgentLead compact
         persona="explain"
         title="Ingestion impact"
         subtitle="Ask why premiums move when data changes. Your data scientist reads the pending approvals and recent uploads, then answers your questions."

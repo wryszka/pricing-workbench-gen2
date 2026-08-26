@@ -173,61 +173,128 @@ export function DemoDisclaimer({ children }: { children: ReactNode }) {
 // AskBox — the purple-gradient AI ask box (question + examples + answer).
 // Pass onAsk(question) returning the answer text. Reusable across pages.
 // ---------------------------------------------------------------------------
-export function AskBox({ title, subtitle, examples = [], onAsk, placeholder = 'Ask a question…', seedQuestion }: {
+// ---------------------------------------------------------------------------
+// Markdown — minimal, dependency-free renderer for agent answers: **bold**,
+// `code`, - bullets, 1. numbered, # headings, paragraphs. Replaces the old raw
+// whitespace-pre-line dump that leaked ** and {} braces into the UI.
+// ---------------------------------------------------------------------------
+function mdInline(text: string, kp = ''): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const re = /(\*\*([^*]+)\*\*|`([^`]+)`)/g;
+  let last = 0, m: RegExpExecArray | null, i = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    if (m[2] != null) nodes.push(<strong key={`${kp}b${i++}`}>{m[2]}</strong>);
+    else nodes.push(<code key={`${kp}c${i++}`} className="px-1 py-0.5 rounded bg-slate-100 text-slate-800 text-[12px] font-mono">{m[3]}</code>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+export function Markdown({ text, className = '' }: { text: string; className?: string }) {
+  const lines = (text || '').split('\n');
+  const blocks: ReactNode[] = [];
+  let list: string[] = []; let k = 0;
+  const flush = () => {
+    if (!list.length) return;
+    const items = list;
+    blocks.push(<ul key={`u${k++}`} className="list-disc pl-5 space-y-1 my-2">{items.map((li, j) => <li key={j}>{mdInline(li, `${k}-${j}-`)}</li>)}</ul>);
+    list = [];
+  };
+  lines.forEach((raw) => {
+    const line = raw.replace(/\s+$/, '');
+    const bullet = line.match(/^\s*[-*•]\s+(.*)/);
+    const num = line.match(/^\s*\d+\.\s+(.*)/);
+    if (bullet) { list.push(bullet[1]); return; }
+    if (num) { list.push(num[1]); return; }
+    flush();
+    if (!line.trim()) return;
+    const h = line.match(/^#{1,4}\s+(.*)/);
+    if (h) blocks.push(<p key={`h${k++}`} className="font-semibold text-ink mt-2">{mdInline(h[1], `${k}-`)}</p>);
+    else blocks.push(<p key={`p${k++}`} className="my-1.5">{mdInline(line, `${k}-`)}</p>);
+  });
+  flush();
+  return <div className={className}>{blocks}</div>;
+}
+
+// ---------------------------------------------------------------------------
+// AskBox — lead-with-agent surface. ON-DEMAND ONLY (no auto-fire on mount, so a
+// page never triggers a live agent call just by opening). `compact` renders the
+// slim one-line inline variant for inner pages; the full card is the Home
+// estate-review lead. Answers render as markdown.
+// ---------------------------------------------------------------------------
+export function AskBox({ title, subtitle, examples = [], onAsk, placeholder = 'Ask a question…', compact = false }: {
   title: string; subtitle?: string; examples?: string[];
-  onAsk: (q: string) => Promise<string>; placeholder?: string;
-  seedQuestion?: string;   // auto-run on mount to populate the initial "lead" read
+  onAsk: (q: string) => Promise<string>; placeholder?: string; compact?: boolean;
 }) {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
+  const [opened, setOpened] = useState(false);
 
   const ask = async (question?: string) => {
     const query = (question ?? q).trim();
     if (!query || busy) return;
-    setBusy(true); setAnswer(null); setQ(query);
+    setBusy(true); setAnswer(null); setQ(query); setOpened(true);
     try { setAnswer(await onAsk(query)); }
     catch (e: any) { setAnswer(`Error: ${e?.message || e}`); }
     finally { setBusy(false); }
   };
 
-  // Lead-with-agent: auto-run the seed question once so the description appears
-  // before the user types anything (without echoing the seed into the input).
-  useEffect(() => {
-    if (!seedQuestion) return;
-    let alive = true;
-    setBusy(true); setAnswer(null);
-    onAsk(seedQuestion)
-      .then((a) => { if (alive) setAnswer(a); })
-      .catch((e: any) => { if (alive) setAnswer(`Error: ${e?.message || e}`); })
-      .finally(() => { if (alive) setBusy(false); });
-    return () => { alive = false; };
-  }, [seedQuestion]);   // eslint-disable-line react-hooks/exhaustive-deps
+  if (compact) {
+    return (
+      <div className="border border-line bg-white rounded-xl px-3.5 py-2.5">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-[#2563eb] shrink-0" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ask(); }}
+            placeholder={placeholder}
+            className="flex-1 bg-transparent text-[13.5px] text-ink focus:outline-none placeholder:text-slate-400" />
+          <button onClick={() => ask()} disabled={busy || !q.trim()}
+            className="px-3 py-1.5 rounded-md bg-[#2563eb] text-white text-[12.5px] font-semibold disabled:opacity-50 inline-flex items-center gap-1.5">
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Ask
+          </button>
+        </div>
+        {examples.length > 0 && !opened && (
+          <div className="flex gap-2 flex-wrap mt-2">
+            {examples.slice(0, 3).map((ex, i) => (
+              <button key={i} onClick={() => ask(ex)} className="text-[11.5px] text-[#2563eb]/80 hover:text-[#2563eb] hover:underline">{ex}</button>
+            ))}
+          </div>
+        )}
+        {(busy || answer) && (
+          <div className="mt-2.5 border-t border-line pt-2.5 text-sm text-slate-700">
+            {busy ? <span className="inline-flex items-center gap-1.5 text-mut"><Loader2 className="w-3.5 h-3.5 animate-spin" /> thinking…</span> : <Markdown text={answer || ''} />}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-[linear-gradient(135deg,#312e81_0%,#6d28d9_55%,#7c3aed_100%)] rounded-2xl px-6 py-5 text-white shadow-[0_10px_30px_rgba(109,40,217,.28)]">
-      <h2 className="text-[19px] font-bold flex items-center gap-2"><Sparkles className="w-4.5 h-4.5" /> {title}</h2>
-      {subtitle && <p className="text-[13px] text-[#ddd6fe] mt-1 mb-3 leading-relaxed max-w-3xl">{subtitle}</p>}
+    <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-slate-50 to-indigo-50/60 px-6 py-5">
+      <h2 className="text-[18px] font-bold text-ink flex items-center gap-2"><Sparkles className="w-4.5 h-4.5 text-[#2563eb]" /> {title}</h2>
+      {subtitle && <p className="text-[13px] text-mut mt-1 mb-3 leading-relaxed max-w-3xl">{subtitle}</p>}
       {examples.length > 0 && (
         <div className="flex gap-2 flex-wrap mb-3">
           {examples.map((ex, i) => (
             <button key={i} onClick={() => ask(ex)}
-              className="bg-white/10 border border-white/20 text-[#ede9fe] px-3 py-1.5 rounded-full text-[12px] hover:bg-white/25 transition">{ex}</button>
+              className="bg-white border border-indigo-200 text-slate-700 px-3 py-1.5 rounded-full text-[12px] hover:border-[#2563eb] hover:text-[#2563eb] transition">{ex}</button>
           ))}
         </div>
       )}
       <div className="flex gap-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ask(); }}
           placeholder={placeholder}
-          className="flex-1 px-3.5 py-3 rounded-lg border-0 text-[13.5px] text-ink focus:outline-none focus:ring-2 focus:ring-white/50" />
+          className="flex-1 px-3.5 py-3 rounded-lg border border-line text-[13.5px] text-ink bg-white focus:outline-none focus:ring-2 focus:ring-[#2563eb]/40" />
         <button onClick={() => ask()} disabled={busy || !q.trim()}
-          className="px-5 py-3 rounded-lg bg-white text-[#6d28d9] font-bold text-[13.5px] disabled:opacity-60 inline-flex items-center gap-1.5">
+          className="px-5 py-3 rounded-lg bg-[#2563eb] text-white font-bold text-[13.5px] disabled:opacity-60 inline-flex items-center gap-1.5">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Ask
         </button>
       </div>
       {(busy || answer) && (
-        <div className="mt-3.5 bg-white/95 rounded-xl px-4 py-3.5 text-ink text-sm leading-relaxed whitespace-pre-line">
-          {busy ? <span className="inline-flex items-center gap-1.5 text-mut"><Loader2 className="w-3.5 h-3.5 animate-spin" /> thinking…</span> : answer}
+        <div className="mt-3.5 bg-white rounded-xl border border-line px-4 py-3.5 text-ink text-sm leading-relaxed">
+          {busy ? <span className="inline-flex items-center gap-1.5 text-mut"><Loader2 className="w-3.5 h-3.5 animate-spin" /> thinking…</span> : <Markdown text={answer || ''} />}
         </div>
       )}
     </div>
@@ -239,17 +306,21 @@ export function AskBox({ title, subtitle, examples = [], onAsk, placeholder = 'A
 // first (auto-seeded), then an ask box for follow-ups. Wired to /api/agent/lead.
 //   persona: ask_the_book | model_review | rate_change | drift_monitor | explain
 // ---------------------------------------------------------------------------
-export function AgentLead({ persona, seed, title, subtitle, examples = [], family, context }: {
-  persona: string; seed: string; title: string; subtitle?: string;
-  examples?: string[]; family?: string; context?: any;
+export function AgentLead({ persona, title, subtitle, examples = [], family, context, compact = false }: {
+  persona: string; seed?: string; title: string; subtitle?: string;
+  examples?: string[]; family?: string; context?: any; compact?: boolean;
 }) {
+  // On-demand only — never auto-fires. On inner pages pass `compact` for the
+  // slim one-line ask; Home uses the full estate-review card. Routes through the
+  // managed Mosaic AI Agent Framework endpoint (/api/agent/lead → pwg2_chat_agent),
+  // so every call is a real, traced, monitorable agent invocation.
   const onAsk = async (q: string) => {
     const r = await api.agentLead({ persona, question: q, family, context });
     return r?.answer || (r?.error ? `Agent unavailable — ${r.error}` : 'No answer returned.');
   };
   return (
-    <AskBox title={title} subtitle={subtitle} examples={examples}
-      onAsk={onAsk} seedQuestion={seed} placeholder="Ask a follow-up…" />
+    <AskBox compact={compact} title={title} subtitle={subtitle} examples={examples}
+      onAsk={onAsk} placeholder={compact ? 'Ask about this page…' : 'Ask about the estate…'} />
   );
 }
 

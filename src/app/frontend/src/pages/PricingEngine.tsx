@@ -54,7 +54,7 @@ export default function PricingEngine() {
         icon={Calculator}
       />
 
-      <AgentLead
+      <AgentLead compact
         persona="rate_change"
         title="Rate-change analyst"
         subtitle="Reads the live rate book and models rate moves."

@@ -38,7 +38,7 @@ export default function ModelDeployment() {
         icon={Rocket}
       />
 
-      <AgentLead
+      <AgentLead compact
         persona="drift_monitor"
         title="Monitoring"
         subtitle="Watches deployed champions for calibration drift."
