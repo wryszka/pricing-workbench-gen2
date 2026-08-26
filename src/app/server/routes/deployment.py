@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -451,3 +451,98 @@ async def set_champion(family: str, version: str) -> dict:
         "previous": current,
         "backfill": backfill,
     }
+
+
+# ---------------------------------------------------------------------------
+# Monthly rate-engine release (commercial) — bundle the 4 champion models + the
+# active rating engine into ONE release-of-record, mirroring the motor rate
+# engine (models + rating ship as one unit, not four separate aliases).
+# ---------------------------------------------------------------------------
+COMMERCIAL_FAMILIES = ["freq_glm", "sev_glm", "demand_gbm", "fraud_gbm"]
+
+
+class RateEngineReleaseRequest(BaseModel):
+    note: str | None = None
+    effective_date: str | None = None   # ISO yyyy-mm-dd; default = 1st of next month
+
+
+def _first_of_next_month(d: date) -> date:
+    return date(d.year + (d.month // 12), (d.month % 12) + 1, 1)
+
+
+@router.post("/rate-engine/release")
+async def cut_rate_engine_release(req: RateEngineReleaseRequest) -> dict:
+    """Cut a new COMMERCIAL monthly rate-engine release: snapshot the four
+    champion model versions PLUS the active rating-engine config version into one
+    `pricing_engine_releases` row (the release-of-record / 'live rate book').
+    This is the commercial equivalent of the motor rate engine — models + rating
+    ship together as one unit, not four independent aliases. Admin-gated + audited."""
+    _require_admin("cut-rate-engine-release")
+    w = get_workspace_client(); catalog = get_catalog(); schema = get_schema()
+
+    # 1. current champion version of each of the four commercial families
+    ver_list = await asyncio.gather(*[
+        asyncio.to_thread(_get_alias_version, w, f"{catalog}.{schema}.{fam}", CHAMPION_ALIAS)
+        for fam in COMMERCIAL_FAMILIES
+    ])
+    versions = dict(zip(COMMERCIAL_FAMILIES, ver_list))
+    missing = [f for f, v in versions.items() if not v]
+    if missing:
+        raise HTTPException(409, f"No champion set for: {', '.join(missing)} — promote all four before cutting a rate-engine release.")
+
+    # 2. active rating-engine config version (the rating half of the bundle)
+    rating_rows = await execute_query(f"""
+        SELECT version FROM {fqn('rating_engine_config')}
+        WHERE status = 'champion' ORDER BY effective_date DESC LIMIT 1
+    """)
+    rating_version = rating_rows[0]["version"] if rating_rows else "bootstrap"
+
+    # 3. compute the new month from the outgoing champion release
+    cur = await execute_query(f"""
+        SELECT cast(effective_date AS string) AS eff
+        FROM {fqn('pricing_engine_releases')}
+        WHERE status = 'champion' ORDER BY effective_date DESC LIMIT 1
+    """)
+    base = date.fromisoformat(cur[0]["eff"][:10]) if (cur and cur[0].get("eff")) else date.today()
+    eff = date.fromisoformat(req.effective_date[:10]) if req.effective_date else _first_of_next_month(base)
+    release_id   = f"{eff.strftime('%b').lower()}_{eff.year}"
+    display_name = eff.strftime("%B %Y")
+    user = get_current_user()
+    narrative = req.note or (
+        f"Monthly rate-engine release — freq v{versions['freq_glm']}, sev v{versions['sev_glm']}, "
+        f"demand v{versions['demand_gbm']}, fraud v{versions['fraud_gbm']}, rating {rating_version}. "
+        "Four champion models + rating engine shipped as one rate book.")
+
+    # 4. demote the outgoing champion release, then insert the new one (bound params)
+    await execute_query(f"""
+        UPDATE {fqn('pricing_engine_releases')} SET status = 'previous_champion'
+        WHERE status = 'champion'
+    """)
+    await execute_query(f"""
+        INSERT INTO {fqn('pricing_engine_releases')}
+          (release_id, display_name, effective_date, status,
+           freq_glm_version, sev_glm_version, demand_gbm_version, fraud_gbm_version,
+           rating_engine_version, approved_by, narrative)
+        VALUES (:rid, :dn, DATE(:eff), 'champion',
+                :fv, :sv, :dv, :frv, :rv, :app, :narr)
+    """, {"rid": release_id, "dn": display_name, "eff": eff.isoformat(),
+          "fv": str(versions["freq_glm"]), "sv": str(versions["sev_glm"]),
+          "dv": str(versions["demand_gbm"]), "frv": str(versions["fraud_gbm"]),
+          "rv": rating_version, "app": user, "narr": narrative})
+
+    await log_audit_event(
+        event_type="rate_engine_release_cut", entity_type="pricing_engine_release",
+        entity_id=release_id, entity_version=release_id, user_id=user,
+        details={"model_versions": versions, "rating_engine_version": rating_version,
+                 "effective_date": eff.isoformat()})
+
+    try:
+        from server.routes.pricing import _bust_alias_cache
+        _bust_alias_cache()
+    except Exception:
+        pass
+
+    return {"ok": True, "release_id": release_id, "display_name": display_name,
+            "effective_date": eff.isoformat(), "status": "champion",
+            "model_versions": versions, "rating_engine_version": rating_version,
+            "approved_by": user, "narrative": narrative}

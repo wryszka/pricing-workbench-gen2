@@ -189,6 +189,10 @@ export const api = {
     fetchJson<any>('/deployment/rollback', {
       method: 'POST', body: JSON.stringify({ family, note }),
     }),
+  cutRateEngineRelease: (note?: string) =>
+    fetchJson<any>('/deployment/rate-engine/release', {
+      method: 'POST', body: JSON.stringify(note ? { note } : {}),
+    }),
 
   // Governance
   getGovernanceSummary: () => fetchJson<any>('/governance/summary'),

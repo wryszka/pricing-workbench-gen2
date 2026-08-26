@@ -44,6 +44,9 @@ for stmt in [
     f"GRANT MODIFY ON TABLE {catalog}.{schema}.audit_log TO `{app_sp}`",
     f"GRANT MODIFY ON TABLE {catalog}.{schema}.optimisation_deployment TO `{app_sp}`",
     f"GRANT MODIFY ON TABLE {catalog}.{schema}.optimisation_decision_records TO `{app_sp}`",
+    # Model Deployment tab cuts the commercial monthly rate-engine release
+    # (4 champion models + rating engine) into the release-of-record.
+    f"GRANT MODIFY ON TABLE {catalog}.{schema}.pricing_engine_releases TO `{app_sp}`",
 ]:
     try:
         spark.sql(stmt)

@@ -143,6 +143,8 @@ function ProductionModels() {
         </div>
       </Card>
 
+      <RateEngineRelease onCut={reload} />
+
       <Card>
         <div className="flex items-center justify-between mb-3">
           <CardTitle>Current champions</CardTitle>
@@ -262,6 +264,73 @@ function ProductionModels() {
         </div>
       )}
     </div>
+  );
+}
+
+function RelCell({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="bg-slate-50 border border-line rounded px-2 py-1.5">
+      <div className="text-[10px] uppercase tracking-wide text-mut">{label}</div>
+      <div className="font-mono font-semibold text-ink">{value || '—'}</div>
+    </div>
+  );
+}
+
+// The commercial monthly rate engine: 4 champion models + rating engine cut into
+// one release-of-record (pricing_engine_releases), mirroring the motor rate engine.
+function RateEngineRelease({ onCut }: { onCut?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [rel, setRel] = useState<any | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const cut = async () => {
+    setBusy(true); setErr(null); setRel(null);
+    try {
+      setRel(await api.cutRateEngineRelease());
+      onCut?.();
+    } catch (e: any) {
+      const m = String(e?.message || e);
+      setErr(m.includes('403') ? 'Cutting a rate-engine release is admin-only (set ADMIN_USERS).'
+                               : m.includes('409') ? 'Promote all four champion models before cutting a release.' : m);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/40">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <CardTitle>Monthly rate engine — commercial</CardTitle>
+          <p className="text-[13px] text-ink leading-relaxed mt-1 max-w-2xl">
+            Commercial ships as a single <strong>monthly rate-engine release</strong>: the four champion
+            models <em>and</em> the active rating-engine config, bundled into one release-of-record (the live
+            rate book) — the same way the motor rate engine ships models + rating as one unit. Written to{' '}
+            <code className="bg-white border border-line px-1 rounded text-[10px] font-mono">pricing_engine_releases</code> and audit-logged.
+          </p>
+        </div>
+        <button onClick={cut} disabled={busy}
+          className="shrink-0 px-4 py-2.5 rounded-lg bg-[#2563eb] text-white font-semibold text-[13px] disabled:opacity-60 inline-flex items-center gap-2">
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />} Cut release
+        </button>
+      </div>
+      {err && <div className="mt-3 text-[13px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+      {rel && (
+        <div className="mt-3 bg-white border border-line rounded-lg p-3.5">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <Pill tone="green">{rel.status}</Pill>
+            <span className="font-semibold text-ink">{rel.display_name}</span>
+            <span className="text-[11px] text-mut">· {rel.release_id} · effective {rel.effective_date}</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <RelCell label="Frequency" value={rel.model_versions?.freq_glm ? `v${rel.model_versions.freq_glm}` : undefined} />
+            <RelCell label="Severity" value={rel.model_versions?.sev_glm ? `v${rel.model_versions.sev_glm}` : undefined} />
+            <RelCell label="Demand" value={rel.model_versions?.demand_gbm ? `v${rel.model_versions.demand_gbm}` : undefined} />
+            <RelCell label="Fraud" value={rel.model_versions?.fraud_gbm ? `v${rel.model_versions.fraud_gbm}` : undefined} />
+            <RelCell label="Rating engine" value={rel.rating_engine_version} />
+          </div>
+          <p className="text-[11px] text-mut mt-2">Approved by {rel.approved_by}.</p>
+        </div>
+      )}
+    </Card>
   );
 }
 
