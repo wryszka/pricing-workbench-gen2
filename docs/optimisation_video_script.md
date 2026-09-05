@@ -1,57 +1,82 @@
 # Optimisation — video script & demo run (Part 1: the governed loop)
 
-A **single-presenter video**, ~17 min, target audience **mixed**: SAs and partners who
-are *not* pricing experts (they must leave able to say what optimisation is and why it
-matters) **and** practitioners who live in Earnix/Radar (they get silent, unspoken hooks
-that the same mechanics run in an open, governed system).
+> ## ✅ APP BUILT — two gates remain before recording
+> The fix-spec work is **committed** (94bb9d1 + follow-ups) **and deployed on pricingv2**: the factor
+> table's **Conduct column** (renewal GIPP status + an amber "fair-value review →" pill), the
+> **three KPIs** (GWP · expected profit · uplift **as % of GWP**), the **reshaped grandma curve**
+> (organic +7.5%), the **provenance block** on explain-price, the **UC stored-procedure deploy
+> gate**, and the removal of on-screen "appliance" copy. Two gates remain:
+> 1. **Confirm the DEPLOYED build matches HEAD.** These changes are **committed** (94bb9d1 + follow-ups)
+>    and the app was redeployed on pricingv2 — before recording, reconfirm the running app matches HEAD
+>    and the pipeline was re-run (reshaped data is in the tables). Committed ≠ necessarily the live build.
+> 2. **Read every number live and name its unit.** The app now shows **GWP** and **expected profit**
+>    as separate KPIs and the **uplift as % of GWP** — read those off the screen; the reshaped data
+>    changes the absolutes, so never memorise a £ figure. (The earlier fix brief mislabelled the
+>    ~£9.4m *profit* as *premium*; the KPIs now make the distinction explicit — see the reviewer
+>    note at the foot.)
+
+A **single-presenter video**, ~17 min, audience **mixed**: SAs/partners who are *not* pricing
+experts (they must leave able to say what optimisation is and why it matters) **and**
+practitioners who live in Earnix/Radar (silent, unspoken hooks that the same mechanics run in an
+open, governed system).
 
 **Structure:** (1) intro → (2) concept, one slide → (3) the app, step by step → (4) summary.
-**Spine:** the "Grandma-in-a-BMW" story carries the whole app walk.
-**Heavy mode** is a *teaser only* here — it gets its own follow-up video (see the end).
+**Spine:** "Grandma-in-a-BMW" carries the whole app walk — and the twist is now a **conduct**
+twist (Consumer Duty / fair value), not just a commercial one.
+**Heavy mode** is a teaser only here; it has its own follow-up video.
 
-Two standing rules this script obeys, on purpose:
-- **Never label anything "WOW" on screen or say it out loud.** The impressive moments land
-  through the *visible artifact*, not a label.
-- **Never verbalise a shot at Earnix/Radar.** The practitioner hooks are *seen, not said* —
-  the viewer's own knowledge supplies the punchline. The one competitive line is the polite
-  leave-behind question at the end.
+Two standing rules this script obeys:
+- **Never label anything "WOW" on screen or out loud.** The impressive moments land through the
+  *visible artifact*.
+- **Never verbalise a shot at Earnix/Radar.** Practitioner hooks are *seen, not said*. The one
+  spoken competitive line is the polite leave-behind at the very end — and it is now the **only**
+  competitive line anywhere (the on-app "appliance" copy has been removed).
 
-Every beat below is: **GO** (what's on screen / click-path) · **SAY** (the words) ·
-**SEE** (the silent practitioner hook — do not verbalise) · **IF ASKED / FALLBACK**.
+Each beat is **GO** (screen / click) · **SAY** (the words) · **SEE** (silent practitioner hook —
+do not verbalise) · **IF ASKED / FALLBACK**.
 
 ---
 
-## Pre-flight — do this before you hit record (and before your test run)
+## Pre-flight — before you record (and before your test run)
 
-1. **App:** open the gen2 app **`pricing-workbench-gen2`** on the pricingv2 FEVM → the
-   **Price Optimisation** page. (Fill your exact URL here: `______`.)
-2. **Reset / data:** the motor book must be populated and dates rolled to "today." If the
-   book looks stale, re-run the spine (`databricks bundle run optimisation_full -t pricingv2`).
-3. **Warm the endpoints.** Serving + agents are scale-to-zero: the **first** quote/agent call
-   after idle takes **~45s** (cold start). Fire one throwaway call to each before recording so
-   the live beats are sub-second.
-4. **Warm the AI cache** and confirm the mode toggle. **Gotcha:** the AI cache can replay a
-   *stale* agent answer — if you changed a persona, ask a fresh question or clear the cache,
-   or you'll narrate an answer that doesn't match the screen.
-5. **Have a fallback screenshot** of a solved frontier + factor table, in case a live re-solve
-   stalls (~1 min normally).
-6. **Confirm you're an admin** (deploy is RBAC-gated to `ADMIN_USERS`). Deploy only works if
-   you're on that list — you are (`laurence.ryszka@databricks.com`).
-7. **Know your demo objects:** grandma segment `70+ · grpHigh` (~340 policies); the
-   explain-price demo case is triggered by the "use the grandma-in-a-BMW demo case" button
-   (quote ≈ `MQ-00025204`, age 72, group 40).
+1. **App:** open **`pricing-workbench-gen2`** (pricingv2 FEVM) → **Price Optimisation**.
+   (URL: `______` ← fill this in.)
+2. **Verify the DEPLOYED build (all built in code — confirm it's live):** the factor table's Conduct
+   column (GIPP + amber fair-value pill) is present, the grandma curve is reshaped (flat upside /
+   steep deep-cut side), the provenance block renders on explain-price, the constraint-edit YAML-diff
+   apply flow works, the word "appliance" is absent from all on-screen copy, and the solve uplift
+   reads **1–3% of GWP**. If any fail, the build isn't deployed — **do not record.**
+3. **Numbers / demo objects:** confirm the Optimiser KPI row shows **GWP and expected profit as
+   two separate numbers** (the summary endpoint already returns both — verify the UI renders both;
+   if not, that's a fix-spec item). After data regeneration re-check: segment `70+ · grpHigh` is
+   still **~316 policies** and still the solver's **organic +7.5%** pick (the profit curve is flat
+   across +2.5–7.5% on this small segment, so +7.5% is the genuine optimum — see the reviewer note),
+   and the explain-price demo case still resolves via the **"grandma-in-a-BMW" button** (it looks the
+   quote up server-side — there is no hardcoded quote id to update).
+4. **Warm the endpoints (~45s cold start each):** serving, **both** agents (ask `constraint_author`
+   a **fresh, uncached** question), the fairness panel, and the heavy-mode default artifact.
+5. **New fallback screenshots needed post-fix:** solved frontier + factor table **with the GIPP
+   column**, the fairness panel, the YAML diff, and (for the teaser) the heavy map + frontier +
+   caption.
+6. **Confirm your deploy privilege** — the gate is now a UC stored procedure; RBAC is a **UC
+   `EXECUTE` grant** on it (you or `sa-presenter@databricks.com`), **not** an app `ADMIN_USERS`
+   list. Confirm you hold `EXECUTE`, or the Approve & deploy beat is denied by Unity Catalog.
 
-**Honesty flags — do NOT overclaim these (a practitioner will catch it):**
-- The technical price is **champion-scored** by the real risk models, but that scoring step
-  does **not** currently emit an automatic model→table lineage edge. Don't claim "automatic
-  lineage" on that specific step.
-- **Constraints:** the corridor + caps are enforced *at solve time*; forbidden signals are
-  excluded *by construction*; GIPP is enforced *at solve time in the renewal solver*. Don't
-  say "every constraint is solve-time enforced across the board" — say what's enforced where.
-- **Sensitivity scales inversely:** *less* elastic → *more* uplift (not "half the elasticity,
-  half the uplift"). If you show the sensitivity panel, describe it that way.
-- It's **synthetic data** and a **demonstration arithmetic layer** for the rate formula.
-  These are **production-shaped patterns**, not "production-grade."
+**Honesty flags — do NOT overclaim (a practitioner will catch it):**
+- **Name the unit on every number.** GWP (~£53m) and expected profit (~£9.4m) are different
+  quantities on screen; point at each once. The uplift (~£1m) is **~2% of premium** *or* **~11% of
+  profit** — same money; pick one framing and stay consistent.
+- **"Profit" here = conversion-weighted margin of price over the technical (risk) cost** — i.e.
+  before fixed overheads. If asked "profit after what?", say that plainly; don't imply it's net
+  underwriting result.
+- **Constraints bind differently — say which is which.** Corridor + segment caps: solve-time hard.
+  Forbidden signals: excluded by construction, proxy-tested post-solve by the fairness job. **GIPP:
+  solve-time in the *renewal* solver** (renewal ≤ equivalent new business). Don't say "all
+  constraints solve-time enforced across the board."
+- The technical-price scoring step does **not** currently emit an automatic model→table lineage
+  edge — don't claim automatic lineage on that specific step.
+- Synthetic data; a **demonstration arithmetic layer** for the rate formula; **production-shaped
+  patterns**, not "production-grade."
 
 ---
 
@@ -60,281 +85,320 @@ Every beat below is: **GO** (what's on screen / click-path) · **SAY** (the word
 **GO:** you on camera, or a title card. No app yet.
 
 **SAY:**
-> "Hi, I'm Laurence — I'm a Solutions Architect at Databricks. Today we're talking about
-> **price optimisation**, and I'm going to show it running end to end inside a real pricing
-> workbench on Databricks. Two promises: by the end, if you've never done pricing, you'll be
-> able to explain what optimisation is and why it matters. And if you *do* pricing for a
-> living, you'll recognise every step — just running somewhere you might not expect."
-
-*(That second sentence is the only time you nod to practitioners out loud. After this, the hooks are silent.)*
+> "Hi, I'm Laurence — a Solutions Architect at Databricks. Today we're talking about **price
+> optimisation**, and I'll show it running end to end inside a real pricing workbench on
+> Databricks. Two promises: if you've never done pricing, you'll leave able to explain what
+> optimisation is and why it matters. And if you *do* price for a living, you'll recognise every
+> step — just running somewhere you might not expect."
 
 ---
 
 ## PART 2 — What optimisation is, and what you need  (~2:30)  · one slide
 
-**GO:** the concept slide (build later). While it's up, talk. The slide carries one diagram:
-**Data → (Cost model + Demand model) → Solver, bound by Constraints → Gate → Monitor**, with
-an arrow labelled **"human sets the policy"** pointing into *Constraints*.
+**GO:** the concept slide (build later). One diagram —
+**Data → (Cost model + Demand model) → Solver, bound by Constraints → Gate → Monitor**, with an
+arrow labelled **"human sets the policy"** pointing into *Constraints*.
+
+**Plus a second build — the "bill of materials"** listed beside the diagram (this is the
+"here's the shopping list of what you need" ask, and the frame SAs will screenshot):
+> *quote responses incl. lost quotes · technical price · demand model · constraints file
+> (versioned) · solver job · decision record · monitor*
+
+**SAY — the bill of materials (one breath):**
+> "Seven artifacts. That's the whole shopping list — everything else today is just these, live."
 
 **SAY — what it is (the four sentences; say them slowly):**
-> "Traditional pricing is cost-plus. You work out the **technical price** — the break-even
-> cost of the policy, expected claims plus expenses — and you add a margin. Optimisation asks
-> a smarter question: customers **respond** to price. Some shop around, some are loyal. So for
-> each type of customer, what price best hits my goal — profit, or volume, or a blend — given
-> how likely they actually are to buy at that price?
->
-> To answer it you need one extra model — a **demand model**, which is just: as I raise the
-> price, how many customers still convert? — and a **solver** that picks the best price for
-> each segment, **inside rules a human sets.** Same risk, same book — but demand-aware prices
+> "Traditional pricing is cost-plus. You work out the **technical price** — the break-even cost of
+> the policy, expected claims plus expenses — and add a margin. Optimisation asks a smarter
+> question: customers **respond** to price. Some shop around, some are loyal. So for each type of
+> customer, what price best hits my goal — profit, or volume, or a blend — given how likely they
+> actually are to buy at that price? To answer it you need one extra model — a **demand model**,
+> which is just: as I raise price, how many still convert? — and a **solver** that picks the best
+> price per segment, **inside rules a human sets.** Same risk, same book — but demand-aware prices
 > instead of a flat margin."
 
 **SAY — why it matters (two reasons):**
-> "Why care? Two reasons. One is money: you lift profit **without taking on more risk** —
-> you're just pricing smarter. Two is regulation: demand-aware pricing is exactly what
-> regulators now scrutinise — fair value, no price-walking. So being able to do this
-> **transparently, and prove every decision**, isn't overhead. It's the whole point."
+> "Why care? One is money: you lift profit **without taking on more risk** — you're pricing
+> smarter, not gambling harder. Two is regulation: demand-aware pricing is exactly what regulators
+> now scrutinise — fair value, no price-walking. So being able to do it **transparently, and prove
+> every decision**, isn't overhead. It's the point."
 
 **SAY — the hook that makes it click (grandma):**
-> "Here's the one idea to hold onto. Imagine I tell the system: *I want to win the most
-> grandmas who drive BMWs.* Watch what happens — because a profit-maximising machine will
-> actually try to **raise** their price. Grandmas are loyal, they don't shop around, so the
-> machine happily charges them more and loses a few. Whether that's OK is **not** a maths
-> question — it's a **policy** question, and a human has to answer it. That tension —
-> **the machine optimises, the human decides what 'optimal' means** — is the whole demo.
-> Let's watch it."
+> "Here's the idea to hold onto. Imagine I tell the system: *I want to win the most grandmas who
+> drive BMWs.* Watch what happens — a profit-maximising machine will actually try to **raise** their
+> price. Grandmas are loyal, they don't shop, so the machine happily charges them more and loses a
+> few. Whether that's OK is **not** a maths question — it's a **policy** question, and a human has
+> to answer it. That tension — **the machine optimises, the human decides what 'optimal' means** —
+> is the whole demo."
 
-**SEE (silent hook):** the diagram deliberately shows *Constraints* as a first-class box, not
-buried config. A practitioner clocks "the policy is an explicit, external artifact" before
-you ever open the app.
+**SEE (silent hook):** the diagram shows *Constraints* as a first-class, external box, not buried
+config. A practitioner clocks "the policy is an explicit, versioned artifact" before you open the app.
 
 ---
 
 ## PART 3 — In the app, step by step  (~12 min)
 
-Grandma is the through-line. The order maps to the loop: **data → models → results → the
-twist (control) → governance → did-it-work.**
+Grandma is the through-line. Order maps to the loop: **data → models → results → the twist
+(conduct) → governance → did-it-work.**
 
 ### Beat A · Data — the book today  (~1:00)
 
-**GO:** Price Optimisation → **Optimiser** tab. Read the roll-up KPIs at the top.
+**GO:** Price Optimisation → **Optimiser** tab. Read the roll-up KPIs — **GWP and expected profit
+are two separate numbers**; point at each.
 
 **SAY:**
-> "This is our motor book — real, though synthetic, data. Roughly **£9.4m of premium** at
-> today's prices. The claim we're going to test is that there's margin left on the table, and
-> we can find it without touching how we assess risk."
+> "This is our motor book — synthetic data, real mechanics. About **[read live — ~£53m] of gross
+> written premium**, and at today's prices it earns about **[read live — ~£9.4m] of expected
+> profit** — that's conversion-weighted margin over the risk cost. The claim we'll test: there's
+> margin left on this book **without touching how we assess risk.**"
 
-**SEE (silent hook):** these KPIs come straight off live Unity Catalog tables — the numbers
-are queryable, not baked into a slide. A practitioner used to exports notices it's *live*.
+**SEE (silent hook):** both KPIs come straight off live Unity Catalog tables — queryable, not baked
+into a slide.
 
-**IF ASKED** "where's the data from?" → live UC tables written by the pipeline; quote
-responses including **lost** quotes (the lost ones carry the price signal).
+**IF ASKED** "where's the data from?" → live UC tables; quote responses including **lost** quotes
+(the lost ones carry the price signal). **"Profit after what?"** → margin of price over the
+technical (risk) cost, before fixed overheads — the quantity the objective maximises.
+
+> **[RESOLVED]** The app took the clean route: keep Beat A as **"the motor book"** (the KPI/factor
+> table are new-business segment factors), and the factor table's new **Conduct column** joins each
+> segment's **renewal GIPP status** onto the row. There is also a dedicated **"Renewals — GIPP
+> enforced"** section. So call it "the motor book" here; grandma's +7.5% is her **new-business segment
+> factor**, and the Conduct column shows her **renewal** stays GIPP-clean. Do not call the whole
+> thing a "renewal book."
 
 ---
 
 ### Beat B · Models — model demand honestly  (~1:45)
 
-**GO:** **Demand & red-team** tab. Show the **elasticity curve** first, then the
-**"wrong-model" (endogeneity) panel**.
+**GO:** **Demand & red-team** tab. Elasticity curve first, then the **"wrong-model" (endogeneity)
+panel**.
 
 **SAY (the curve):**
-> "Here's the demand model. As price goes up, conversion comes down — and notice it can *only*
-> go down: that monotonic shape is **enforced in the model**, not hoped for. This curve is the
-> heart of optimisation: it tells us, segment by segment, how price-sensitive people are."
+> "Here's the demand model. As price rises, conversion falls — and it can *only* fall: that
+> monotonic shape is **enforced in the model**, not hoped for. This curve is the heart of
+> optimisation — it tells us, segment by segment, how price-sensitive people are."
 
-**SAY (the wrong-model panel — this is the credibility beat):**
-> "Now, the trap. If you naively model demand on the **raw price**, the model tells you
-> customers barely care about price — because expensive risks cost more *and* command higher
-> prices, so the signal cancels out. That's a false 'inelastic' read, and it's how you leave
-> money everywhere. We model demand on price **relative to the technical price**, which removes
-> that trap — and this panel shows the difference side by side."
+**SAY (the wrong-model panel — the credibility beat):**
+> "Now the trap. Model demand on the **raw price** and it tells you customers barely care —
+> because expensive risks cost more *and* command higher prices, so the signal cancels out. That's
+> a false 'inelastic' read, and it's how you leave money everywhere. We model demand on price
+> **relative to the technical price**, which removes the trap — and this panel shows the difference
+> side by side."
 
-**SEE (silent hook):** the model's code and its monotonic constraints are on screen, and there
-is a *panel whose only job is to red-team the model's own honesty*. A black-box appliance shows
-you a curve; here you see the model, the code, and the self-check. Say none of that.
+**SEE (silent hook):** the model's code and monotone constraints are on screen, plus a panel whose
+only job is to red-team the model's own honesty. Say none of it.
 
-**IF ASKED** "is the elasticity even real?" → the **parameter-recovery** panel: on data where
-we know the true answer, the model recovers it (correlation ≈ 0.95).
+**IF ASKED** "is the elasticity real?" → concede first: it's synthetic, so parameter recovery is
+expected — the panel demonstrates the red-team *pattern* (recovery correlation ≈ 0.95). On real
+data you'd feed it price-test or randomised-corridor experience.
 
 ---
 
 ### Beat C · Results — what optimisation finds  (~1:45)
 
-**GO:** back to **Optimiser**. Set the objective to **Expected profit**, set **N** (scenarios)
-to a few thousand, click **Re-solve (live job)**. Let it run (~1 min), then read the
-**efficient frontier**, the **per-segment waterfall**, and the **factor table**.
+**GO:** back to **Optimiser**. Objective = **Expected profit**, set **N** (scenarios) to a few
+thousand, click **Re-solve (live job)** (~1 min). Read the **frontier**, **waterfall**, **factor
+table**.
 
 **SAY (while it solves):**
-> "I'm going to explore a few **thousand** possible price sets and pick the best one under my
-> goal. This is a real governed job running now — not a slider faking it."
+> "I'll explore a few **thousand** possible price sets and pick the best under my goal — a real
+> governed job running now, not a slider faking it."
 
-**SAY (the result):**
-> "There it is. Same book, same risk models — optimised, the profit goes from **£9.4m to about
-> £10.4m. That's roughly +£1m, about +11%,** and — this matters — **every single price move
-> stayed inside a ±15% corridor** around the technical price. Look at the waterfall: it raised
-> stable, loyal segments toward the cap, and it **cut** price for the young drivers who shop
-> around hard. That's the machine doing exactly what we asked."
+**SAY (the result — read numbers live, name units):**
+> "There it is. Same book, same risk models — optimised, expected profit moves up by [read the
+> **Profit uplift** KPI], and the app reads it back as a **percent of GWP** right there — call it
+> **about two percent of premium** — with every move inside the ±15% corridor. Two percent doesn't
+> sound dramatic — **that's the point.** It's found money on the same book, same risk, and it's the
+> honest size of what optimisation finds. Anyone promising you ten times that is selling you *their*
+> elasticities, not yours."
 
-**SEE (silent hook):** **N is a control you set**, and the frontier is generated live. In an
-appliance, the number of scenarios you can explore is a licence tier; here it's a text box.
-Don't say it — just set N in front of them.
+**SEE (silent hook):** **N is a control you set** and the frontier is generated live — in an
+appliance the number of scenarios is a licence tier; here it's a text box. Don't say it; set N in
+front of them.
 
-**FALLBACK:** if the live solve stalls, drop to your pre-solved screenshot: "here's the last
-run" — the story is identical.
-
----
-
-### Beat D · The twist — the machine vs the human (control)  (~2:30)  ← the peak
-
-**GO:** **Optimiser → factor table.** Find the grandma segment **`70+ · grpHigh`** (~340
-policies). It shows a **+5%** move.
-
-**SAY:**
-> "Now watch. Remember the grandmas. Told 'maximise profit', the optimiser **raised** our
-> 70-plus, high-value-car segment by **5%** — conversion drops a touch, 73% to 68%, and the
-> machine is fine with that, because they're loyal. From a pure profit view, that's correct."
-
-**GO:** flip to **Demand & red-team → elasticity curve**, select `70+ · grpHigh`.
-
-**SAY:**
-> "But say my business wants to **win** this segment, not milk it. Look at their curve: if I
-> **cut** their price, conversion climbs — 92% at a 15% discount, versus 48% at a 15% loading.
-> To win them I have to go the *opposite* way to what the profit machine chose. That's not a
-> maths error — the maths is right. It's a **policy decision**, and it's mine to make."
-
-**GO (Option A — agents woven in):** invoke the **`constraint_author`** agent — ask it, in plain
-language: *"cap increases and allow a price cut for the 70-plus high-group segment."* It drafts
-the constraint-YAML override.
-
-**SAY:**
-> "So I tell the system, in plain English, what I want — and an agent drafts the change to the
-> **pricing policy** for me. I'm not editing maths; I'm stating intent. Then I re-solve under
-> the new policy."
-
-**GO:** **Optimiser → Re-solve** (solver-only, ~1 min). Show `70+ · grpHigh` now moving **down**.
-
-**SAY:**
-> "Same governed solver, new policy — the grandmas now move **down**, and conversion goes up.
-> The machine ran the optimisation; **I** decided what optimal meant."
-
-**SEE (silent hook):** the policy is a **versioned YAML file changed by an agent + re-solved on
-demand** — i.e. your pricing policy is diff-able, reviewable, and reproducible. A practitioner
-who changes constraints through a GUI clocks "that's under version control" instantly.
-
-**FALLBACK / SEAM:** `constraint_author` is an **agent persona via the agent panel, not yet a
-one-click button**. If it's slow or you want a clean click-path, either (a) tilt the objective
-to **retention-weighted** in the front door, or (b) show the pre-edited segment override in
-`optimisation_constraints/default.yaml`. All three routes reach the same "human overrules the
-machine" point.
+**FALLBACK:** if the live solve stalls, drop to the pre-solved screenshot — the story is identical.
 
 ---
 
-### Beat E · Governance — approve, prove, explain  (~3:00)
+### Beat D · The twist — the machine vs the human (a *conduct* twist)  (~2:30)  ← the peak
 
-**GO:** **Optimiser → Approve & deploy.** Click it (you're an admin).
+**[BUILT — verify deployed. Now live: the factor table's Conduct column (renewal GIPP status + an
+amber "fair-value review →" pill), the reshaped grandma curve (organic +7.5%), and the
+`/optimisation/constraint-edit` YAML-diff apply endpoint.]**
 
-**SAY:**
-> "The human sets the policy; the system **enforces** it. When I deploy, the corridor is
-> re-checked **server-side** — no prompt, no agent, nothing can talk its way past it — and the
-> whole decision is written to an **immutable record**: who, when, why, which model, which
-> constraint version."
+**GO:** **Optimiser → factor table.** Find `70+ · grpHigh` (~316 policies): **+7.5%**, with a
+**Conduct column** showing **GIPP ✓** and an **amber "fair-value review →" pill**.
 
-**GO:** open the **decision record** (Decisions tab) for the deploy you just made.
+**SAY (1 — commercial + legal):**
+> "Watch. Told 'maximise profit', the machine raised our 70-plus segment **5%**. Look at her curve
+> — nearly flat on increases; she barely reacts, only deep cuts move her. So the machine milks the
+> loyalty. Commercially, that's correct. And notice — it stayed **legal**: her renewal never
+> exceeds the equivalent new-business price, checked at solve time. That's the GIPP column."
 
-**SAY:**
-> "Here's that record. This is what a regulator or an internal auditor asks for — and it exists
-> automatically, as a by-product of deciding."
+**GO:** point at the **amber marker**.
 
-**GO (the standout beat):** **Optimiser → "Explain this price" → "use the grandma-in-a-BMW demo
-case."** Show the decomposition, then the plain-language explanation.
+**SAY (2 — legal is the floor, not the standard):**
+> "But legal is the floor, not the standard. This flag says: a loyal, older, low-switching segment
+> is being loaded — that's a **fair-value question under Consumer Duty**, and it isn't the machine's
+> to answer. It's mine."
 
-**SAY:**
-> "And here's the one I love. Pick a single real quote — this is our grandma, age 72, higher
-> group car. **Exactly why does she pay what she pays?** The risk price, the factor we chose,
-> the corridor that bounds it — every number, traceable, from her premium back to the model and
-> the policy. And it drops straight into a decision record."
+**GO:** click the amber **"fair-value review →"** pill on her row — it jumps to **Monitoring → the
+Fair-value evidence panel** (proxy-correlation, disparate impact, vulnerability screen).
 
-**SEE (silent hook — the big one):** **this per-quote, fully-decomposed, traceable explanation
-is the thing a black-box appliance cannot produce.** You do not say that. You just show the
-document on the grandma's own quote and pause. A practitioner's own experience fills the gap.
+**SAY (3 — the evidence, one sentence):**
+> "Here's the evidence I'd take to a fair-value committee — and my call is: **we win this segment,
+> we don't milk it.**"
 
-**GO (optional, if fair value comes up):** the **fairness / fair-value** evidence panel
-(Monitoring or the fairness section) — proxy-correlation, disparate impact, vulnerability.
+**GO:** ask **`constraint_author`** in plain language — *"cap increases and allow a price cut for the
+70-plus high-group segment"* — then **pause on the YAML diff**.
 
-**FALLBACK:** if a governance PDF render hangs (known serverless stall), use the **Pack History**
-list — packs were pre-generated at deploy time; click one to show it inline.
+**SAY (4 — intent, then attributed commit):**
+> "The agent drafted the change — I'm not editing maths, I'm stating intent — but **nothing applies
+> until I review this diff and commit it.** The policy is a versioned file; this change now has my
+> name on it."
+
+**GO:** **Re-solve** → `70+ · grpHigh` moves **down**, conversion up, consistent with the deep-cut
+side of her curve.
+
+**SAY (5):**
+> "Same governed solver, new policy — the grandmas now move **down**, and conversion climbs. The
+> machine ran the optimisation; **I** decided what optimal meant."
+
+**SEE (silent hook):** the policy is a **versioned YAML changed by an agent, reviewed as a diff,
+committed under a name, and re-solved on demand** — pricing policy that's diff-able, attributable,
+reproducible.
+
+**FALLBACK / SEAM:** `constraint_author` is an **agent persona, not yet a one-click button**. If
+slow, (a) tilt the objective to **retention-weighted**, or (b) show the pre-edited segment override
+in `optimisation_constraints/default.yaml`. Both must land on the **same conduct framing** — legal
+floor vs fair-value standard, human decides.
+
+> **[NOTE]** The old "92% / 73% / 48%" elasticity recital is **deleted** — the reshaped curve has
+> different numbers. Read them live off her curve.
 
 ---
 
-### Beat F · Did it work?  (~1:00)
+### Beat E · Governance — approve, then prove provenance  (~3:00)
 
-**GO:** **Monitoring** tab → **Advance one month**.
+**GO:** **Optimiser → Approve & deploy.** The deploy runs a **Unity Catalog stored procedure** (not
+app code): it re-checks the corridor, writes the deployment, and stamps an **immutable `audit_log`
+row** — called **as you, over OBO**, so UC enforces the gate per person via an **`EXECUTE` grant**,
+and your forwarded email is the approver on the record.
 
 **SAY:**
-> "Last question: did reality agree? I roll the book forward one month under the prices we just
-> deployed, and compare **predicted against realised**. [Read the on-screen numbers.] They line
-> up closely — the book behaved the way the model said it would. That closes the loop: decide,
-> deploy, monitor, and check yourself honestly."
+> "The human sets the policy; the platform **enforces** it. Deploy here isn't app code I could edit —
+> it's a **Unity Catalog stored procedure**, and permission to run it is a **database grant**, checked
+> per person. It re-checks the corridor server-side and stamps an immutable audit record with my name
+> on it. No prompt, no agent, no engineer talks past a UC privilege."
 
-**SEE (silent hook):** the loop is **closed and self-checking** — predicted-vs-realised is a
-first-class screen, not a quarterly reconciliation project.
+**GO (re-aimed standout):** open **Explain this price → "use the grandma-in-a-BMW demo case."** Give
+the decomposition **~10 seconds**, then **pause on the provenance block.**
+
+**SAY (the provenance chain — this is the beat):**
+> "Every rating engine can show you a factor waterfall. Here's what sits **underneath** this one:
+> the exact model version, the exact constraint version — **including the change I just committed
+> with my name on it** — who approved deployment, and the decision record it all landed in. One
+> chain, from her premium to the audit trail, queryable. Not a report someone assembles for the
+> regulator — a **by-product of deciding.**"
+
+**SEE (silent hook):** a queryable premium→model-version→constraint-version→approver→decision-record
+chain is the thing a black box can't produce. Show it; never say who can't.
+
+> **[RESOLVED — word choice]** The deploy procedure writes an **immutable `audit_log` row** under
+> `SQL SECURITY DEFINER` (owner-privileged; the caller only holds `EXECUTE`). "Immutable" is now
+> defensible — be ready to show the audit table (or Delta time-travel) if pressed. Still don't
+> improvise beyond what you can show.
+
+**FALLBACK:** if a governance PDF render hangs (known serverless stall), use **Pack History** —
+packs are pre-generated at deploy time; click one to show it inline.
+
+---
+
+### Beat F · Did it work? — the honesty flip  (~1:00)
+
+**GO:** **Monitoring** tab → **Advance one month.**
+
+**SAY:**
+> "Last screen — and let me be straight about what it proves. This is **synthetic data**, so
+> predicted and realised reconcile by construction; I wrote the world. What matters is the
+> **pattern**: this screen exists, first-class, and in production it's where your model error
+> surfaces in **month one** — not in a year-end reconciliation project. Decide, deploy, monitor, and
+> check yourself honestly."
+
+**SEE (silent hook):** predicted-vs-realised is a first-class screen, not a quarterly project.
+
+> **[NOTE]** Never say "the book behaved the way the model said it would" — that's false validation
+> on synthetic data.
 
 ---
 
 ## PART 4 — Summary  (~1:15)
 
-**GO:** back on camera, or the concept slide again.
+**GO:** back on camera, or the concept slide.
 
-**SAY (recap the concept — reinforce the teach):**
-> "So — that's price optimisation. Cost-plus tells you the floor; optimisation asks what price
-> best hits your goal given how customers respond, within rules a human sets. We modelled
-> demand honestly, we found about **£1m of margin on the same book without touching risk**, and
-> every price was bounded, deployed behind a gate, explained down to a single grandma's quote,
-> and checked against reality a month later."
+**SAY (recap — honest numbers):**
+> "So — that's price optimisation. Cost-plus tells you the floor; optimisation asks what price best
+> hits your goal given how customers respond, within rules a human sets. We modelled demand
+> honestly, found about **£1m — roughly two percent of premium — on the same book without touching
+> risk**, bounded every move, deployed behind a gate, and could trace a single grandma's premium
+> all the way to the audit trail."
 
 **SAY (the line to leave them with):**
 > "The machine runs the cycle. The human decides when it's allowed to act alone. That's the
 > product — and it all runs in your own workspace, open, on one platform."
 
 **SAY (heavy-mode teaser → sequel hook):**
-> "One more thing, and then I'll let you go. Today the optimiser was deliberately *light* —
-> smart, fast, thousands of scenarios. But when a decision really matters, the same platform can
-> run the **entire book, policy by policy, across a whole ensemble of candidate demand models,
-> for the full distribution of outcomes** — not a single point estimate. **Smart when you can,
-> exhaustive when it matters.** That's a video of its own — I'll show you that next."
+> "One more thing. Today the optimiser was deliberately *light* — smart, fast, thousands of
+> scenarios. But when a decision really matters, the same platform can run the **whole book, policy
+> by policy, across an ensemble of candidate demand models, for the full distribution of outcomes** —
+> not one point estimate. **Smart when you can, exhaustive when it matters.** That's the next video."
 
-**SAY (the polite competitive leave-behind — the only shot you take):**
-> "And a question to take with you: ask whoever prices for you today to show you the
-> **distribution** of outcomes across your candidate demand models — not one number, the spread.
-> That's a good conversation to have."
+**SAY (the only competitive line anywhere — the polite leave-behind):**
+> "And a question to take with you: ask whoever prices for you today to show you the **distribution**
+> of outcomes across your candidate demand models — not one number, the spread. That's a good
+> conversation to have."
 
 ---
 
-## Test-run checklist (run this once, silently, before recording)
+## Test-run checklist (walk it once, silently, before recording)
 
-Walk the whole path with a stopwatch and tick each:
-
-- [ ] Optimiser KPIs load and show ~£9.4m (Beat A)
-- [ ] Demand curve + wrong-model panel + param-recovery all render (Beat B)
-- [ ] Live re-solve completes < ~90s; frontier + waterfall + factor table populate (Beat C)
-- [ ] `70+ · grpHigh` visible in the factor table at **+5%** (Beat D)
-- [ ] Its elasticity curve shows the 92% / 73% / 48% shape (Beat D)
-- [ ] `constraint_author` agent returns a YAML override on a fresh (uncached) question (Beat D)
-- [ ] Re-solve flips `70+ · grpHigh` to a **cut** (Beat D)
-- [ ] Approve & deploy succeeds as admin; a decision record appears (Beat E)
-- [ ] "Explain this price" grandma demo case renders the full decomposition (Beat E)
-- [ ] Advance-one-month returns predicted-vs-realised numbers (Beat F)
+- [ ] KPIs show **GWP and profit separately** (~£53m / ~£9.4m) — both rendered
+- [ ] Solve **uplift reads 1–3% of GWP** (≈£1m); read live, named by unit
+- [ ] **[verify deployed]** Grandma curve: flat upside, steep deep-cut side; solver picks +7.5% **organically**
+- [ ] **[verify deployed]** GIPP column + amber fair-value marker on her row
+- [ ] **[verify deployed]** One click from her row → fairness panel renders
+- [ ] **[verify deployed]** Agent draft → YAML diff → **attributed** apply → re-solve flips her to a cut
+- [ ] **[verify deployed]** Provenance block on explain-price with live values; decision-record link opens
+- [ ] Monitoring caption carries the **synthetic-reconciliation** honesty line
+- [ ] `constraint_author` returns on a **fresh (uncached)** question
 - [ ] Total run lands **15–20 min** at speaking pace
 
-If any agent/serving beat is slow on first hit, that's the ~45s cold start — warm it and retry.
+If an agent/serving beat is slow on first hit, that's the ~45s cold start — warm it and retry.
 
 ---
 
-## Follow-up video (planned): Heavy mode — "exhaustive when it matters"
+## Editor guidance (Part 1)
 
-Its own ~8–10 min video. Star of the show: the **Heavy mode** tab — the pre-computed
-**disagreement map** and **uncertainty-banded frontier**, and the **measured** caption
-(evaluation count, wall-clock, estimated cost — captured from a real run, never a claim;
-the shipped run measured billions of evaluations in ~90s for ~$1). Rule from the runbook:
-**never lead with this** — it only makes sense once a viewer already believes the light,
-governed loop is real, which this Part-1 video establishes. The leave-behind question above
-is the natural bridge into it.
+Full cut **~17 min.** If a **10-minute** cut is ever needed, keep: **concept slide (with bill of
+materials), Beat A, Beat C, Beat D (the conduct twist, uncut — it *is* the video), Beat E
+explain-price + provenance.** Drop first: Beat B's parameter-recovery detail; Beat F (fold its one
+honesty line into the summary); the live-solve wait (jump-cut it). **The strongest 30 seconds are
+the YAML-diff commit and the provenance chain — protect them in any cut.**
+
+---
+
+## Reviewer note (why the numbers differ from the fix brief)
+
+The fix brief states GWP ≈ £9.4m and profit ≈ £1.3m with a £180k (~2%) uplift. Verified against the
+app: the `/summary` endpoint returns `gwp_current` **and** `expected_profit_hold/opt/profit_uplift`
+**separately**. The real values are **GWP ≈ £53m** (≈50k policies × ~£1,065 loaded — the same 50k
+that makes Part 2's ~4.5B evaluations true) and **expected profit ≈ £9.4m → £10.4m, uplift ≈ £1m.**
+The brief's "£9.4m premium" is actually the **profit** figure mislabelled as premium; £1.3m and
+£180k are then derived from that mislabel. The brief's *narrative instinct is correct* — the uplift
+**is** ~2% of premium (£1m / £53m ≈ 1.9%) — so this script keeps "~2% of premium / found money /
+not selling you their elasticities" and only corrects the base numbers. **Re-review update (app
+built):** the app now exposes an explicit **`uplift_pct_of_gwp`** KPI alongside separate GWP and
+expected-profit KPIs — confirming the correction. The **new-business vs renewal** challenge is
+resolved: renewal GIPP status *is* joined onto the factor table (the Conduct column), plus a
+dedicated Renewals section. The deploy gate also became a **UC stored procedure** (EXECUTE-grant
+RBAC over OBO) — a stronger governance beat than the old app `ADMIN_USERS` check; Beat E reflects it.
