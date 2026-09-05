@@ -949,14 +949,14 @@ function DecisionRecords({ records, available }: { records: any[]; available?: b
             {isOpen && (
               <div className="px-5 pb-5 border-t border-gray-100 pt-3 text-sm space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div><div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Reproducibility</div>
-                    <div className="text-xs text-gray-700 space-y-0.5">
+                  <div className="min-w-0"><div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Reproducibility</div>
+                    <div className="text-xs text-gray-700 space-y-0.5 break-words">
                       <div>Data: {r.data_snapshot}</div>
-                      <div>Conversion model: <span className="font-mono">{r.conversion_model}{r.conversion_model_version ? ` v${r.conversion_model_version}` : ''}</span></div>
-                      <div>Retention model: <span className="font-mono">{r.retention_model}{r.retention_model_version ? ` v${r.retention_model_version}` : ''}</span></div>
-                      <div>Re-run: <span className="font-mono">{r.rerun_pointer}</span></div>
+                      <div>Conversion model: <span className="font-mono break-all">{r.conversion_model}{r.conversion_model_version ? ` v${r.conversion_model_version}` : ''}</span></div>
+                      <div>Retention model: <span className="font-mono break-all">{r.retention_model}{r.retention_model_version ? ` v${r.retention_model_version}` : ''}</span></div>
+                      <div>Re-run: <span className="font-mono break-all">{r.rerun_pointer}</span></div>
                     </div></div>
-                  <div><div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Chosen</div>
+                  <div className="min-w-0"><div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Chosen</div>
                     <div className="text-xs text-gray-700">Objective <b>{chosen.objective}</b> · {chosen.segments} segments · expected profit {gbpM(chosen.expected_profit_opt)} (hold {gbpM(chosen.expected_profit_hold)}) · uplift <b>{gbpM(chosen.profit_uplift)}</b> · volume {Number(chosen.expected_volume || 0).toLocaleString()}</div>
                     <div className="text-[11px] uppercase tracking-wide text-gray-500 mt-2 mb-1">Rejected alternatives</div>
                     <div className="text-xs text-gray-700 space-y-0.5">
