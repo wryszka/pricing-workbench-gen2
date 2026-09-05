@@ -4,7 +4,7 @@
 # MAGIC
 # MAGIC The optional second gear. The default optimiser is deliberately light
 # MAGIC (segment-collapsed, scale-free). Heavy mode is what you run **because you
-# MAGIC can**, not because you must — the flex an appliance can't match:
+# MAGIC can**, not because you must — smart when you can, exhaustive when it matters:
 # MAGIC
 # MAGIC 1. **Ensemble disagreement map** — refit the demand model as an **ensemble of
 # MAGIC    candidate specs** (different model types / depths / feature subsets / seeds),
