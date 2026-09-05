@@ -76,36 +76,37 @@ async def _t_run_heavy_mode(args, session_id, agent_id):
     return _run_job(_JOBS["heavy_mode"], {"preset": preset})
 
 async def _t_deploy_factors(args, session_id, agent_id):
-    """Server-side gate: **RBAC + corridor re-check** — the SAME gate as the app
-    /deploy route, so an external MCP client (agent or user) cannot bypass it.
-    On approval it also writes the immutable decision record (parity with the app)."""
-    # (1) RBAC — caller must be in ADMIN_USERS, identical to the app route.
+    """Deploy the solved factor set. The write + the **corridor re-check** + the
+    audit row now live in the governed UC procedure `deploy_factor_set`
+    (playbook v2.3 platform-native gate) — this tool just CALLs it, so an external
+    MCP client cannot bypass the corridor.
+
+    RBAC: interim app-side `_require_admin` until app user-authorization (OBO) is
+    enabled; once it is, the CALL runs as the user and the UC `EXECUTE` grant on
+    the procedure enforces RBAC per-person — and this check is removed."""
     try:
         _require_admin("optimisation-deploy")
     except HTTPException as e:
         return {"ok": False, "gated": True, "error": f"admin-only: {e.detail}"}
-    rows = await _q(f"SELECT segment, factor, constraint_version FROM {fqn('optimisation_factor_table')}")
-    if not rows:
-        return {"ok": False, "error": "no factor table — solve first"}
-    # (2) corridor re-check, server-side.
-    lo, hi = 1 - CORRIDOR_PCT / 100, 1 + CORRIDOR_PCT / 100
-    breaches = [r["segment"] for r in rows
-                if not (lo - 1e-6 <= float(r.get("factor") or 1.0) <= hi + 1e-6)]
-    if breaches:
-        return {"ok": False, "gated": True,
-                "error": f"deploy blocked: {len(breaches)} segment(s) outside ±{CORRIDOR_PCT:.0f}% corridor"}
-    cver = str(rows[0].get("constraint_version") or "v1")
     who = get_current_user() or agent_id or "mcp-agent"
-    p = {"cver": cver, "who": who, "note": f"deployed via MCP by {agent_id}", "n": len(rows)}
-    await execute_query(f"""
-        INSERT INTO {fqn('optimisation_deployment')}
-        SELECT uuid(), :cver, :n, :who, :note, current_timestamp()""", p)
-    await execute_query(f"""
-        INSERT INTO {fqn('audit_log')} (event_id, event_type, entity_type, entity_id, entity_version,
-               user_id, timestamp, details, source)
-        SELECT uuid(), 'optimisation_deploy_approved', 'factor_table', :cver, :cver, :who,
-               current_timestamp(), to_json(named_struct('segments', :n, 'note', :note)), 'optimisation_mcp'""", p)
-    # (3) immutable decision record — parity with the app /deploy path (governance §11).
+    note = f"deployed via MCP by {agent_id}"
+    # CALL the UC procedure — it re-checks the corridor and writes deployment +
+    # audit_log. A corridor breach raises USER_RAISED_EXCEPTION → surfaced as gated.
+    try:
+        await execute_query(f"CALL {fqn('deploy_factor_set')}(:note, :who)", {"note": note, "who": who})
+    except Exception as e:
+        msg = str(e)
+        blocked = "blocked" in msg.lower() or "corridor" in msg.lower() or "USER_RAISED_EXCEPTION" in msg
+        return {"ok": False, "gated": blocked, "error": msg[:220]}
+    # constraint version + segment count for the response + decision record
+    cver, n = "v1", 0
+    try:
+        r = await _q(f"SELECT max(constraint_version) cver, count(*) n FROM {fqn('optimisation_factor_table')}")
+        if r:
+            cver = str(r[0].get("cver") or "v1"); n = int(r[0].get("n") or 0)
+    except Exception:
+        pass
+    # immutable decision record — parity with the app /deploy path (governance §11).
     try:
         from server.routes.optimisation import _write_decision_record
         dep = await _q(f"SELECT deployment_id FROM {fqn('optimisation_deployment')} ORDER BY deployed_at DESC LIMIT 1")
@@ -113,35 +114,33 @@ async def _t_deploy_factors(args, session_id, agent_id):
         await _write_decision_record(dep_id, who, cver, objective="expected_profit")
     except Exception as e:
         logger.warning("mcp deploy: decision-record write failed: %s", str(e)[:160])
-    return {"ok": True, "segments": len(rows), "constraint_version": cver, "deployed_by": who}
+    return {"ok": True, "segments": n, "constraint_version": cver, "deployed_by": who, "via": "uc_procedure"}
 
 
 # --- read tools -------------------------------------------------------------
+# Reads are backed by governed UC VIEWS (optimisation_read_views.py), per the
+# platform-native gate: the tool is a thin caller (`SELECT * FROM <view>`); the
+# read logic — columns, filters, joins — lives in Unity Catalog with lineage.
 async def _t_read_scenarios(args, session_id, agent_id):
-    rows = await _q(f"""SELECT scenario_id, expected_profit, expected_volume, expected_gwp, pareto
-                        FROM {fqn('optimisation_scenarios')} WHERE pareto=true OR scenario_id='hold'
-                        ORDER BY expected_volume""")
+    rows = await _q(f"SELECT * FROM {fqn('v_optimisation_frontier')} ORDER BY expected_volume")
     return {"ok": True, "frontier": rows}
 
 async def _t_read_factors(args, session_id, agent_id):
-    rows = await _q(f"""SELECT segment, factor_pct, conversion_hold, conversion_opt, profit_uplift, binding
-                        FROM {fqn('optimisation_factor_table')} ORDER BY segment""")
+    rows = await _q(f"SELECT * FROM {fqn('v_optimisation_factors')} ORDER BY segment")
     return {"ok": True, "factors": rows}
 
 async def _t_read_renewal_factors(args, session_id, agent_id):
-    rows = await _q(f"""SELECT segment, policies, renewal_factor_pct, retention_hold, retention_opt,
-                        margin_uplift, gipp_breaches FROM {fqn('optimisation_renewal_factor_table')} ORDER BY segment""")
+    rows = await _q(f"SELECT * FROM {fqn('v_optimisation_renewal_factors')} ORDER BY segment")
     return {"ok": True, "renewal_factors": rows}
 
 async def _t_read_monitoring(args, session_id, agent_id):
-    drift = await _q(f"""SELECT cast(quote_month as string) month, actual_conversion, expected_conversion, drift
-                         FROM {fqn('optimisation_monitoring')} ORDER BY quote_month""")
-    breaches = await _q(f"SELECT check, breaches, total, rate FROM {fqn('optimisation_constraint_breaches')}")
+    drift = await _q(f"SELECT * FROM {fqn('v_optimisation_monitoring_drift')} ORDER BY month")
+    breaches = await _q(f"SELECT * FROM {fqn('v_optimisation_constraint_breaches')}")
     return {"ok": True, "drift": drift, "breaches": breaches}
 
 async def _t_read_fairness(args, session_id, agent_id):
-    ev = await _q(f"SELECT check, dimension, group, value, threshold, pass FROM {fqn('optimisation_fairness_evidence')}")
-    summ = await _q(f"SELECT overall_pass, worst_proxy_corr, evidence FROM {fqn('optimisation_fairness_summary')} LIMIT 1")
+    ev = await _q(f"SELECT * FROM {fqn('v_optimisation_fairness_evidence')}")
+    summ = await _q(f"SELECT * FROM {fqn('v_optimisation_fairness_summary')} LIMIT 1")
     return {"ok": True, "checks": ev, "summary": (summ or [None])[0]}
 
 async def _t_read_constraints(args, session_id, agent_id):
@@ -174,14 +173,11 @@ async def _t_get_decision_record(args, session_id, agent_id):
     return {"ok": True, "record": rows[0] if rows else None}
 
 async def _t_read_disagreement(args, session_id, agent_id):
-    rows = await _q(f"""SELECT segment, factor_min, factor_max, factor_spread_pp, agreement, n_models
-                        FROM {fqn('optimisation_disagreement')} ORDER BY factor_spread_pp DESC""")
+    rows = await _q(f"SELECT * FROM {fqn('v_optimisation_disagreement')} ORDER BY factor_spread_pp DESC")
     return {"ok": True, "segments": rows}
 
 async def _t_read_run_costs(args, session_id, agent_id):
-    rows = await _q(f"""SELECT preset, grid_points, n_draws, n_models, policies, total_evaluations,
-                        wallclock_s, est_cost_usd, cast(ran_at as string) ran_at
-                        FROM {fqn('optimisation_heavy_meta')} LIMIT 1""")
+    rows = await _q(f"SELECT * FROM {fqn('v_optimisation_run_costs')} LIMIT 1")
     return {"ok": True, "last_heavy_run": rows[0] if rows else None}
 
 

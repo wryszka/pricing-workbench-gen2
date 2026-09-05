@@ -276,6 +276,62 @@ resources:
             client: "5"
             dependencies: [pandas]
 
+    # --- read layer: governed UC VIEWS backing the opt_read_* MCP tools --------
+    # Platform-native gate (playbook v2.3): reads are UC objects, not app SQL.
+    optimisation_read_views:
+      name: "Price optimisation — read views (UC-native) (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: create_views
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_read_views.py
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              schema_name:  "{{job.parameters.schema_name}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: []
+
+    # --- deploy as a governed UC PROCEDURE (RBAC = EXECUTE grant) --------------
+    # Platform-native gate (playbook v2.3): the deploy action + corridor re-check
+    # + audit live in a UC stored procedure; RBAC is a UC EXECUTE grant, not app code.
+    optimisation_deploy_procedure:
+      name: "Price optimisation — deploy procedure (UC-native gate) (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: app_service_principal_id
+          default: ${var.app_service_principal_id}
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: create_proc
+          notebook_task:
+            notebook_path: ../src/04_models/production/optimisation_deploy_procedure.py
+            base_parameters:
+              catalog_name:             "{{job.parameters.catalog_name}}"
+              schema_name:              "{{job.parameters.schema_name}}"
+              app_service_principal_id: "{{job.parameters.app_service_principal_id}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: []
+
     # --- closed loop: advance one month under the deployed prices (§3 tail) ----
     optimisation_advance_month:
       name: "Price optimisation — advance month (did it work?) (gen2)"
@@ -439,3 +495,11 @@ resources:
           depends_on: [{task_key: decision_record}]
           run_job_task:
             job_id: ${resources.jobs.optimisation_explain_price.id}
+        - task_key: read_views
+          depends_on: [{task_key: explain_price}]
+          run_job_task:
+            job_id: ${resources.jobs.optimisation_read_views.id}
+        - task_key: deploy_procedure
+          depends_on: [{task_key: read_views}]
+          run_job_task:
+            job_id: ${resources.jobs.optimisation_deploy_procedure.id}

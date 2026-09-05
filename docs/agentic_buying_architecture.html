@@ -1,0 +1,266 @@
+<title>Agentic Buying Reference Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --paper:#FAF9F7; --slab:#FFFFFF; --ink:#1B1B1F; --muted:#5B5B66;
+    --line:#E5E3DD; --line-strong:#D3D0C8;
+    --accent:#FF3621; --accent-soft:#FFEBE6;
+    --steel:#31507E; --steel-soft:#EAEFF7; --steel-line:#C9D6EC;
+    --good:#12855B; --good-soft:#E4F3EC;
+    --band:#F4F2EC; --chip:#F0EEE8;
+    --shadow:0 1px 2px rgba(27,27,31,.06), 0 8px 24px rgba(27,27,31,.05);
+  }
+  :root:not([data-theme="light"]){ }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0E0F13; --slab:#16181F; --ink:#ECECEF; --muted:#9A9AA6;
+      --line:#262A33; --line-strong:#333947;
+      --accent:#FF5A44; --accent-soft:#331611;
+      --steel:#8AA6D8; --steel-soft:#172234; --steel-line:#2A3A57;
+      --good:#3FBE86; --good-soft:#12241B;
+      --band:#12141A; --chip:#1C1F27;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0E0F13; --slab:#16181F; --ink:#ECECEF; --muted:#9A9AA6;
+    --line:#262A33; --line-strong:#333947;
+    --accent:#FF5A44; --accent-soft:#331611;
+    --steel:#8AA6D8; --steel-soft:#172234; --steel-line:#2A3A57;
+    --good:#3FBE86; --good-soft:#12241B;
+    --band:#12141A; --chip:#1C1F27;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--paper); color:var(--ink);
+    font-family:"IBM Plex Sans", system-ui, sans-serif; line-height:1.5;
+    -webkit-font-smoothing:antialiased;}
+  .page{max-width:1120px; margin:0 auto; padding:40px 28px 56px;}
+
+  /* header */
+  .eyebrow{font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); font-weight:500;}
+  h1{font-family:"Archivo",sans-serif; font-weight:800; font-size:clamp(28px,4.4vw,44px);
+    line-height:1.02; letter-spacing:-.02em; margin:.28em 0 .18em; text-wrap:balance; max-width:20ch;}
+  .lede{color:var(--muted); font-size:15.5px; max-width:66ch; margin:0;}
+
+  /* the diagram frame */
+  .diagram{margin-top:34px; display:grid; grid-template-columns:230px 1fr; gap:0 26px; align-items:stretch;}
+  @media (max-width:760px){ .diagram{grid-template-columns:1fr;} }
+
+  /* channel column (the buyer) */
+  .channel{display:flex; flex-direction:column; justify-content:center; gap:14px;}
+  .agent{background:var(--slab); border:1.5px solid var(--line-strong); border-radius:14px;
+    padding:18px 16px; box-shadow:var(--shadow);}
+  .agent .role{font-family:"Archivo",sans-serif; font-weight:700; font-size:16px; letter-spacing:-.01em;}
+  .agent .sub{color:var(--muted); font-size:12.5px; margin-top:4px;}
+  .tag{display:inline-block; margin-top:12px; font-family:"IBM Plex Mono",monospace; font-size:10.5px;
+    letter-spacing:.04em; color:var(--steel); background:var(--steel-soft);
+    border:1px solid var(--steel-line); border-radius:999px; padding:3px 9px;}
+  .link{position:relative; text-align:center; color:var(--accent);
+    font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.02em; line-height:1.35;}
+  .link b{display:block; font-weight:500;}
+  .link::before{content:""; display:block; height:2px; background:
+    linear-gradient(90deg,transparent,var(--accent) 20%,var(--accent) 80%,transparent);
+    margin:0 0 8px;}
+  @media (max-width:760px){ .link::before{display:none} }
+
+  /* platform slab */
+  .platform{background:var(--slab); border:1.5px solid var(--line-strong);
+    border-left:5px solid var(--accent); border-radius:16px; overflow:hidden; box-shadow:var(--shadow);}
+  .platform-hd{display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+    padding:14px 20px; border-bottom:1px solid var(--line); background:var(--band);}
+  .platform-hd .name{font-family:"Archivo",sans-serif; font-weight:800; font-size:15px; letter-spacing:-.01em;}
+  .platform-hd .gov{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted);}
+
+  .band{padding:16px 20px; border-bottom:1px solid var(--line); display:grid;
+    grid-template-columns:150px 1fr; gap:18px; align-items:center;}
+  @media (max-width:640px){ .band{grid-template-columns:1fr; gap:10px;} }
+  .band:last-child{border-bottom:none;}
+  .band-label .k{font-family:"Archivo",sans-serif; font-weight:700; font-size:13.5px; letter-spacing:-.01em;}
+  .band-label .d{color:var(--muted); font-size:12px; margin-top:3px;}
+
+  .cards{display:flex; flex-wrap:wrap; gap:10px;}
+  .card{flex:1 1 0; min-width:150px; background:var(--paper); border:1px solid var(--line);
+    border-radius:11px; padding:11px 12px;}
+  .card.managed{border-color:var(--steel-line); background:var(--steel-soft);}
+  .card .ct{font-family:"Archivo",sans-serif; font-weight:700; font-size:13px; letter-spacing:-.01em;
+    display:flex; align-items:center; gap:7px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--steel);flex:none;}
+  .dot.hot{background:var(--accent);}
+  .card .mono{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--muted);
+    margin-top:6px; line-height:1.5; word-break:break-word;}
+  .card .note{font-size:11.5px; color:var(--muted); margin-top:6px;}
+
+  /* serving row with flow arrow */
+  .serving{display:flex; align-items:stretch; gap:10px; flex-wrap:wrap;}
+  .serving .card{flex:1 1 200px;}
+  .arrow{align-self:center; font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--accent);
+    letter-spacing:.03em; white-space:nowrap; display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .arrow span{font-size:15px; line-height:1;}
+  @media (max-width:640px){ .arrow{transform:rotate(90deg); margin:2px 0;} }
+
+  /* foundation bar */
+  .foundation{background:linear-gradient(180deg,var(--band),var(--slab));
+    padding:15px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .foundation .fk{font-family:"Archivo",sans-serif; font-weight:800; font-size:14px;}
+  .foundation .fd{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--muted); letter-spacing:.02em;}
+  .gchip{font-size:10.5px; font-family:"IBM Plex Mono",monospace; color:var(--good);
+    background:var(--good-soft); border:1px solid var(--good); border-radius:999px; padding:2px 9px; letter-spacing:.03em;}
+
+  /* flow ribbon */
+  .flow{margin-top:26px; border:1px dashed var(--line-strong); border-radius:14px; padding:16px 18px;}
+  .flow-hd{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:12px;}
+  .steps{display:flex; gap:10px; flex-wrap:wrap;}
+  .step{flex:1 1 150px; display:flex; gap:10px; align-items:flex-start;}
+  .num{flex:none; width:24px; height:24px; border-radius:50%; background:var(--accent); color:#fff;
+    font-family:"Archivo",sans-serif; font-weight:700; font-size:12.5px;
+    display:grid; place-items:center;}
+  .step .st{font-weight:600; font-size:12.5px;}
+  .step .sd{color:var(--muted); font-size:11.5px; margin-top:1px;}
+  .step code{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--steel);}
+
+  .foot{margin-top:22px; color:var(--muted); font-size:12.5px; max-width:80ch; line-height:1.6;}
+  .foot b{color:var(--ink); font-weight:600;}
+  .caption{margin-top:14px; font-family:"Archivo",sans-serif; font-weight:700; font-size:15px;
+    color:var(--ink); letter-spacing:-.01em; text-wrap:balance; max-width:60ch;}
+</style>
+
+<div class="page">
+  <div class="eyebrow">Reference architecture · Databricks</div>
+  <h1>Agentic buying, on the Lakehouse</h1>
+  <p class="lede">A buyer's AI agent purchases motor cover directly from the carrier — no website. The tool surface is <b>managed MCP governed by Unity Catalog</b> and fronted by the AI Gateway; the app is a thin host, not the framework.</p>
+
+  <div class="diagram">
+    <!-- channel -->
+    <div class="channel">
+      <div class="agent">
+        <div class="role">AI buying agent</div>
+        <div class="sub">the customer's assistant · an aggregator · a partner agent</div>
+        <span class="tag">MCP client</span>
+      </div>
+      <div class="link"><b>MCP over HTTPS</b>OAuth via the AI Gateway<br>discover · call tools</div>
+    </div>
+
+    <!-- platform -->
+    <div class="platform">
+      <div class="platform-hd">
+        <span class="name">Databricks Data Intelligence Platform · Bricksurance Motor</span>
+        <span class="gov">governed by Unity Catalog</span>
+      </div>
+
+      <!-- gateway -->
+      <div class="band">
+        <div class="band-label">
+          <div class="k">Governed front door</div>
+          <div class="d">the single entry for models &amp; tools</div>
+        </div>
+        <div class="cards">
+          <div class="card managed">
+            <div class="ct"><span class="dot hot"></span>Unity Catalog AI Gateway</div>
+            <div class="note">Auth, guardrails, rate limits, and usage &amp; payload logging on every model and tool call.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- agent -->
+      <div class="band">
+        <div class="band-label">
+          <div class="k">Reasoning agent</div>
+          <div class="d">advises, never sets the price</div>
+        </div>
+        <div class="cards">
+          <div class="card managed">
+            <div class="ct"><span class="dot"></span>Mosaic AI Agent Framework</div>
+            <div class="mono">served on Model Serving</div>
+            <div class="note">Runs the buying dialogue and orchestrates the tools below.</div>
+          </div>
+          <div class="card managed">
+            <div class="ct"><span class="dot"></span>Foundation Model API</div>
+            <div class="mono">databricks-claude</div>
+            <div class="note">The reasoning model — gathers answers, explains, never invents a premium.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- managed MCP tool surface -->
+      <div class="band">
+        <div class="band-label">
+          <div class="k">Tool surface · Managed MCP</div>
+          <div class="d">every tool is a governed UC object</div>
+        </div>
+        <div class="cards">
+          <div class="card managed">
+            <div class="ct"><span class="dot"></span>UC Functions MCP</div>
+            <div class="mono">fn_indicative_quote · explain_price · appetite &amp; rating fns</div>
+          </div>
+          <div class="card managed">
+            <div class="ct"><span class="dot"></span>Genie MCP</div>
+            <div class="mono">pricing &amp; book space</div>
+            <div class="note">NL question → governed SQL over the marts.</div>
+          </div>
+          <div class="card managed">
+            <div class="ct"><span class="dot"></span>Vector Search MCP</div>
+            <div class="mono">policy wordings · product docs</div>
+          </div>
+          <div class="card">
+            <div class="ct"><span class="dot hot"></span>Custom MCP · Databricks Apps</div>
+            <div class="mono">get_quote_requirements · check_answers · price_motor_risk</div>
+            <div class="note">The bespoke buying journey — the one custom piece.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- serving + features -->
+      <div class="band">
+        <div class="band-label">
+          <div class="k">Live price &amp; features</div>
+          <div class="d">where a tool call becomes a real number</div>
+        </div>
+        <div class="serving">
+          <div class="card">
+            <div class="ct"><span class="dot hot"></span>Model Serving API</div>
+            <div class="mono">motor_pricing_scorer · route-optimized</div>
+            <div class="note">4 champion models (freq/sev GLM, demand/fraud GBM) + rating engine → premium &amp; full breakdown, ~90&nbsp;ms.</div>
+          </div>
+          <div class="arrow"><span>→</span>FeatureLookup</div>
+          <div class="card">
+            <div class="ct"><span class="dot"></span>Lakebase online feature store</div>
+            <div class="note">Live features + telematics / behaviour — book-mean for a brand-new customer.</div>
+          </div>
+          <div class="card">
+            <div class="ct"><span class="dot"></span>UC feature &amp; model tables</div>
+            <div class="mono">@champion aliases</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- foundation -->
+      <div class="foundation">
+        <span class="fk">Unity Catalog</span>
+        <span class="fd">governance · lineage · @champion model aliases · audit log &amp; channel telemetry</span>
+        <span class="gchip">every call governed + audited</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- request flow -->
+  <div class="flow">
+    <div class="flow-hd">How one quote flows</div>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><div><div class="st">Discover</div><div class="sd">agent asks <code>get_quote_requirements</code> what the carrier needs</div></div></div>
+      <div class="step"><div class="num">2</div><div><div class="st">Gather</div><div class="sd">conversational turns; <code>check_answers</code> validates, no premium yet</div></div></div>
+      <div class="step"><div class="num">3</div><div><div class="st">Price</div><div class="sd"><code>price_motor_risk</code> calls the live Model Serving engine</div></div></div>
+      <div class="step"><div class="num">4</div><div><div class="st">Feature lookup</div><div class="sd">scorer reads Lakebase online store, runs the models + rating</div></div></div>
+      <div class="step"><div class="num">5</div><div><div class="st">Explain</div><div class="sd"><code>explain_price</code> — the "why" an aggregator can't give</div></div></div>
+    </div>
+  </div>
+
+  <p class="foot"><b>Honest note for a customer room:</b> today the buying-journey tools run as a <b>custom MCP on Databricks Apps</b> delegating to these UC objects; the reads/functions/Genie are the managed-MCP-native part. This diagram is the target-state reference shape — the App becomes a thin host as those tools graduate to managed MCP.</p>
+  <p class="caption">The agent gets a real carrier price from the live engine, plus a governed "why" — and Unity Catalog has a record of every call.</p>
+</div>

@@ -458,53 +458,34 @@ async def deploy(req: DeployRequest):
     be in ADMIN_USERS (the approver role); (2) the ±corridor is re-checked against
     the live factor table. On approval we stamp optimisation_deployment + an
     immutable audit_log row, using bound parameters (injection-proof)."""
-    _require_admin("optimisation-deploy")   # RBAC: approver must be in ADMIN_USERS
-    rows = await _safe(f"""
-        SELECT segment, factor, factor_pct, within_corridor, constraint_version
-        FROM {fqn('optimisation_factor_table')}
-    """)
-    if not rows:
-        return {"ok": False, "error": "no factor table to deploy — solve first"}
-    rows = _coerce(rows)
-    lo, hi = 1 - CORRIDOR_PCT / 100, 1 + CORRIDOR_PCT / 100
-    breaches = [r["segment"] for r in rows
-                if not (lo - 1e-6 <= (r.get("factor") or 1.0) <= hi + 1e-6)]
-    if breaches:
-        return {"ok": False, "gated": True,
-                "error": f"deploy blocked: {len(breaches)} segment(s) outside the "
-                         f"±{CORRIDOR_PCT:.0f}% corridor: {', '.join(breaches[:5])}"}
-    cver = str(rows[0].get("constraint_version") or "v1")
+    # RBAC: interim app-side check. The deploy WRITE + the ±corridor re-check + the
+    # audit row now live in the governed UC procedure deploy_factor_set (playbook
+    # v2.3 platform-native gate); this route CALLs it. Once app user-authorization
+    # (OBO) is enabled the CALL runs as the user and the UC EXECUTE grant on the
+    # procedure enforces RBAC per-person — this _require_admin is then removed.
+    _require_admin("optimisation-deploy")
     approver = get_current_user() or req.approver or "app_user"
     note = req.note or "approved in app"
-    n = len(rows)
-    # Stamp the deployment ledger + the immutable audit log (append — the history of
-    # deployments IS the record) with BOUND PARAMETERS — user-supplied values can
-    # never alter the statement. The table is pre-created by the solver notebook, so
-    # the app SP only needs INSERT (MODIFY), never CREATE. Surface write failures.
-    p = {"cver": cver, "approver": approver, "note": note}
-    dep_ok = await _safe(f"""
-        INSERT INTO {fqn('optimisation_deployment')}
-        SELECT uuid(), :cver, {n}, :approver, :note, current_timestamp()
-    """, p)
-    aud_ok = await _safe(f"""
-        INSERT INTO {fqn('audit_log')} (event_id, event_type, entity_type, entity_id,
-               entity_version, user_id, timestamp, details, source)
-        SELECT uuid(), 'optimisation_deploy_approved', 'factor_table', :cver, :cver,
-               :approver, current_timestamp(),
-               to_json(named_struct('segments', {n}, 'note', :note)), 'optimisation_app'
-    """, p)
-    if dep_ok is None or aud_ok is None:
-        return {"ok": False, "constraint_version": cver, "segments": n,
-                "error": "corridor OK but writeback failed — check app-SP MODIFY grants "
-                         "on optimisation_deployment / audit_log (run grant_app_sp)."}
-    # capture the deployment_id we just stamped, then write the immutable decision record
+    # CALL the procedure — a corridor breach raises inside it (USER_RAISED_EXCEPTION)
+    # and surfaces here as a gated failure with the procedure's own message.
+    try:
+        await execute_query(f"CALL {fqn('deploy_factor_set')}(:note, :approver)",
+                            {"note": note, "approver": approver})
+    except Exception as e:
+        msg = str(e)
+        blocked = "blocked" in msg.lower() or "corridor" in msg.lower() or "USER_RAISED_EXCEPTION" in msg
+        return {"ok": False, "gated": blocked, "error": msg[:240]}
+    meta = await _safe(f"SELECT max(constraint_version) cver, count(*) n FROM {fqn('optimisation_factor_table')}")
+    cver = str((meta or [{}])[0].get("cver") or "v1")
+    n = int((meta or [{}])[0].get("n") or 0)
+    # capture the deployment_id the procedure just stamped, then the decision record
     dep = await _safe(f"""SELECT deployment_id FROM {fqn('optimisation_deployment')}
                           ORDER BY deployed_at DESC LIMIT 1""")
     dep_id = (dep or [{}])[0].get("deployment_id") if dep else None
     rec_id = await _write_decision_record(dep_id, approver, cver, objective="expected_profit")
     return {"ok": True, "constraint_version": cver, "segments": n,
             "approver": approver, "deployment_id": dep_id, "decision_id": rec_id,
-            "message": "Factor table approved and deployed — immutable decision record written."}
+            "message": "Factor table approved and deployed via the governed UC procedure — immutable decision record written."}
 
 
 async def _write_decision_record(deployment_id, approver, cver, objective="expected_profit"):
