@@ -114,6 +114,10 @@ async def summary():
         "expected_profit_hold": round(hold, 2), "expected_profit_opt": round(opt, 2),
         "profit_uplift": round(opt - hold, 2),
         "profit_uplift_pct": round((opt / hold - 1) * 100, 2) if hold else None,
+        # Uplift as a share of GWP — the incumbent-comparable metric (low single
+        # digits of GWP). Headline this, not the profit-relative %, so the number
+        # doesn't read as a >10% uplift.
+        "uplift_pct_of_gwp": round((opt - hold) / gwp * 100, 2) if gwp else None,
         "all_within_corridor": all(f.get("within_corridor") for f in factors),
     }
     cver = factors[0].get("constraint_version") if factors else None
@@ -250,9 +254,37 @@ async def explain(quote_id: str):
     if not rows or not rows[0].get("j"):
         return {"available": False, "quote_id": quote_id, "error": "quote not found or function unavailable"}
     try:
-        return {"available": True, "quote_id": quote_id, "decomposition": json.loads(rows[0]["j"])}
+        dec = json.loads(rows[0]["j"])
     except Exception:
         return {"available": True, "quote_id": quote_id, "decomposition_raw": rows[0]["j"]}
+    # Provenance block (§11): tie this quote to the exact governed artefacts that
+    # produced it — read live from the decision_records table for the factor set's
+    # constraint version. The @champion alias is the model version pointer.
+    prov = None
+    try:
+        cver = dec.get("constraint_version")
+        where = "WHERE constraint_version = :cv" if cver else ""
+        prec = await _safe(f"""
+            SELECT decision_id, deployment_id, approver, constraint_version,
+                   conversion_model, conversion_model_version, data_snapshot,
+                   cast(created_at AS string) AS created_at
+            FROM {fqn('optimisation_decision_records')} {where}
+            ORDER BY created_at DESC LIMIT 1""", {"cv": cver} if cver else None)
+        p = (_coerce(prec) or [None])[0] if prec else None
+        prov = {
+            "risk_model": "freq_glm_motor × sev_glm_motor @champion",
+            "demand_model": (p or {}).get("conversion_model") or "conversion_elasticity_motor",
+            "demand_model_version": (p or {}).get("conversion_model_version"),
+            "constraint_version": cver or (p or {}).get("constraint_version"),
+            "data_snapshot": (p or {}).get("data_snapshot"),
+            "approver": (p or {}).get("approver"),
+            "decision_id": (p or {}).get("decision_id"),
+            "deployment_id": (p or {}).get("deployment_id"),
+            "decided_at": (p or {}).get("created_at"),
+        }
+    except Exception as e:
+        logger.warning("explain provenance lookup failed: %s", str(e)[:160])
+    return {"available": True, "quote_id": quote_id, "decomposition": dec, "provenance": prov}
 
 
 @router.get("/explain-demo")
@@ -486,6 +518,31 @@ async def deploy(req: DeployRequest):
     return {"ok": True, "constraint_version": cver, "segments": n,
             "approver": approver, "deployment_id": dep_id, "decision_id": rec_id,
             "message": "Factor table approved and deployed via the governed UC procedure — immutable decision record written."}
+
+
+class ConstraintEditRequest(BaseModel):
+    change: str | None = None
+    approver: str | None = None
+
+
+@router.post("/constraint-edit")
+async def constraint_edit(req: ConstraintEditRequest):
+    """HITL gate for an agent-proposed pricing-policy (constraint) change: the human
+    reviews the YAML diff and applies it. The attributed record is written to the
+    immutable audit_log by the governed UC procedure record_constraint_edit — the
+    write + RBAC live in Unity Catalog (playbook v2.3 platform-native gate), this
+    route just CALLs it. Recorded BEFORE the re-solve acts on the changed policy.
+    Interim app-side _require_admin until OBO enforces the UC EXECUTE grant per-person."""
+    _require_admin("optimisation-constraint-edit")
+    who = get_current_user() or req.approver or "app_user"
+    change = (req.change or "").strip() or "pricing-policy change reviewed & applied"
+    try:
+        await execute_query(f"CALL {fqn('record_constraint_edit')}(:chg, :who)",
+                            {"chg": change, "who": who})
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:240]}
+    return {"ok": True, "recorded_by": who, "change": change,
+            "message": "Policy change reviewed and recorded to the immutable audit log via the governed UC procedure — before the solver acts on it."}
 
 
 async def _write_decision_record(deployment_id, approver, cver, objective="expected_profit"):

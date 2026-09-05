@@ -66,7 +66,7 @@ Six driven beats, each firing the real agent or governed job: **detect** (drift 
 ## Act 3 — HEAVY MODE (Optimisation → "Heavy mode" tab) — **only after ~1:20 in**
 - **Rule:** never lead with this; run it once the governed loop has landed.
 - **GO/DO:** show the pre-computed disagreement map + uncertainty-banded frontier; read the **measured** caption (evaluations, wall-clock, est. cost). For a live re-run use **"Re-run live (small)"** (~1–2 min); the **full heavy run** is the pre-computed default (don't trigger the big one live unless you have the time).
-- **SAY:** "Smart when you can, **exhaustive when it matters — the appliance has one gear.**"
+- **SAY:** "Smart when you can, **exhaustive when it matters.**"
 - **IF FAILS:** the pre-computed results are the default view — no live run needed; the "live" preset is the only thing that touches compute in-room.
 - **LEAVE-BEHIND:** "Ask your current vendor to show you the distribution across your candidate models."
 

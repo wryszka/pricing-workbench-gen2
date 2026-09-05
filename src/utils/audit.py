@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS {fqn}.audit_log (
     source          STRING      COMMENT 'app, notebook, api'
 )
 COMMENT 'Unified audit trail for all Pricing Workbench events'
+TBLPROPERTIES ('delta.appendOnly' = 'true')
 """
 
 

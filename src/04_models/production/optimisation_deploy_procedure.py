@@ -56,14 +56,48 @@ print("procedure deploy_factor_set created")
 
 # COMMAND ----------
 
+# A second governed action: record a human-reviewed pricing-policy (constraint)
+# change to the immutable audit_log BEFORE a re-solve acts on it. Same platform-
+# native gate — the write lives in UC, RBAC is the EXECUTE grant. Used by the
+# aggregator-squeeze "review & apply the policy change" beat: an agent proposes a
+# constraint edit, the human reviews the YAML diff and applies it (attributed +
+# recorded here), and only then does the solver run under the changed policy.
+spark.sql(f"""
+CREATE OR REPLACE PROCEDURE {fqn}.record_constraint_edit(p_change STRING, p_approver STRING)
+LANGUAGE SQL
+SQL SECURITY DEFINER
+COMMENT 'Record an attributed, human-reviewed pricing-policy (constraint) change to the immutable audit_log BEFORE a re-solve acts on it. RBAC = EXECUTE grant on this procedure (playbook v2.3 platform-native gate). p_change = the reviewed diff/summary; p_approver = trusted forwarded email.'
+AS BEGIN
+  DECLARE v_who STRING;
+  SET v_who = COALESCE(NULLIF(p_approver, ''), current_user());
+  INSERT INTO {fqn}.audit_log (event_id, event_type, entity_type, entity_id, entity_version, user_id, timestamp, details, source)
+    SELECT uuid(), 'constraint_edit_applied', 'constraint_set', 'pricing_policy', '', v_who, current_timestamp(),
+           to_json(named_struct('change', p_change, 'uc_caller', current_user())), 'record_constraint_edit';
+END
+""")
+print("procedure record_constraint_edit created")
+
+# COMMAND ----------
+
 # RBAC as UC privilege: only admins (and, for the pre-OBO interim, the app SP) may
 # EXECUTE. When app user-authorization (OBO) is enabled, the CALL runs as the user
 # and UC enforces this grant per-person — the app-side ADMIN_USERS check is then
 # removed and the app-SP grant revoked.
 grantees = list(admins) + ([app_sp] if app_sp else [])
-for g in grantees:
-    spark.sql(f"GRANT EXECUTE ON PROCEDURE {fqn}.deploy_factor_set TO `{g}`")
-    print("granted EXECUTE to", g)
+granted, skipped = [], []
+for proc in ("deploy_factor_set", "record_constraint_edit"):
+    for g in grantees:
+        # Resilient per-grantee: a principal that does not exist in THIS workspace
+        # (e.g. a placeholder admin from the default list) must not fail the task and
+        # skip every downstream job. Skip-and-log so the procedures still deploy and
+        # the real admins/app-SP still get EXECUTE.
+        try:
+            spark.sql(f"GRANT EXECUTE ON PROCEDURE {fqn}.{proc} TO `{g}`")
+            granted.append(f"{proc}:{g}"); print(f"granted EXECUTE on {proc} to", g)
+        except Exception as e:
+            skipped.append(f"{proc}:{g}"); print(f"SKIP grant on {proc} to {g}: {str(e)[:140]}")
 
 import json
-dbutils.notebook.exit(json.dumps({"procedure": f"{fqn}.deploy_factor_set", "execute_granted_to": grantees}))
+dbutils.notebook.exit(json.dumps({
+    "procedures": [f"{fqn}.deploy_factor_set", f"{fqn}.record_constraint_edit"],
+    "granted": granted, "skipped": skipped}))

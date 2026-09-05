@@ -150,7 +150,7 @@ the foundation; this is the pricing department switched on."*
   Run it once the room believes the governed loop is real. The line:
   > *"The default optimiser is deliberately light — smart when you can. But when it matters, the same
   > platform runs the whole book per policy, under an ensemble of your candidate models, for the full
-  > risk distribution. **Smart when you can, exhaustive when it matters — the appliance has one gear.**"*
+  > risk distribution. **Smart when you can, exhaustive when it matters.**"*
   Show the **measured** caption (row count, wall-clock, est. cost — captured from the actual run, never a
   claim) and the uncertainty-banded frontier + disagreement map.
 - **Leave-behind question** (hand this to the room as they go): *"Ask your current vendor to show you

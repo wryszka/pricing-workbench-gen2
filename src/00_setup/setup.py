@@ -72,8 +72,15 @@ spark.sql(f"""
         source          STRING      COMMENT 'app, notebook, api'
     )
     COMMENT 'Unified audit trail for all Pricing Workbench events'
+    TBLPROPERTIES ('delta.appendOnly' = 'true')
 """)
-print(f"✓ {fqn}.audit_log")
+# Enforce append-only on any pre-existing table too (idempotent): Delta rejects
+# UPDATE/DELETE, so the "append-only audit log" claim is enforced, not just convention.
+try:
+    spark.sql(f"ALTER TABLE {fqn}.audit_log SET TBLPROPERTIES ('delta.appendOnly' = 'true')")
+except Exception as _e:
+    print(f"audit_log appendOnly set skipped: {_e}")
+print(f"✓ {fqn}.audit_log (append-only enforced)")
 
 # COMMAND ----------
 

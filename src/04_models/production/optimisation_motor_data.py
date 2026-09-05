@@ -212,10 +212,21 @@ vs_market    = offered / market                                      # competiti
 # Elasticity drifts subtly month to month (±20% sinusoid) so monitoring moves and
 # the drift sentinel has a genuine signal.
 drift = 1.0 + 0.20 * np.sin(2 * np.pi * month_idx / max(1, NMON))
-z = 0.9 - CONV_E * drift * (vs_market - 1.0)                          # competitiveness → bind
-# Young drivers shop harder (extra sensitivity); loyal/low-risk convert a touch more.
 age = pd.to_numeric(book.get("driver_age", pd.Series([40]*n)), errors="coerce").fillna(40).values
-z = z - np.where(age < 25, 0.5, 0.0)
+vg  = pd.to_numeric(book.get("vehicle_group", pd.Series([20]*n)), errors="coerce").fillna(20).values
+d   = vs_market - 1.0                                                 # price deviation vs market
+# Baseline: competitiveness → bind; young drivers shop harder (extra sensitivity).
+z = 0.9 - CONV_E * drift * d - np.where(age < 25, 0.5, 0.0)
+# WP2 — the 70+ · grpHigh renewal-heavy "loyal" segment has ASYMMETRIC demand:
+# near-flat for small rate rises (loyal customers don't shop a small increase),
+# rolling off only past ~+5%, and genuinely responsive to deep cuts. Continuous
+# (no kink), monotone-compatible. The solver then lands ~+5% here ORGANICALLY
+# under the profit objective — the move falls out of the curve, not from a cap.
+is_grandma = (age >= 70) & (vg >= 30)
+extra_up   = np.where(d > 0.0, 48.0 * np.power(np.maximum(d - 0.048, 0.0), 1.5), 0.0)  # ~0 until ~+4.8%, then the cliff bites → organic optimum ~+5% (interpolated: start 0.06→+7.5%, 0.035→+2.5%)
+deep_cut   = np.where(d < -0.05, -6.0 * (d + 0.05), 0.0)             # extra pull on cuts beyond -5%
+z_g = 1.05 - 1.4 * drift * d - extra_up + deep_cut                   # near-flat to ~+5%, steep roll-off after → organic +5% optimum, ~0.74 at market
+z = np.where(is_grandma, z_g, z)
 p_bind = 1.0 / (1.0 + np.exp(-z))
 bound = (np.random.random(n) < p_bind).astype(int)
 

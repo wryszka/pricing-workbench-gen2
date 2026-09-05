@@ -247,9 +247,9 @@ export default function PriceOptimisation() {
         <>
           {rollup && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-              <Kpi label="Expected profit (opt)" value={gbpM(rollup.expected_profit_opt)} hint={`hold ${gbpM(rollup.expected_profit_hold)}`} tone="good" />
-              <Kpi label="Profit uplift" value={gbpM(rollup.profit_uplift)} hint={signPct(rollup.profit_uplift_pct)} tone="good" />
-              <Kpi label="Book" value={`${Number(rollup.policies).toLocaleString()}`} hint={`${rollup.segments} segments · ${gbpM(rollup.gwp_current)} GWP`} />
+              <Kpi label="GWP (annualised)" value={gbpM(rollup.gwp_current)} hint={`${Number(rollup.policies).toLocaleString()} policies · ${rollup.segments} segments`} />
+              <Kpi label="Expected underwriting profit" value={gbpM(rollup.expected_profit_opt)} hint={`hold ${gbpM(rollup.expected_profit_hold)}`} tone="good" />
+              <Kpi label="Profit uplift" value={gbpM(rollup.profit_uplift)} hint={`${signPct(rollup.uplift_pct_of_gwp)} of GWP`} tone="good" />
               <Kpi label="Constraint corridor" value={rollup.all_within_corridor ? 'All within' : 'Breach!'}
                 hint={`policy set ${summary?.constraint?.version || 'v1'}`} tone={rollup.all_within_corridor ? 'good' : 'warn'} />
             </div>
@@ -316,12 +316,12 @@ export default function PriceOptimisation() {
           </Section>
 
           <Section title="Solved factor table" icon={<ScrollText className="w-4 h-4 text-emerald-600" />}
-            sub="The deployable artifact — the per-segment factor the rating config consumes. 'Binding' shows why each segment stopped: interior (free optimum), segment_cap, corridor, or portfolio_volume (a portfolio volume floor, default 90% of today's book — enforced by the solver; non-binding here because the profit-optimum already holds volume).">
+            sub="The deployable artifact — the per-segment factor the rating config consumes. 'Binding' shows why each segment stopped: interior (free optimum), segment_cap, corridor, or portfolio_volume (a portfolio volume floor, default 90% of today's book — enforced by the solver; non-binding here because the profit-optimum already holds volume). 'Conduct' surfaces the renewal-book GIPP status and flags any increase into an older cohort for a fair-value review — click through to the evidence.">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-gray-500 border-b">
                   <th className="py-1.5 pr-3">Segment</th><th className="pr-3">Policies</th><th className="pr-3">Factor</th>
-                  <th className="pr-3">Conv hold→opt</th><th className="pr-3">Profit uplift</th><th className="pr-3">Binding</th><th>Corridor</th>
+                  <th className="pr-3">Conv hold→opt</th><th className="pr-3">Profit uplift</th><th className="pr-3">Binding</th><th className="pr-3">Corridor</th><th>Conduct</th>
                 </tr></thead>
                 <tbody>
                   {factors.map((f) => (
@@ -332,7 +332,16 @@ export default function PriceOptimisation() {
                       <td className="pr-3 text-gray-600">{pct(f.conversion_hold, 0)} → {pct(f.conversion_opt, 0)}</td>
                       <td className="pr-3">{gbp(f.profit_uplift)}</td>
                       <td className="pr-3"><span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{f.binding}</span></td>
-                      <td>{f.within_corridor ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-amber-600" />}</td>
+                      <td className="pr-3">{f.within_corridor ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-amber-600" />}</td>
+                      <td>{(() => {
+                        // conduct rule: a price *increase* into an older cohort triggers a fair-value review (the existing evidence pack).
+                        const rseg = renewal?.segments?.find((s: any) => s.segment === f.segment);
+                        if (/70\+/.test(f.segment) && f.factor_pct > 0) return (
+                          <button onClick={() => { setTab('monitor'); setTimeout(() => document.getElementById('fair-value-evidence')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }}
+                            className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-200">fair-value review →</button>);
+                        if (rseg) return <span className={`text-[11px] px-2 py-0.5 rounded-full ${rseg.gipp_breaches === 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>{rseg.gipp_breaches === 0 ? 'GIPP ✓' : 'GIPP flag'}</span>;
+                        return <span className="text-gray-300">—</span>;
+                      })()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -373,7 +382,7 @@ export default function PriceOptimisation() {
           )}
 
           <Section title="Approve → deploy" icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />}
-            sub="The human sets policy; the gate enforces it. On approve, the corridor is re-checked SERVER-SIDE (a future agent cannot bypass it), then the factor set is stamped to optimisation_deployment + the immutable audit log.">
+            sub="The human sets policy; the gate enforces it. On approve, the corridor is re-checked SERVER-SIDE (a future agent cannot bypass it), then the factor set is stamped to optimisation_deployment + the append-only audit log.">
             <div className="flex items-center gap-3 flex-wrap">
               <button onClick={doDeploy} disabled={deployBusy}
                 className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-60 text-gray-800 text-sm font-medium rounded-md px-4 py-2">
@@ -388,7 +397,7 @@ export default function PriceOptimisation() {
             </div>
           </Section>
 
-          <ExplainPrice />
+          <ExplainPrice onOpenDecisions={() => setTab('decisions')} />
         </>
       )}
 
@@ -502,6 +511,7 @@ export default function PriceOptimisation() {
             </div>
           </Section>
 
+          <div id="fair-value-evidence">
           <Section title="Fair-value evidence (§11)" icon={<ShieldCheck className="w-4 h-4 text-emerald-600" />}
             sub="Generated on every solve, before deploy: proxy-correlation of the price factor with forbidden signals, disparate impact across protected groups, and a vulnerability screen. This is the pack a Consumer-Duty / GIPP review asks for.">
             {fairness?.summary && (
@@ -532,6 +542,7 @@ export default function PriceOptimisation() {
               </div>
             )}
           </Section>
+          </div>
         </>
       )}
 
@@ -547,12 +558,12 @@ export default function PriceOptimisation() {
       {/* --------------------------------------------------------- HOW IT WORKS */}
       {tab === 'how' && (
         <>
-          <Section title="Where this wins — vs a black-box appliance" icon={<TrendingUp className="w-4 h-4 text-emerald-600" />}
-            sub="We concede sophistication on any single formula. We win on breadth, openness and cost — and on the things a regulated buyer actually needs. The risk of inaction is a per-seat licence you can't audit, can't extend, and can't point a regulator at.">
+          <Section title="Where this wins — vs a closed black-box tool" icon={<TrendingUp className="w-4 h-4 text-emerald-600" />}
+            sub="We concede sophistication on any single formula. We win on breadth, openness and cost — and on the things a regulated buyer actually needs: a decision a regulator can audit, extend, and reproduce.">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-gray-500 border-b">
-                  <th className="py-1.5 pr-3"></th><th className="pr-3">Black-box appliance</th><th>This workbench</th>
+                  <th className="py-1.5 pr-3"></th><th className="pr-3">Closed black-box tool</th><th>This workbench</th>
                 </tr></thead>
                 <tbody>
                   {[['Decision logic', 'vendor-owned, opaque', 'open code — you own & extend it'],
@@ -620,7 +631,7 @@ export default function PriceOptimisation() {
               <p className="text-sm text-gray-600">Monotone LightGBM conversion + retention (price as a ratio to technical, never raw). scipy solver, arg-max within the corridor ∩ segment caps. Everything open code.</p>
             </Section>
             <Section title="Platform" icon={<Zap className="w-4 h-4 text-gray-500" />}>
-              <p className="text-sm text-gray-600">Serverless jobs (scale-to-zero), UC-governed tables + registered @champion models, run-now via the app service principal (no PAT), immutable audit log.</p>
+              <p className="text-sm text-gray-600">Serverless jobs (scale-to-zero), UC-governed tables + registered @champion models, run-now via the app service principal (no PAT), append-only audit log.</p>
             </Section>
           </div>
         </>
@@ -642,8 +653,8 @@ function FrontierChart({ frontier }: { frontier: any[] }) {
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ maxHeight: h }}>
       <line x1={pad} y1={h - 28} x2={w - 12} y2={h - 28} stroke="#e5e7eb" />
       <line x1={pad} y1={12} x2={pad} y2={h - 28} stroke="#e5e7eb" />
-      <text x={pad} y={h - 10} fontSize="10" className="fill-gray-400">expected volume →</text>
-      <text x={6} y={16} fontSize="10" className="fill-gray-400">profit ↑</text>
+      <text x={pad} y={h - 10} fontSize="10" className="fill-gray-400">expected volume (policies) →</text>
+      <text x={6} y={16} fontSize="10" className="fill-gray-400">expected profit (£) ↑</text>
       <polyline fill="none" stroke="#a7f3d0" strokeWidth={2} points={line.map((f) => `${sx(f.expected_volume)},${sy(f.expected_profit)}`).join(' ')} />
       {frontier.map((f) => {
         const hold = f.scenario_id === 'hold';
@@ -662,6 +673,13 @@ function Waterfall({ factors }: { factors: any[] }) {
   const max = Math.max(...factors.map((f) => Math.abs(Number(f.factor_pct))), 1);
   return (
     <div className="space-y-1.5">
+      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400 pb-1 border-b border-gray-100">
+        <div className="w-28">Segment</div>
+        <div className="flex-1 text-center">Price move (− cut · + raise)</div>
+        <div className="w-14 text-right">Factor</div>
+        <div className="w-24 text-right">£ profit uplift</div>
+        <div className="w-24">Binding</div>
+      </div>
       {factors.map((f) => {
         const up = Number(f.factor_pct) >= 0;
         const wpc = (Math.abs(Number(f.factor_pct)) / max) * 46;
@@ -700,7 +718,7 @@ function EndoHeadline({ rows }: { rows: any[] }) {
 }
 
 // --- Explain-this-price (§11): decompose any quote, plain-language ----------
-function ExplainPrice() {
+function ExplainPrice({ onOpenDecisions }: { onOpenDecisions?: () => void }) {
   const [qid, setQid] = useState('');
   const [dec, setDec] = useState<any>(null);
   const [busy, setBusy] = useState(false);
@@ -742,6 +760,21 @@ function ExplainPrice() {
           <div>Optimisation factor <b>{signPct(d.optimisation_factor_pct)}</b> ({d.factor_binding}) → indicated {gbp(d.indicated_after_factor)}</div>
           <div>Offered {gbp(d.offered_premium)} · vs-technical {Number(d.vs_technical).toFixed(2)} · corridor clamp: <b>{d.corridor_clamped ? 'yes' : 'no'}</b> ({d.corridor})</div>
           <div className="text-[11px] text-gray-500">{d.models}</div>
+          {dec?.provenance && (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-1">Provenance — the exact artefacts behind this price</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-gray-600">
+                <div><span className="text-gray-400">Risk model</span> · {dec.provenance.risk_model}</div>
+                <div><span className="text-gray-400">Demand model</span> · {dec.provenance.demand_model}{dec.provenance.demand_model_version ? ` v${dec.provenance.demand_model_version}` : ''}</div>
+                <div><span className="text-gray-400">Constraint version</span> · <span className="font-mono">{dec.provenance.constraint_version || '—'}</span></div>
+                <div><span className="text-gray-400">Data snapshot</span> · <span className="font-mono">{dec.provenance.data_snapshot || '—'}</span></div>
+                <div><span className="text-gray-400">Approved by</span> · {dec.provenance.approver || '—'}{dec.provenance.decided_at ? ` · ${String(dec.provenance.decided_at).slice(0, 10)}` : ''}</div>
+                <div><span className="text-gray-400">Decision record</span> · {dec.provenance.decision_id
+                  ? <button onClick={onOpenDecisions} className="text-emerald-700 hover:underline font-mono">{dec.provenance.decision_id} →</button>
+                  : <span className="text-gray-400">—</span>}</div>
+              </div>
+            </div>
+          )}
           <div className="pt-1">
             <button onClick={explainPlain} disabled={plain?.busy}
               className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black disabled:opacity-60 text-white text-xs font-medium rounded-md px-3 py-1.5">
@@ -792,7 +825,7 @@ function HeavyMode() {
         <b>The second gear.</b> The default optimiser is deliberately light. Heavy mode is what you run
         <b> because you can</b>: refit demand as an ensemble of candidate models and re-solve under each, and
         score the whole book per-policy with Monte-Carlo demand draws for the full risk distribution.
-        <span className="text-emerald-300"> Smart when you can, exhaustive when it matters — the appliance has one gear.</span>
+        <span className="text-emerald-300"> Smart when you can, exhaustive when it matters.</span>
       </div>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <button onClick={() => go('live')} disabled={!!busy}
@@ -808,15 +841,14 @@ function HeavyMode() {
 
       {meta && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-gray-800 mb-4">
-          <b>Measured, not claimed:</b> {Number(meta.total_evaluations).toLocaleString()} evaluations
+          <b>Measured, not claimed:</b> {Number(meta.total_evaluations).toLocaleString()} scored evaluations
           ({Number(meta.policies).toLocaleString()} policies × {meta.grid_points} price sets × {meta.n_draws} draws,
           {meta.n_models} demand models) in <b>{meta.wallclock_s}s</b> · ~<b>${meta.est_cost_usd}</b> compute (est.) · preset <b>{meta.preset}</b>.
-          <span className="text-gray-500"> Now ask an appliance to show you the distribution across your candidate models.</span>
         </div>
       )}
 
       <Section title="Ensemble disagreement map" icon={<Layers className="w-4 h-4 text-emerald-600" />}
-        sub="Per-segment factor spread across the candidate demand models. Tight = high decision confidence; wide = treat the factor as uncertain (widen corridor or hold).">
+        sub="Per-segment factor spread across a genuinely diverse demand ensemble — a logistic-regression (GLM) baseline plus monotone gradient-boosted specs with varied depth, features and seeds. Tight = high decision confidence; wide = treat the factor as uncertain (widen corridor or hold).">
         {disRows.length ? (
           <div className="space-y-1.5">
             {disRows.map((d) => {
@@ -889,7 +921,7 @@ function DecisionRecords({ records, available }: { records: any[]; available?: b
   return (
     <div>
       <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-gray-700 mb-4">
-        <b>Every deployment leaves an immutable, reproducible record.</b> Data snapshot, elasticity model
+        <b>Every deployment leaves a tamper-evident, reproducible record.</b> Data snapshot, elasticity model
         versions, constraint version, the chosen scenario <b>and the alternatives we passed on</b>, the
         fairness review, approver + time, and a pointer to re-run the exact solve. This is what a regulator
         or an internal audit asks to see.
@@ -954,10 +986,31 @@ function DecisionRecords({ records, available }: { records: any[]; available?: b
 // Drives the real agents + governed jobs end to end: an external event → the
 // drift sentinel detects → the planner designs → the solver decides → the
 // recommender assembles the pack → the gate routes → deploy → did-it-work.
+// The reviewed policy edit that beat 4 actually acts on: switch the objective to
+// retention-weighted to defend young-driver volume. Shown as a diff, applied (and
+// recorded) by a human before the solver runs.
+const POLICY_DIFF: { t: 'ctx' | 'del' | 'add'; s: string }[] = [
+  { t: 'ctx', s: '# pricing_policy.yaml — proposed change' },
+  { t: 'ctx', s: 'objective:' },
+  { t: 'del', s: '  primary: expected_profit' },
+  { t: 'add', s: '  primary: retention_weighted_profit   # defend young-driver volume after the aggregator move' },
+];
+const POLICY_CHANGE_SUMMARY = 'objective: expected_profit → retention_weighted_profit (defend young-driver volume after aggregator move)';
+
 function AggregatorSqueeze() {
   const [res, setRes] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [applied, setApplied] = useState<any>(null);
   const set = (k: string, v: any) => setRes((p) => ({ ...p, [k]: v }));
+
+  const applyEdit = async () => {
+    setBusy('review');
+    try {
+      const r = await api.optConstraintEdit({ change: POLICY_CHANGE_SUMMARY });
+      if (r?.ok) { setApplied(r); set('review', `applied & recorded by ${r.recorded_by} — written to the append-only audit log before the solver runs`); }
+      else { set('review', r?.error ? 'error: ' + r.error : 'failed'); }
+    } catch (e) { set('review', 'GATED or failed: ' + String(e)); } finally { setBusy(null); }
+  };
 
   const pollRun = (runId: any): Promise<string> => new Promise((resolve) => {
     let n = 0;
@@ -1009,16 +1062,19 @@ function AggregatorSqueeze() {
     { k: 'plan', n: 2, title: 'Plan the response', label: 'Run the planner',
       story: 'The planner designs the next run — objective, grid size, and which segments to watch — using the current book and frontier.',
       run: () => agent('plan', 'planner', 'Design a re-optimisation run to defend young-driver volume without walking the margin on the rest of the book.') },
-    { k: 'solve', n: 3, title: 'Decide under constraints', label: 'Run the governed solver',
-      story: 'The deterministic solver re-solves within the versioned corridor — retention-weighted this time, to defend volume.',
+    { k: 'review', n: 3, title: 'Review & apply the policy change', label: 'Review & apply the policy change',
+      story: 'The planner proposes a pricing-policy edit. A human reviews the exact YAML diff and applies it — the change is attributed and written to the append-only audit log by a governed UC procedure BEFORE the solver acts on it. The agent proposes; the human decides; Unity Catalog records.',
+      run: applyEdit },
+    { k: 'solve', n: 4, title: 'Decide under constraints', label: 'Run the governed solver',
+      story: 'The deterministic solver re-solves within the versioned corridor — retention-weighted this time, to defend volume — under the policy change the human just approved.',
       run: solve },
-    { k: 'recommend', n: 4, title: 'Assemble the decision pack', label: 'Run the recommender',
+    { k: 'recommend', n: 5, title: 'Assemble the decision pack', label: 'Run the recommender',
       story: 'The recommender reads the solved factors, the frontier and the fair-value evidence, and assembles the pack a pricing committee signs off.',
       run: () => agent('recommend', 'recommender', 'Assemble the decision pack for this re-optimisation: recommendation, uplift by segment, fair-value verdict, residual risks.') },
-    { k: 'deploy', n: 5, title: 'The gate routes it', label: 'Approve & deploy',
+    { k: 'deploy', n: 6, title: 'The gate routes it', label: 'Approve & deploy',
       story: 'The deployment gate re-checks the corridor server-side (RBAC + ±15%). Within the pre-approved corridor it can auto-deploy; outside it needs human sign-off. Either way it is audited.',
       run: deploy },
-    { k: 'advance', n: 6, title: 'Did it work?', label: 'Advance one month',
+    { k: 'advance', n: 7, title: 'Did it work?', label: 'Advance one month',
       story: 'Roll the book forward under the deployed prices and compare what the solver predicted to what the book realized.',
       run: advance },
   ];
@@ -1039,11 +1095,23 @@ function AggregatorSqueeze() {
           </div>
           <p className="text-xs text-gray-500 mb-3 ml-8">{b.story}</p>
           <div className="ml-8">
-            <button onClick={b.run} disabled={busy === b.k}
-              className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black disabled:opacity-60 text-white text-sm font-medium rounded-md px-4 py-2">
-              {busy === b.k ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            {b.k === 'review' && (
+              <pre className="mb-3 bg-gray-900 rounded-lg p-3 text-[11px] leading-relaxed overflow-x-auto">
+                {POLICY_DIFF.map((l, i) => (
+                  <div key={i} className={l.t === 'add' ? 'text-emerald-300' : l.t === 'del' ? 'text-rose-300' : 'text-gray-400'}>
+                    {l.t === 'add' ? '+ ' : l.t === 'del' ? '- ' : '  '}{l.s}
+                  </div>
+                ))}
+              </pre>
+            )}
+            <button onClick={b.run} disabled={busy === b.k || (b.k === 'solve' && !applied)}
+              className={`inline-flex items-center gap-2 disabled:opacity-60 text-white text-sm font-medium rounded-md px-4 py-2 ${b.k === 'review' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-900 hover:bg-black'}`}>
+              {busy === b.k ? <Loader2 className="w-4 h-4 animate-spin" /> : b.k === 'review' ? <ShieldCheck className="w-4 h-4" /> : <Play className="w-4 h-4" />}
               {b.label}
             </button>
+            {b.k === 'solve' && !applied && (
+              <span className="ml-3 text-xs text-amber-700">Review & apply the policy change first — the solver only runs under an approved policy.</span>
+            )}
             {res[b.k] && (
               <div className="mt-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-3 whitespace-pre-wrap">{String(res[b.k])}</div>
             )}
