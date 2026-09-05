@@ -1,5 +1,9 @@
 # Price Optimisation — runbook (Phase 1: offline spine, motor)
 
+> **New to pricing? Read `docs/optimisation_sa_primer.md` first** — the ten load-bearing ideas, a
+> glossary, and the perimeter rule for questions beyond them. The same primer is in the app under
+> **Learn → Price optimisation**.
+
 What shipped, how to run it, and how to demo it. This is the **offline spine** on
 personal **motor** — the phase-1 scope of `docs/optimisation_demo_spec.md` (Part 2), built with
 the naming/placement decisions in `docs/OPTIMIZATION_RECONCILIATION.md`

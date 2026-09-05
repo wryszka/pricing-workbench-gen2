@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BookOpen, Database, Table2, Code, Rocket, Calculator, Shield, Sparkles,
-  GitBranch, RefreshCw, Lock, ArrowRight,
+  GitBranch, RefreshCw, Lock, ArrowRight, Target,
 } from 'lucide-react';
 import { Page, PageHeader, OnThisPage } from '../components/ui';
 
@@ -14,6 +14,7 @@ const PANELS = [
   { id: 'what',       label: 'What this is',          icon: BookOpen },
   { id: 'spine',      label: 'The pricing spine',     icon: GitBranch },
   { id: 'ratebook',   label: 'Rolling rate book',     icon: RefreshCw },
+  { id: 'optimiser',  label: 'Price optimisation',    icon: Target },
   { id: 'agents',     label: 'Real agents',           icon: Sparkles },
   { id: 'governance', label: 'Governance & bias',     icon: Shield },
   { id: 'platform',   label: 'Platform & deploy',     icon: Rocket },
@@ -45,7 +46,7 @@ export default function Learn() {
         icon={BookOpen}
       />
       <OnThisPage>
-        Use the sticky TOC on the left to jump to any section. Six topics: what this demo is, the six-stage pricing spine, the rolling rate book mechanics, how the real AI agents work, governance and bias monitoring, and how to deploy on your own workspace.
+        Use the sticky TOC on the left to jump to any section. Seven topics: what this demo is, the six-stage pricing spine, the rolling rate book mechanics, price optimisation (the ten ideas + a glossary for anyone without a pricing background), how the real AI agents work, governance and bias monitoring, and how to deploy on your own workspace.
       </OnThisPage>
 
       <div className="grid grid-cols-12 gap-6">
@@ -116,6 +117,75 @@ export default function Learn() {
             </p>
           </Panel>
 
+          <Panel id="optimiser" title="Price optimisation — the ten ideas" icon={Target}>
+            <p>
+              A primer for anyone running <Link to="/optimisation" className="text-blue-600 hover:underline">Price
+              Optimisation</Link> without a pricing background. It is not a pricing course — it is the
+              defensible perimeter: the ideas that are load-bearing for the demo, and one sentence for
+              everything past them. You do <em>not</em> need GLM/GBM internals, Monte-Carlo mechanics,
+              solver algorithms, reserving, capital or IFRS 17 — none of it is load-bearing here.
+            </p>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <strong>The perimeter rule</strong> — for any modelling question you can't answer, say it
+              without apology and move on: <em>"That's a modelling choice your actuaries would own — the
+              platform runs whichever choice they make."</em>
+            </div>
+            <ol className="list-decimal pl-5 space-y-1.5 text-sm">
+              <li><strong>Technical price</strong> — the break-even cost of a policy (expected claims + expenses). Every price is expressed relative to this floor: it answers "what does this risk cost us?"; optimisation answers "what should we charge, given that?"</li>
+              <li><strong>The demand curve (elasticity)</strong> — per segment, as price rises what fraction still buys? Steep = price-sensitive shoppers; flat = loyal. This is the one extra model optimisation adds; the risk models and rating an insurer already has.</li>
+              <li><strong>Why lost quotes matter</strong> — you can't learn price sensitivity from customers who said yes. The quotes that walked away carry the signal — a data-platform story before it's a modelling one.</li>
+              <li><strong>The endogeneity trap</strong> — riskier customers are quoted more <em>and still buy</em>, so a naive model reads demand as price-insensitive and leaves money everywhere. Fix: model demand on price <em>relative to technical</em>, so the risk-driven part cancels. The "wrong-model" panel shows the trap.</li>
+              <li><strong>The corridor</strong> — a hard ±15% bound around technical price that no optimised price may leave, enforced <em>at solve time</em> (the solver can't produce a violating price) and re-checked at deploy. Not a guideline someone checks afterwards — that's the governance story.</li>
+              <li><strong>Why the machine raises loyal segments (the grandma logic)</strong> — if a segment's curve is flat on the upside, a profit maximiser will always raise it. Not a bug — the objective doing its job. Whether it <em>should</em> is a policy question (the twist below).</li>
+              <li><strong>GIPP</strong> — UK FCA rule (2022): a renewal price may not exceed the equivalent new-business price. It exists because insurers "price-walked" loyal customers year after year. Checked at solve time, shown as the Conduct column.</li>
+              <li><strong>Legal floor vs fair-value standard</strong> — GIPP is the law (the floor); Consumer Duty asks the broader question: is this customer getting fair value at all? A price can pass GIPP and still fail fair value. The machine checks the floor; only a human sets the standard. The amber pill flags the second question.</li>
+              <li><strong>What "Re-solve" does</strong> — it searches thousands of candidate factor sets against the fitted demand curves and keeps the best one satisfying every constraint. It does <em>not</em> retrain a model and isn't AI magic — a governed search job (which is why it's fast, and why N is a text box).</li>
+              <li><strong>Ensemble disagreement = model risk</strong> (heavy mode) — one demand model is one opinion. Heavy mode refits demand as eight specifications and re-solves under each: where they agree the move is robust; where they split it's a model artifact — hold it or widen the corridor.</li>
+            </ol>
+            <p className="text-sm">
+              <strong>Three answers that cover most hard questions.</strong> (1) <em>"How does this reach my
+              rating engine?"</em> → the factor table is a governed Delta table; publish it like any rate
+              revision — this replaces the analysis/decision layer, not your execution path. (2) <em>"Is any
+              of this real?"</em> → concede first: synthetic book, production-shaped patterns; your data and
+              your actuaries' models drop into the same slots. (3) Anything on modelling choices → the
+              perimeter rule above.
+            </p>
+            <details className="text-sm">
+              <summary className="cursor-pointer font-medium text-gray-800">Glossary — the terms you'll see on the page</summary>
+              <Glossary items={[
+                ['Technical price', 'Break-even cost of a policy (expected claims + expenses). All optimised prices are a factor on this baseline.'],
+                ['Street / final premium', 'What the customer is charged: technical price × the optimised factor, bounded by the corridor.'],
+                ['Price factor', 'The multiplier on a segment’s technical price (1.05 = +5%). The factor table is the solver’s output and what exports to a rating engine.'],
+                ['Segment', 'A group of similar customers priced together (age band × vehicle group). The demo optimises per segment.'],
+                ['Conversion', 'The share of quoted customers who buy — the quantity the demand model predicts and the y-axis of every elasticity curve.'],
+                ['Demand model', 'Predicts conversion as a function of price relative to technical. The one extra model optimisation requires.'],
+                ['Elasticity', 'How strongly conversion reacts to a price change. Elastic = shoppers; inelastic = loyal.'],
+                ['Monotonic constraint', 'A rule forcing conversion to only fall as price rises — the model can’t say "raise price, sell more".'],
+                ['Endogeneity', 'The trap where risk drives both price and purchase, making demand look price-insensitive. Removed by modelling on price relative to technical.'],
+                ['Lost quote', 'A quote that didn’t convert — carries most of the price signal; without it there is no demand model.'],
+                ['Objective', 'What the solver maximises: expected profit, volume, or a blend. Set by a human; the machine never picks its own goal.'],
+                ['Expected profit', 'Conversion-weighted margin of street price over technical cost, before fixed overheads.'],
+                ['Constraint', 'A rule the solver must respect (corridor, segment caps, forbidden signals, GIPP, volume floor). Lives in a versioned YAML file — the pricing policy as an artifact.'],
+                ['Corridor', 'The hard ±15% band around technical price. Enforced at solve time and re-checked at deploy.'],
+                ['Forbidden signal', 'A variable the model may never use (protected characteristics + proxies). Excluded by construction; proxy-tested after solve.'],
+                ['Solver / Re-solve', 'The governed job that searches candidate factor sets for the best one satisfying all constraints. Search, not training.'],
+                ['Efficient frontier', 'The curve of best available trade-offs between volume and profit. Below it = leaving money or customers on the table.'],
+                ['Waterfall', 'The chart decomposing where the profit uplift comes from, segment by segment.'],
+                ['GIPP', 'UK FCA rule: a renewal price may not exceed the equivalent new-business price. Checked at solve time; shown in the Conduct column.'],
+                ['Consumer Duty / fair value', 'UK conduct standard asking whether the customer gets fair value overall — a higher bar than GIPP. The amber pill flags segments for a human call.'],
+                ['Price walking', 'Raising loyal customers’ renewal prices year after year because they don’t shop around. The practice GIPP banned.'],
+                ['Decision record', 'The immutable row written when prices deploy: who, when, why, which model version, which constraint version.'],
+                ['Provenance block', 'The chain under an explained price: model version → constraint version → approver → decision record.'],
+                ['Deploy gate', 'A Unity Catalog stored procedure that re-checks the corridor and writes the audit record. Permission to run it is a per-person DB grant, not app logic.'],
+                ['Heavy mode', 'The optional second gear: refit demand as an ensemble and score the whole book across hundreds of plans and demand draws.'],
+                ['Disagreement map', 'Per-segment spread of the ensemble’s prices. Green = models agree (deploy with confidence); amber = they split (hold / widen the corridor).'],
+                ['Monte-Carlo demand draws', 'Simulating "who actually converts" many times per plan, since each customer converts with a probability — an outcome distribution, not one number.'],
+                ['P5–P95 band', 'The realistic worst-to-best range of a plan’s outcome. A tight band above today’s line often beats a higher but wider mean.'],
+                ['Scored evaluation', 'One policy × one plan × one demand draw — cheap arithmetic on fitted curves, not a model inference.'],
+              ]} />
+            </details>
+          </Panel>
+
           <Panel id="agents" title="Real agents" icon={Sparkles}>
             <p>
               The agents use the <strong>Mosaic AI Agent Framework</strong> (MLflow
@@ -182,6 +252,19 @@ function Panel({ id, title, icon: Icon, children }: {
         {children}
       </div>
     </section>
+  );
+}
+
+function Glossary({ items }: { items: [string, string][] }) {
+  return (
+    <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+      {items.map(([term, def]) => (
+        <div key={term} className="min-w-0">
+          <dt className="font-semibold text-gray-900 text-[13px]">{term}</dt>
+          <dd className="text-[12px] text-gray-600 leading-snug">{def}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
