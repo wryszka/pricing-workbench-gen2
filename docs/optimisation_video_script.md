@@ -230,7 +230,7 @@ amber "fair-value review →" pill), the reshaped grandma curve (organic +7.5%),
 **Conduct column** showing **GIPP ✓** and an **amber "fair-value review →" pill**.
 
 **SAY (1 — commercial + legal):**
-> "Watch. Told 'maximise profit', the machine raised our 70-plus segment **5%**. Look at her curve
+> "Watch. Told 'maximise profit', the machine raised our 70-plus segment **7.5%**. Look at her curve
 > — nearly flat on increases; she barely reacts, only deep cuts move her. So the machine milks the
 > loyalty. Commercially, that's correct. And notice — it stayed **legal**: her renewal never
 > exceeds the equivalent new-business price, checked at solve time. That's the GIPP column."
