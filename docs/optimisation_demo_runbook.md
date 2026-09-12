@@ -88,7 +88,47 @@ customers, not a guarantee.
 - [~] **Phase 5** — presenter script `docs/optimisation_demo_presenter.md` (written). Fallback screenshots
       still to capture from the live app (browser SSO needed).
 
-## How to run the tests
-```
-uv run --system-certs --with pytest pytest tests/optimisation_demo/ -q
-```
+## Chapter 2 — a portfolio (built + live on pricingv2)
+
+Learned demand + individual costs + coupled segment prices + a portfolio sales floor.
+Modules (all pure, tested): `economics.py`, `demand.py` (logistic + monotone GBT; frozen
+validation battery), `portfolio.py` (finite-candidate MILP via SciPy/HiGHS), `governance.py`
+(deterministic pre-approval recompute + hashes), `monitoring.py` (synthetic outcome check).
+Jobs: `ch2_prepare` (freeze data + train/validate/persist model + portfolio summary),
+`ch2_run` (score→solve), `ch2_governance_setup` (approval procedure + approver-only EXECUTE),
+`ch2_check` (synthetic next period). App: chapter selector → Prepare status / Portfolio /
+Choose (Margin-first vs Protect-sales-98%) / Review (OBO approve+release) / Check.
+
+- **OBO gate:** app `user_api_scopes: [sql]` enabled; `/ch2/approve` recomputes the plan
+  then CALLs the UC procedure `optimisation_demo_ch2_approve` AS THE USER — approver-only
+  EXECUTE, non-approver denied by UC. Append-only approvals/releases.
+- **Verified live:** margin-first 2,990 sales / £998k; protect-sales-0.98 3,660 / £891k;
+  approval + release + rollback-chain works; guardrail blocks non-complete runs; Check
+  period-1 observed ≈ expected per segment.
+
+## Chapter 3 — uncertain futures (Live preset built + live)
+
+Robust maximin of expected-margin uplift across **worlds** (validated demand model ×
+declared market/cost scenario), inheriting Ch2's grid + 98% per-world sales floor.
+`robustness.py` (pure, tested — enumeration + maximin invariants); `ch3_run` job builds the
+Live world set (2 validated models × 3 scenarios = 6 worlds), solves baseline/nominal/robust,
+saves worlds + plan-by-world comparison. App: Chapter 3 → Compare (robust vs nominal min
+uplift + plan×world uplift table + grandma factor per plan).
+
+- **Verified live:** 6 worlds; robust worst-uplift £16,370 ≥ nominal £16,357; robust grandma
+  +1% vs nominal +2%; feasible in every world. Honest, modest robustness benefit.
+
+## Tests
+`uv run --system-certs --with pytest --with scipy --with numpy --with pandas --with scikit-learn pytest tests/optimisation_demo/ -q` → **43 passing** (core 9, portfolio 10, demand 5, pipeline 4, governance 6, monitoring 3, robustness 6).
+
+## Honest remaining gaps (not built / need you)
+- **OBO approve-as-user live confirm:** the UC gate + recompute are verified headless, but the
+  first-time consent + as-the-user CALL need a browser sign-in (and a non-approver identity to
+  see the denial) — only a real login exercises the token handshake.
+- **Automated denied-non-approver integration test:** approver-only EXECUTE is verified via
+  SHOW GRANTS; a scripted deny needs a non-approver credential.
+- **Ch3 Full-scale preset** (up to 250k opps / 9 models / Spark-partitioned scoring + billing
+  evidence) and **conditional Monte-Carlo** — the spec labels these a prepared scale experiment
+  / optional-last; the Live camera path is done.
+- **Slide decks + recording briefs** (`CHAPTERS_2_3_SLIDES_AND_RECORDING.md` companion was not
+  supplied) and the remaining Ch3 screens (Assumptions / Grandma-detail / Run-evidence).
