@@ -89,14 +89,16 @@ try:
     job_run_id = str(dbutils.notebook.entry_point.getDbutils().notebook().getContext().jobId().get())
 except Exception:
     job_run_id = ""
-spark.createDataFrame([Row(
-    run_id=app_run_id, model_version=model_version, objective=policy["objective"],
-    min_portfolio_sales_ratio=(None if ratio is None else float(ratio)), status=status,
-    baseline_sales=baseline_sales, baseline_margin=baseline_margin,
-    total_sales=(res.get("total_expected_sales") if res["feasible"] else None),
-    total_margin=(res.get("total_expected_margin") if res["feasible"] else None),
-    future_delta_version=int(man["future_delta_version"]), job_run_id=job_run_id,
-    created_at=datetime.now(timezone.utc))]).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_ch2_runs")
+# Use the table's explicit schema so a NULL sales ratio (margin-first) / NULL totals
+# (infeasible) don't break single-row schema inference.
+tot_sales = float(res["total_expected_sales"]) if res["feasible"] else None
+tot_margin = float(res["total_expected_margin"]) if res["feasible"] else None
+runs_schema = spark.table(f"{fqn}.optimisation_demo_ch2_runs").schema
+run_tuple = (app_run_id, model_version, policy["objective"],
+             (None if ratio is None else float(ratio)), status,
+             float(baseline_sales), float(baseline_margin), tot_sales, tot_margin,
+             int(man["future_delta_version"]), job_run_id, datetime.now(timezone.utc))
+spark.createDataFrame([run_tuple], schema=runs_schema).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_ch2_runs")
 
 dbutils.notebook.exit(json.dumps({
     "app_run_id": app_run_id, "status": status, "selection": selection,
