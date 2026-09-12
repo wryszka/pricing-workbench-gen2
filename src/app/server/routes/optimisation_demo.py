@@ -321,7 +321,9 @@ async def ch2_approve(req: Ch2ApproveRequest, request: Request):
         from databricks.sdk import WorkspaceClient
         from databricks.sdk.service.sql import StatementParameterListItem, StatementState
         import time as _t
-        wc = WorkspaceClient(host=get_workspace_host(), token=user_token)
+        # auth_type="pat" so the SDK uses ONLY the user's OBO token and ignores the
+        # app's ambient OAuth env (else: "more than one authorization method configured").
+        wc = WorkspaceClient(host=get_workspace_host(), token=user_token, auth_type="pat")
         # Inline the CALL (named :param markers aren't bound for stored-procedure CALLs).
         # run_id/hash are validated hex; approver/note are single-quote-escaped.
         def _esc(v: str) -> str:
