@@ -36,3 +36,67 @@ resources:
           spec:
             client: "5"
             dependencies: []
+
+    # --- Chapter 2: prepare the frozen data + model (run once before recording) ---
+    optimisation_demo_ch2_prepare:
+      name: "Optimisation demo — Chapter 2 prepare (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: model_version
+          default: "ch2-demand-v1"
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: prepare
+          notebook_task:
+            notebook_path: ../src/app/server/optimisation_demo/jobs/ch2_prepare.py
+            base_parameters:
+              catalog_name:  "{{job.parameters.catalog_name}}"
+              schema_name:   "{{job.parameters.schema_name}}"
+              model_version: "{{job.parameters.model_version}}"
+              app_src_base:  "${workspace.file_path}/src/app"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [scikit-learn, scipy, pandas, numpy, joblib]
+
+    # --- Chapter 2: score -> solve for one requirement ---
+    optimisation_demo_ch2_run:
+      name: "Optimisation demo — Chapter 2 run (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: app_run_id
+          default: ""
+        - name: model_version
+          default: "ch2-demand-v1"
+        - name: min_portfolio_sales_ratio
+          default: ""          # blank = margin-first; e.g. 0.98 = protect sales
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: run
+          notebook_task:
+            notebook_path: ../src/app/server/optimisation_demo/jobs/ch2_run.py
+            base_parameters:
+              catalog_name:              "{{job.parameters.catalog_name}}"
+              schema_name:               "{{job.parameters.schema_name}}"
+              app_run_id:                "{{job.parameters.app_run_id}}"
+              model_version:             "{{job.parameters.model_version}}"
+              min_portfolio_sales_ratio: "{{job.parameters.min_portfolio_sales_ratio}}"
+              app_src_base:              "${workspace.file_path}/src/app"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [scikit-learn, scipy, pandas, numpy, joblib]
