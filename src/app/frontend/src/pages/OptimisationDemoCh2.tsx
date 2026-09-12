@@ -58,7 +58,7 @@ export default function Chapter2() {
       <Choose disabled={!prep.prepared || !prep.manifest?.passes} pf={pf} onApproved={refreshRelease} />
 
       {/* Review & release */}
-      <Section title="Review & release" subtitle="Approval runs the plan through a deterministic recompute, then a Unity Catalog stored procedure called AS YOU — only an approver can release. Appended to an append-only record.">
+      <Section title="Review & release" subtitle="Approval runs the plan through a deterministic recompute, then calls a Unity Catalog stored procedure that writes the approval + release to an append-only record. The gate is a per-person UC EXECUTE grant on that procedure.">
         {release ? (
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <Pill tone="green">active demo release</Pill>
@@ -69,7 +69,14 @@ export default function Chapter2() {
             {release.previous_release_id && <span className="text-mut">← prev <span className="font-mono">{String(release.previous_release_id).slice(0, 8)}</span></span>}
           </div>
         ) : <div className="text-sm text-mut">No demo release yet. Run a plan, then Approve &amp; release it (approver only).</div>}
-        <Note>The gate is a per-person Unity Catalog EXECUTE grant enforced over OBO — a non-approver's approval is denied by the platform, not the app. The consumer reads the approved release id; a new unapproved solve does not change it.</Note>
+        <Note>
+          The app tries to CALL the governed procedure <b>as you</b> (OBO), so Unity Catalog enforces the approver-only
+          EXECUTE grant per-person. Where on-behalf-of SQL isn't available at this workspace's app front-door, it records
+          the <b>authenticated approver's</b> decision through the same governed procedure via the app's service principal —
+          an attributed, access-controlled record, not per-user platform denial. The button says which path ran. The
+          deterministic recompute, the append-only record, and the approver-only grant are real either way; the consumer
+          reads the approved release id, and a new unapproved solve does not change it.
+        </Note>
       </Section>
 
       {/* Check */}

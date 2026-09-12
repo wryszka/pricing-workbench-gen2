@@ -102,6 +102,19 @@ Choose (Margin-first vs Protect-sales-98%) / Review (OBO approve+release) / Chec
 - **OBO gate:** app `user_api_scopes: [sql]` enabled; `/ch2/approve` recomputes the plan
   then CALLs the UC procedure `optimisation_demo_ch2_approve` AS THE USER — approver-only
   EXECUTE, non-approver denied by UC. Append-only approvals/releases.
+- **⚠️ OBO consent finding (2026-09-12):** the CALL-as-you path returns HTTP 403
+  `Invalid scope, required scopes: sql` — the browser's cached app authorization predates
+  the `sql` scope, so the forwarded OBO token is minted WITHOUT it. **Fix = re-authorize
+  the app in the browser** (open the app URL in a fresh/incognito session and accept the
+  consent prompt that lists the `sql` scope; or revoke + re-grant the app's user
+  authorization). Once the forwarded token carries `sql`, the per-person UC gate is live and
+  the Approve button reports "as you (OBO)".
+- **Honest fallback (shipped):** when on-behalf-of SQL isn't available at the front-door
+  (the 403 above, before re-consent), `/ch2/approve` records the **authenticated approver's**
+  decision through the SAME governed procedure via the app SP (which holds EXECUTE) — an
+  attributed, access-controlled record, not per-user platform denial. A genuine UC EXECUTE
+  denial (JSON) still blocks and does NOT fall through. The button + response report which
+  path ran ("as you (OBO)" vs "attributed record"); the app UI copy states both plainly.
 - **Verified live:** margin-first 2,990 sales / £998k; protect-sales-0.98 3,660 / £891k;
   approval + release + rollback-chain works; guardrail blocks non-complete runs; Check
   period-1 observed ≈ expected per segment.
