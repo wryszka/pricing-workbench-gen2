@@ -154,3 +154,35 @@ resources:
           spec:
             client: "5"
             dependencies: [pandas, numpy]
+
+    # --- Chapter 3: robust decision across worlds ---
+    optimisation_demo_ch3_run:
+      name: "Optimisation demo — Chapter 3 run (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: app_run_id
+          default: ""
+        - name: sales_ratio
+          default: "0.98"
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: run
+          notebook_task:
+            notebook_path: ../src/app/server/optimisation_demo/jobs/ch3_run.py
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              schema_name:  "{{job.parameters.schema_name}}"
+              app_run_id:   "{{job.parameters.app_run_id}}"
+              sales_ratio:  "{{job.parameters.sales_ratio}}"
+              app_src_base: "${workspace.file_path}/src/app"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [scikit-learn, scipy, pandas, numpy, joblib]

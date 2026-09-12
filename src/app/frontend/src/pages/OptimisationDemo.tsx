@@ -3,6 +3,7 @@ import { Calculator, ArrowRight, Play, Loader2, CheckCircle2, ExternalLink } fro
 import { Page, PageHeader, Section, Metric, Pill, Btn, Note, DemoDisclaimer, Loading } from '../components/ui';
 import { api } from '../lib/api';
 import Chapter2 from './OptimisationDemoCh2';
+import Chapter3 from './OptimisationDemoCh3';
 
 // Chapter 1 — the honest teaching flow. Two connected parts:
 //   • Explain (worked example, arithmetic from the shared core via /example)
@@ -15,14 +16,15 @@ const signed = (n: number) => (n >= 0 ? '+' : '−') + Math.abs(Math.round(n)).t
 const sgbp = (n: number) => (n >= 0 ? '+£' : '−£') + Math.abs(Math.round(n)).toLocaleString('en-GB');
 
 export default function OptimisationDemo() {
-  const [chapter, setChapter] = useState<'1' | '2'>('1');
+  const [chapter, setChapter] = useState<'1' | '2' | '3'>('1');
   return (
     <Page>
       <div className="flex flex-wrap gap-1.5 mb-4">
         <Btn tone={chapter === '1' ? 'primary' : 'ghost'} onClick={() => setChapter('1')}>Chapter 1 · One segment</Btn>
         <Btn tone={chapter === '2' ? 'primary' : 'ghost'} onClick={() => setChapter('2')}>Chapter 2 · A portfolio</Btn>
+        <Btn tone={chapter === '3' ? 'primary' : 'ghost'} onClick={() => setChapter('3')}>Chapter 3 · Uncertain futures</Btn>
       </div>
-      {chapter === '1' ? <Chapter1 /> : <Chapter2 />}
+      {chapter === '1' ? <Chapter1 /> : chapter === '2' ? <Chapter2 /> : <Chapter3 />}
     </Page>
   );
 }

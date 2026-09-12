@@ -370,5 +370,10 @@ export const api = {
   optDemoCh2Release: () => fetchJson<any>('/optimisation-demo/ch2/release'),
   optDemoCh2Check: () => fetchJson<any>('/optimisation-demo/ch2/check', { method: 'POST', body: '{}' }),
   optDemoCh2Monitoring: () => fetchJson<any>('/optimisation-demo/ch2/monitoring'),
+  // Chapter 3 — robust decision across worlds
+  optDemoCh3Run: (body: { sales_ratio?: number }) =>
+    fetchJson<any>('/optimisation-demo/ch3/run', { method: 'POST', body: JSON.stringify(body) }),
+  optDemoCh3Status: (appRunId: string, jobRunId: number) =>
+    fetchJson<any>(`/optimisation-demo/ch3/run/${encodeURIComponent(appRunId)}?job_run_id=${jobRunId}`),
   optAdvanceResult: () => fetchJson<any>('/optimisation/advance/result'),
 };

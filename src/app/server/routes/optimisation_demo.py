@@ -391,3 +391,67 @@ async def ch2_monitoring():
                              f"FROM {fqn('optimisation_demo_ch2_monitoring')} WHERE release_id = :r AND period = :p ORDER BY segment",
                              {"r": rid, "p": int(period)}) or []
     return {"release_id": rid, "period": period, "rows": rows}
+
+
+# --------------------------------------------------------------------------- #
+# Chapter 3 — robust decision across worlds
+# --------------------------------------------------------------------------- #
+CH3_RUN_JOB = "Optimisation demo — Chapter 3 run (gen2)"
+
+
+class Ch3RunRequest(BaseModel):
+    sales_ratio: Optional[float] = 0.98
+
+
+@router.post("/ch3/run")
+async def ch3_run(req: Ch3RunRequest):
+    r = req.sales_ratio if req.sales_ratio is not None else 0.98
+    if r < 0 or r > 2:
+        raise HTTPException(400, "sales_ratio must be between 0 and 2")
+    job_id = resolve_job_by_name(CH3_RUN_JOB)
+    if not job_id:
+        raise HTTPException(503, f"Job '{CH3_RUN_JOB}' not found — deploy the bundle first.")
+    app_run_id = uuid.uuid4().hex
+    params = {"catalog_name": get_catalog(), "schema_name": get_schema(),
+              "app_run_id": app_run_id, "sales_ratio": str(r)}
+    try:
+        resp = get_workspace_client().api_client.do(
+            "POST", "/api/2.1/jobs/run-now", body={"job_id": int(job_id), "job_parameters": params})
+    except Exception as e:
+        raise HTTPException(502, f"Could not start the Chapter 3 job: {str(e)[:200]}")
+    return {"app_run_id": app_run_id, "job_run_id": resp.get("run_id"), "sales_ratio": r, "status": "running"}
+
+
+@router.get("/ch3/run/{app_run_id}")
+async def ch3_run_status(app_run_id: str, job_run_id: int = Query(...)):
+    if not _APP_RUN_ID.match(app_run_id):
+        raise HTTPException(400, "invalid application run id")
+    life = res = page = None
+    try:
+        job = get_workspace_client().api_client.do("GET", "/api/2.1/jobs/runs/get", query={"run_id": int(job_run_id)})
+        st = job.get("state") or {}
+        life, res, page = st.get("life_cycle_state"), st.get("result_state"), job.get("run_page_url")
+    except Exception as e:
+        logger.warning("ch3 runs/get failed: %s", str(e)[:120])
+
+    run_row = await _safe_q(f"SELECT sales_ratio, n_models, n_worlds, round(robust_worst_uplift,0) robust_worst_uplift, "
+                            f"round(nominal_worst_uplift,0) nominal_worst_uplift FROM {fqn('optimisation_demo_ch3_runs')} "
+                            f"WHERE run_id = :rid", {"rid": app_run_id})
+    result = None
+    if run_row:
+        worlds = await _safe_q(f"SELECT world_id, model, market_scale, cost_scale, label FROM {fqn('optimisation_demo_ch3_worlds')} "
+                               f"WHERE run_id = :rid ORDER BY world_id", {"rid": app_run_id}) or []
+        comp = await _safe_q(f"SELECT plan, world_id, round(uplift,0) uplift, round(sales,1) sales, meets_floor "
+                             f"FROM {fqn('optimisation_demo_ch3_comparison')} WHERE run_id = :rid", {"rid": app_run_id}) or []
+        sel = await _safe_q(f"SELECT plan, segment, factor FROM {fqn('optimisation_demo_ch3_selection')} "
+                            f"WHERE run_id = :rid ORDER BY segment", {"rid": app_run_id}) or []
+        result = {"run": run_row[0], "worlds": worlds, "comparison": comp, "selection": sel}
+    terminal = life in ("TERMINATED", "SKIPPED", "INTERNAL_ERROR")
+    if terminal and res == "SUCCESS":
+        status = "succeeded" if result else "running"
+    elif terminal:
+        status = "failed"
+    else:
+        status = "running"
+    return {"app_run_id": app_run_id, "job_run_id": job_run_id, "life_cycle_state": life,
+            "result_state": res, "run_page_url": page, "status": status, "result": result}
