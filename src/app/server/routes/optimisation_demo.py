@@ -188,11 +188,12 @@ async def ch2_portfolio():
                          f"ORDER BY segment")
     if not rows:
         return {"ready": False}
+    # NB: the SQL statement API returns values as strings — cast before arithmetic.
     totals = {
-        "opportunities": int(sum(r["opportunities"] for r in rows)),
-        "baseline_sales": round(sum(r["baseline_sales"] for r in rows), 1),
-        "baseline_premium": round(sum(r["baseline_premium"] for r in rows), 0),
-        "baseline_margin": round(sum(r["baseline_margin"] for r in rows), 0),
+        "opportunities": int(sum(float(r["opportunities"]) for r in rows)),
+        "baseline_sales": round(sum(float(r["baseline_sales"]) for r in rows), 1),
+        "baseline_premium": round(sum(float(r["baseline_premium"]) for r in rows), 0),
+        "baseline_margin": round(sum(float(r["baseline_margin"]) for r in rows), 0),
     }
     rep = await _safe_q(f"SELECT opportunity_id, driver_age, vehicle_group, round(baseline_price,2) baseline_price, "
                         f"round(market_premium,2) market_premium, round(expected_claims,2) expected_claims, "
@@ -319,13 +320,14 @@ async def ch2_approve(req: Ch2ApproveRequest, request: Request):
         from databricks.sdk.service.sql import StatementParameterListItem, StatementState
         import time as _t
         wc = WorkspaceClient(host=get_workspace_host(), token=user_token)
+        # Inline the CALL (named :param markers aren't bound for stored-procedure CALLs).
+        # run_id/hash are validated hex; approver/note are single-quote-escaped.
+        def _esc(v: str) -> str:
+            return str(v).replace("'", "''")
+        stmt = (f"CALL {fqn('optimisation_demo_ch2_approve')}("
+                f"'{req.app_run_id}', '{ph}', '{_esc(approver)}', '{_esc(req.note or 'approved in app')}')")
         resp = wc.statement_execution.execute_statement(
-            warehouse_id=get_warehouse_id(), wait_timeout="30s",
-            statement=f"CALL {fqn('optimisation_demo_ch2_approve')}(:rid, :hash, :appr, :note)",
-            parameters=[StatementParameterListItem(name="rid", value=req.app_run_id),
-                        StatementParameterListItem(name="hash", value=ph),
-                        StatementParameterListItem(name="appr", value=approver),
-                        StatementParameterListItem(name="note", value=(req.note or "approved in app"))])
+            warehouse_id=get_warehouse_id(), wait_timeout="30s", statement=stmt)
         deadline = _t.monotonic() + 40
         while resp.status and resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
             if _t.monotonic() > deadline:
@@ -335,6 +337,7 @@ async def ch2_approve(req: Ch2ApproveRequest, request: Request):
         state = resp.status.state if resp.status else None
         if state != StatementState.SUCCEEDED:
             msg = (resp.status.error.message if resp.status and resp.status.error else str(state)) or ""
+            logger.warning("ch2 approve CALL failed (state=%s): %s", state, msg[:300])
             up = msg.upper()
             if "PERMISSION" in up or "DENIED" in up or "EXECUTE" in up:
                 raise HTTPException(403, f"Approval denied by Unity Catalog — you are not an approver. {msg[:160]}")
@@ -342,6 +345,7 @@ async def ch2_approve(req: Ch2ApproveRequest, request: Request):
     except HTTPException:
         raise
     except Exception as e:
+        logger.warning("ch2 approve call error: %s", str(e)[:300])
         raise HTTPException(502, f"approval call error: {str(e)[:200]}")
 
     return {"ok": True, "approved_by": approver, "plan_hash": ph, "recompute": check["totals"]}
