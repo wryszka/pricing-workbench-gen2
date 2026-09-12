@@ -100,3 +100,31 @@ resources:
           spec:
             client: "5"
             dependencies: [scikit-learn, scipy, pandas, numpy, joblib]
+
+    # --- Chapter 2: governance setup (approval procedure + gate) — run once ---
+    optimisation_demo_ch2_governance:
+      name: "Optimisation demo — Chapter 2 governance setup (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: approver_users
+          default: "laurence.ryszka@databricks.com"
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: governance
+          notebook_task:
+            notebook_path: ../src/app/server/optimisation_demo/jobs/ch2_governance_setup.py
+            base_parameters:
+              catalog_name:   "{{job.parameters.catalog_name}}"
+              schema_name:    "{{job.parameters.schema_name}}"
+              approver_users: "{{job.parameters.approver_users}}"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: []
