@@ -351,5 +351,12 @@ export const api = {
   optConstraintEdit: (body: { change?: string; approver?: string }) =>
     fetchJson<any>('/optimisation/constraint-edit', { method: 'POST', body: JSON.stringify(body) }),
   optAdvance: () => fetchJson<any>('/optimisation/advance', { method: 'POST', body: '{}' }),
+
+  // Optimisation demo (Chapter 1 teaching flow) — worked example + real Databricks run.
+  optDemoExample: () => fetchJson<any>('/optimisation-demo/example'),
+  optDemoRun: (body: { min_expected_customers: number | null }) =>
+    fetchJson<any>('/optimisation-demo/run', { method: 'POST', body: JSON.stringify(body) }),
+  optDemoStatus: (appRunId: string, jobRunId: number) =>
+    fetchJson<any>(`/optimisation-demo/run/${encodeURIComponent(appRunId)}?job_run_id=${jobRunId}`),
   optAdvanceResult: () => fetchJson<any>('/optimisation/advance/result'),
 };

@@ -20,6 +20,7 @@ import RatingEngineIntegration from './pages/RatingEngineIntegration';
 import Supervisor from './pages/Supervisor';
 import PricingEngine from './pages/PricingEngine';
 import PriceOptimisation from './pages/PriceOptimisation';
+import OptimisationDemo from './pages/OptimisationDemo';
 import QuoteSystem from './pages/QuoteSystem';
 import BlackBox from './pages/BlackBox';
 import QuoteTester from './pages/QuoteTester';
@@ -30,7 +31,8 @@ const NAV_ITEMS = [
   { to: '/pricing-table', label: 'Modelling Mart',    icon: Table2,       match: (p: string) => p.startsWith('/pricing-table') },
   { to: '/development',   label: 'Model Development', icon: Code,         match: (p: string) => p.startsWith('/development') },
   { to: '/deployment',    label: 'Model Deployment',  icon: Rocket,       match: (p: string) => p.startsWith('/deployment') },
-  { to: '/optimisation',  label: 'Price Optimisation',icon: Target,       match: (p: string) => p.startsWith('/optimisation') },
+  { to: '/optimisation-demo', label: 'Optimisation demo', icon: Calculator, match: (p: string) => p.startsWith('/optimisation-demo') },
+  { to: '/optimisation',  label: 'Price Optimisation',icon: Target,       match: (p: string) => p.startsWith('/optimisation') && !p.startsWith('/optimisation-demo') },
   { to: '/governance',    label: 'Model Governance',  icon: Shield,       match: (p: string) => p.startsWith('/governance') },
   { to: '/pricing-ai',    label: 'Pricing AI',        icon: Sparkles,     match: (p: string) => p.startsWith('/pricing-ai') || p.startsWith('/supervisor') || p.startsWith('/regulatory-ai') },
   { to: '/models',        label: 'Model Factory',     icon: FlaskConical, match: (p: string) => p.startsWith('/models') },
@@ -281,6 +283,7 @@ export default function App() {
             <Route path="/deployment" element={<ModelDeployment />} />
             <Route path="/pricing-engine" element={<PricingEngine />} />
             <Route path="/optimisation" element={<PriceOptimisation />} />
+            <Route path="/optimisation-demo" element={<OptimisationDemo />} />
             <Route path="/governance" element={<Governance />} />
             <Route path="/pricing-ai"   element={<Supervisor />} />
             <Route path="/supervisor"   element={<Supervisor />} />  {/* legacy URL */}

@@ -1,0 +1,24 @@
+{
+  "example_id": "grandma_bmw_v1",
+  "example_version": "1",
+  "segment_label": "Older drivers · higher-group cars",
+  "segment_mnemonic": "grandma in a BMW",
+  "opportunities": 1000,
+  "modelled_variable_cost_per_sale": 800,
+  "baseline_price": 1000,
+  "objective": "maximise_expected_margin",
+  "assumptions": {
+    "cost_basis": "Supplied total modelled variable cost per sale (the variable costs we choose to model). A teaching assumption — NOT the workbench's technical_premium (a claims-only estimate).",
+    "demand_basis": "Supplied synthetic purchase probabilities — not learned from real customers. A real exercise would estimate and validate them from suitable quote-response data.",
+    "opportunities_basis": "1,000 potential customers (opportunities), not sold policies.",
+    "segment_note": "An invented synthetic segment. 'grandma in a BMW' is a mnemonic (age ≥ 70, higher vehicle group); it is not a claim that real older motorists are unresponsive to price."
+  },
+  "candidates": [
+    { "price": 900,  "purchase_probability": 0.90 },
+    { "price": 950,  "purchase_probability": 0.83 },
+    { "price": 1000, "purchase_probability": 0.75 },
+    { "price": 1050, "purchase_probability": 0.74 },
+    { "price": 1100, "purchase_probability": 0.70 },
+    { "price": 1150, "purchase_probability": 0.45 }
+  ]
+}

@@ -1,0 +1,38 @@
+# Optimisation demo (Chapter 1) — the honest teaching flow's Databricks job.
+# One job, dedicated optimisation_demo_* tables. Does NOT touch the workbench tables.
+resources:
+  jobs:
+    optimisation_demo_run:
+      name: "Optimisation demo — run (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: example_id
+          default: "grandma_bmw_v1"
+        - name: app_run_id
+          default: ""
+        - name: min_expected_customers
+          default: ""          # blank = no sales requirement (Run A); e.g. 830 = Run B
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: run
+          notebook_task:
+            notebook_path: ../src/app/server/optimisation_demo/run_demo.py
+            base_parameters:
+              catalog_name:           "{{job.parameters.catalog_name}}"
+              schema_name:            "{{job.parameters.schema_name}}"
+              example_id:             "{{job.parameters.example_id}}"
+              app_run_id:             "{{job.parameters.app_run_id}}"
+              min_expected_customers: "{{job.parameters.min_expected_customers}}"
+              # the synced files root + /src/app so `server.optimisation_demo.core` imports
+              app_src_base:           "${workspace.file_path}/src/app"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: []
