@@ -25,6 +25,12 @@ admins  = [u.strip() for u in dbutils.widgets.get("admin_users").split(",") if u
 app_sp  = dbutils.widgets.get("app_service_principal_id").strip()
 fqn = f"{catalog}.{schema}"
 
+# A SECURITY DEFINER procedure captures the creator's default catalog/schema for its
+# execution context; set them to real ones so a CALL doesn't fall back to
+# `<catalog>.default` (which doesn't exist) and fail with SCHEMA_NOT_FOUND.
+spark.sql(f"USE CATALOG {catalog}")
+spark.sql(f"USE SCHEMA {schema}")
+
 # COMMAND ----------
 
 spark.sql(f"""
