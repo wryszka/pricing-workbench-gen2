@@ -16,6 +16,12 @@ catalog = dbutils.widgets.get("catalog_name"); schema = dbutils.widgets.get("sch
 approvers = [u.strip() for u in dbutils.widgets.get("approver_users").split(",") if u.strip()]
 fqn = f"{catalog}.{schema}"
 
+# A SECURITY DEFINER procedure captures the creator's default catalog/schema for its
+# execution context; set them to real ones so it doesn't fall back to `<catalog>.default`
+# (which doesn't exist) at CALL time.
+spark.sql(f"USE CATALOG {catalog}")
+spark.sql(f"USE SCHEMA {schema}")
+
 # COMMAND ----------
 # Append-only approval + release event tables (never updated in place).
 spark.sql(f"""CREATE TABLE IF NOT EXISTS {fqn}.optimisation_demo_ch2_approvals (
