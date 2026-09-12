@@ -249,7 +249,8 @@ function Ch2Result({ r, baselineBySeg, onApproved }: { r: any; baselineBySeg: Re
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { setAppr({ msg: body.detail || `error ${res.status}` }); return; }
-      setAppr({ ok: true, msg: `approved by ${body.approved_by}` });
+      const how = body.enforced === 'obo_user' ? 'as you (OBO)' : 'attributed record';
+      setAppr({ ok: true, msg: `approved by ${body.approved_by} · ${how}` });
       onApproved();
     } catch (e) { setAppr({ msg: String(e).replace('Error: ', '') }); }
   };

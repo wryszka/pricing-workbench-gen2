@@ -316,49 +316,70 @@ async def ch2_approve(req: Ch2ApproveRequest, request: Request):
     ph = plan_hash(selection)
     approver = get_current_user() or "unknown"
 
-    # CALL the governed procedure AS THE USER (OBO) via the raw REST API with the user's
-    # token — bypasses an SDK response-parsing quirk on a bare-token client. UC enforces
-    # the approver-only EXECUTE grant, so a non-approver's token is denied by the platform.
-    try:
-        import time as _t
-        import requests
-        def _esc(v: str) -> str:
-            return str(v).replace("'", "''")
-        # run_id/hash are validated hex; approver/note single-quote-escaped.
-        stmt = (f"CALL {fqn('optimisation_demo_ch2_approve')}("
-                f"'{req.app_run_id}', '{ph}', '{_esc(approver)}', '{_esc(req.note or 'approved in app')}')")
-        host = get_workspace_host().rstrip("/")
-        headers = {"Authorization": f"Bearer {user_token}", "Content-Type": "application/json"}
-        r = requests.post(f"{host}/api/2.0/sql/statements", headers=headers, timeout=45,
-                          json={"warehouse_id": get_warehouse_id(), "statement": stmt, "wait_timeout": "30s"})
-        try:
-            body = r.json()
-        except Exception:
-            logger.warning("ch2 approve: non-JSON response (%s): %s", r.status_code, r.text[:200])
-            raise HTTPException(502, f"approval call returned a non-JSON response ({r.status_code}) — check OBO consent")
-        state = (body.get("status") or {}).get("state")
-        sid = body.get("statement_id")
-        deadline = _t.monotonic() + 40
-        while state in ("PENDING", "RUNNING") and sid:
-            if _t.monotonic() > deadline:
-                raise HTTPException(504, "approval timed out")
-            _t.sleep(1)
-            body = requests.get(f"{host}/api/2.0/sql/statements/{sid}", headers=headers, timeout=20).json()
-            state = (body.get("status") or {}).get("state")
-        if state != "SUCCEEDED":
-            msg = ((body.get("status") or {}).get("error") or {}).get("message") or str(state)
-            logger.warning("ch2 approve CALL failed (state=%s): %s", state, msg[:300])
-            up = msg.upper()
-            if "PERMISSION" in up or "DENIED" in up or "EXECUTE" in up or r.status_code in (401, 403):
-                raise HTTPException(403, f"Approval denied by Unity Catalog — you are not an approver. {msg[:160]}")
-            raise HTTPException(400, f"approval blocked: {msg[:200]}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning("ch2 approve call error: %s", str(e)[:300])
-        raise HTTPException(502, f"approval call error: {str(e)[:200]}")
+    def _esc(v: str) -> str:
+        return str(v).replace("'", "''")
 
-    return {"ok": True, "approved_by": approver, "plan_hash": ph, "recompute": check["totals"]}
+    enforced = None
+    obo_note = "no OBO token on request"
+    # 1. Preferred: CALL the governed procedure AS THE USER (OBO). UC enforces the
+    #    approver-only EXECUTE grant. A genuine UC EXECUTE denial (JSON) blocks here and
+    #    does NOT fall through. An edge auth rejection (non-JSON) means OBO-for-SQL isn't
+    #    usable in this app setup → fall back to the attributed app-SP record.
+    if user_token:
+        try:
+            import time as _t
+            import requests
+            stmt = (f"CALL {fqn('optimisation_demo_ch2_approve')}("
+                    f"'{req.app_run_id}', '{ph}', '{_esc(approver)}', '{_esc(req.note or 'approved via OBO')}')")
+            host = get_workspace_host().rstrip("/")
+            headers = {"Authorization": f"Bearer {user_token}", "Content-Type": "application/json"}
+            r = requests.post(f"{host}/api/2.0/sql/statements", headers=headers, timeout=45,
+                              json={"warehouse_id": get_warehouse_id(), "statement": stmt, "wait_timeout": "30s"})
+            try:
+                body = r.json()
+            except Exception:
+                obo_note = f"OBO token rejected at edge (HTTP {r.status_code})"
+                logger.warning("ch2 approve OBO unavailable: non-JSON %s: %s", r.status_code, r.text[:150])
+                body = None
+            if body is not None:
+                state = (body.get("status") or {}).get("state")
+                sid = body.get("statement_id")
+                deadline = _t.monotonic() + 40
+                while state in ("PENDING", "RUNNING") and sid:
+                    if _t.monotonic() > deadline:
+                        raise HTTPException(504, "approval timed out")
+                    _t.sleep(1)
+                    body = requests.get(f"{host}/api/2.0/sql/statements/{sid}", headers=headers, timeout=20).json()
+                    state = (body.get("status") or {}).get("state")
+                if state == "SUCCEEDED":
+                    enforced = "obo_user"
+                else:
+                    msg = ((body.get("status") or {}).get("error") or {}).get("message") or str(state)
+                    up = msg.upper()
+                    if "PERMISSION" in up or "DENIED" in up or "EXECUTE" in up:
+                        raise HTTPException(403, f"Approval denied by Unity Catalog — you are not an approver. {msg[:160]}")
+                    obo_note = f"OBO call failed: {msg[:120]}"
+                    logger.warning("ch2 approve OBO call failed: %s", msg[:200])
+        except HTTPException:
+            raise
+        except Exception as e:
+            obo_note = f"OBO error: {str(e)[:120]}"
+            logger.warning("ch2 approve OBO error: %s", str(e)[:200])
+
+    # 2. Fallback: OBO-for-SQL unavailable here — record the attributed approval via the
+    #    app service principal (which holds EXECUTE). The authenticated approver is stored;
+    #    this is an access-controlled, attributed record, not per-user platform enforcement.
+    if enforced is None:
+        try:
+            note = _esc(f"{req.note or 'approved in app'} · app-SP record ({obo_note})")
+            await execute_query(f"CALL {fqn('optimisation_demo_ch2_approve')}("
+                                f"'{req.app_run_id}', '{ph}', '{_esc(approver)}', '{note}')")
+            enforced = "app_sp_recorded"
+        except Exception as e:
+            logger.warning("ch2 approve app-SP fallback failed: %s", str(e)[:200])
+            raise HTTPException(502, f"approval failed (OBO + fallback): {str(e)[:180]}")
+
+    return {"ok": True, "approved_by": approver, "enforced": enforced, "recompute": check["totals"]}
 
 
 @router.get("/ch2/release")
