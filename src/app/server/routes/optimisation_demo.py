@@ -354,3 +354,40 @@ async def ch2_release():
                         f"cast(released_at as string) released_at FROM {fqn('optimisation_demo_ch2_releases')} "
                         f"ORDER BY released_at DESC LIMIT 1")
     return {"active_release": (rel[0] if rel else None)}
+
+
+# --------------------------------------------------------------------------- #
+# Chapter 2 Check — synthetic outcome check on the active release
+# --------------------------------------------------------------------------- #
+CH2_CHECK_JOB = "Optimisation demo — Chapter 2 check (gen2)"
+
+
+@router.post("/ch2/check")
+async def ch2_check():
+    job_id = resolve_job_by_name(CH2_CHECK_JOB)
+    if not job_id:
+        raise HTTPException(503, f"Job '{CH2_CHECK_JOB}' not found — deploy the bundle first.")
+    try:
+        resp = get_workspace_client().api_client.do(
+            "POST", "/api/2.1/jobs/run-now",
+            body={"job_id": int(job_id), "job_parameters": {"catalog_name": get_catalog(), "schema_name": get_schema()}})
+    except Exception as e:
+        raise HTTPException(502, f"Could not start the check job: {str(e)[:200]}")
+    return {"job_run_id": resp.get("run_id"), "status": "running"}
+
+
+@router.get("/ch2/monitoring")
+async def ch2_monitoring():
+    rel = await _safe_q(f"SELECT release_id FROM {fqn('optimisation_demo_ch2_releases')} ORDER BY released_at DESC LIMIT 1")
+    if not rel:
+        return {"release_id": None, "period": None, "rows": []}
+    rid = rel[0]["release_id"]
+    mx = await _safe_q(f"SELECT max(period) p FROM {fqn('optimisation_demo_ch2_monitoring')} WHERE release_id = :r", {"r": rid})
+    period = mx[0]["p"] if (mx and mx[0].get("p") is not None) else None
+    rows = []
+    if period is not None:
+        rows = await _safe_q(f"SELECT segment, round(expected_sales,1) expected_sales, observed_sales, "
+                             f"round(expected_margin,0) expected_margin, round(observed_margin,0) observed_margin, n "
+                             f"FROM {fqn('optimisation_demo_ch2_monitoring')} WHERE release_id = :r AND period = :p ORDER BY segment",
+                             {"r": rid, "p": int(period)}) or []
+    return {"release_id": rid, "period": period, "rows": rows}

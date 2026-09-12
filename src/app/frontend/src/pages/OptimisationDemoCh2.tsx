@@ -72,8 +72,68 @@ export default function Chapter2() {
         <Note>The gate is a per-person Unity Catalog EXECUTE grant enforced over OBO — a non-approver's approval is denied by the platform, not the app. The consumer reads the approved release id; a new unapproved solve does not change it.</Note>
       </Section>
 
+      {/* Check */}
+      <Check hasRelease={!!release} />
+
       <DemoDisclaimer>The plan is a recommended factor table on a synthetic book. No real premiums are issued; nothing here is a deployed production price.</DemoDisclaimer>
     </>
+  );
+}
+
+function Check({ hasRelease }: { hasRelease: boolean }) {
+  const [mon, setMon] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const pollRef = useRef<any>(null);
+  const load = () => api.optDemoCh2Monitoring().then(setMon).catch(() => {});
+  useEffect(() => { load(); return () => { if (pollRef.current) clearTimeout(pollRef.current); }; }, []);
+
+  const advance = async () => {
+    setBusy(true);
+    const before = mon?.period ?? 0;
+    try {
+      await api.optDemoCh2Check();
+      const poll = (n: number) => {
+        if (n > 60) { setBusy(false); return; }
+        pollRef.current = setTimeout(async () => {
+          const m = await api.optDemoCh2Monitoring().catch(() => null);
+          if (m && (m.period ?? 0) > before) { setMon(m); setBusy(false); }
+          else poll(n + 1);
+        }, 4000);
+      };
+      poll(0);
+    } catch { setBusy(false); }
+  };
+
+  return (
+    <Section title="Check — synthetic outcome" subtitle="Roll the released plan forward one synthetic period, drawing outcomes from the frozen generator (not the model). Expected vs observed, over modelled cost.">
+      <div className="flex items-center gap-3 mb-3">
+        <Btn tone="primary" disabled={!hasRelease || busy} onClick={advance}>
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Advance one synthetic period
+        </Btn>
+        {!hasRelease && <span className="text-[12px] text-amber-700">Approve & release a plan first.</span>}
+        {mon?.period != null && <span className="text-[12px] text-mut">period {mon.period}</span>}
+      </div>
+      {mon?.rows?.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead><tr className="text-left text-mut border-b border-line"><th className="py-1 pr-2">Segment</th><th className="pr-2">Exp. sales</th><th className="pr-2">Obs. sales</th><th className="pr-2">Exp. margin</th><th className="pr-2">Obs. margin</th><th>n</th></tr></thead>
+            <tbody>
+              {mon.rows.map((r: any) => (
+                <tr key={r.segment} className={`border-b border-line/60 ${r.segment === GRANDMA ? 'bg-blue-50' : ''}`}>
+                  <td className="py-1 pr-2 font-medium text-ink">{r.segment}</td>
+                  <td className="pr-2">{num(r.expected_sales)}</td>
+                  <td className="pr-2">{num(r.observed_sales)}</td>
+                  <td className="pr-2">{gbp(r.expected_margin)}</td>
+                  <td className="pr-2">{gbp(r.observed_margin)}</td>
+                  <td>{num(r.n)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <div className="text-sm text-mut">No synthetic check yet.</div>}
+      <Note>Synthetic outcome check: outcomes are drawn from the frozen generator, not the model's own predictions. It does not validate real demand or realised claims profitability.</Note>
+    </Section>
   );
 }
 

@@ -128,3 +128,29 @@ resources:
           spec:
             client: "5"
             dependencies: []
+
+    # --- Chapter 2: synthetic outcome check on the active release ---
+    optimisation_demo_ch2_check:
+      name: "Optimisation demo — Chapter 2 check (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: check
+          notebook_task:
+            notebook_path: ../src/app/server/optimisation_demo/jobs/ch2_check.py
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              schema_name:  "{{job.parameters.schema_name}}"
+              app_src_base: "${workspace.file_path}/src/app"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [pandas, numpy]
