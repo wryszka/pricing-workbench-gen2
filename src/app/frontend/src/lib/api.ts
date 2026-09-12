@@ -365,5 +365,8 @@ export const api = {
     fetchJson<any>('/optimisation-demo/ch2/run', { method: 'POST', body: JSON.stringify(body) }),
   optDemoCh2Status: (appRunId: string, jobRunId: number) =>
     fetchJson<any>(`/optimisation-demo/ch2/run/${encodeURIComponent(appRunId)}?job_run_id=${jobRunId}`),
+  optDemoCh2Approve: (body: { app_run_id: string; note?: string }) =>
+    fetchJson<any>('/optimisation-demo/ch2/approve', { method: 'POST', body: JSON.stringify(body) }),
+  optDemoCh2Release: () => fetchJson<any>('/optimisation-demo/ch2/release'),
   optAdvanceResult: () => fetchJson<any>('/optimisation/advance/result'),
 };

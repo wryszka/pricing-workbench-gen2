@@ -14,11 +14,14 @@ const GRANDMA = '70+ · grp≥30';
 export default function Chapter2() {
   const [prep, setPrep] = useState<any>(null);
   const [pf, setPf] = useState<any>(null);
+  const [release, setRelease] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const refreshRelease = () => api.optDemoCh2Release().then((r) => setRelease(r.active_release)).catch(() => {});
   useEffect(() => {
     api.optDemoCh2PrepareStatus().then(setPrep).catch((e) => setErr(String(e)));
     api.optDemoCh2Portfolio().then(setPf).catch(() => {});
+    refreshRelease();
   }, []);
 
   if (err) return <Note>Couldn't load Chapter 2: {err}</Note>;
@@ -52,7 +55,22 @@ export default function Chapter2() {
       {pf?.ready ? <Portfolio pf={pf} /> : <Section title="Portfolio"><Note>Portfolio summary not ready — run prepare.</Note></Section>}
 
       {/* Choose */}
-      <Choose disabled={!prep.prepared || !prep.manifest?.passes} pf={pf} />
+      <Choose disabled={!prep.prepared || !prep.manifest?.passes} pf={pf} onApproved={refreshRelease} />
+
+      {/* Review & release */}
+      <Section title="Review & release" subtitle="Approval runs the plan through a deterministic recompute, then a Unity Catalog stored procedure called AS YOU — only an approver can release. Appended to an append-only record.">
+        {release ? (
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <Pill tone="green">active demo release</Pill>
+            <span className="text-mut">release <span className="font-mono">{String(release.release_id).slice(0, 8)}</span></span>
+            <span className="text-mut">run <span className="font-mono">{String(release.run_id).slice(0, 8)}</span></span>
+            <span className="text-mut">approved by {release.approver}</span>
+            <span className="text-mut">{release.released_at}</span>
+            {release.previous_release_id && <span className="text-mut">← prev <span className="font-mono">{String(release.previous_release_id).slice(0, 8)}</span></span>}
+          </div>
+        ) : <div className="text-sm text-mut">No demo release yet. Run a plan, then Approve &amp; release it (approver only).</div>}
+        <Note>The gate is a per-person Unity Catalog EXECUTE grant enforced over OBO — a non-approver's approval is denied by the platform, not the app. The consumer reads the approved release id; a new unapproved solve does not change it.</Note>
+      </Section>
 
       <DemoDisclaimer>The plan is a recommended factor table on a synthetic book. No real premiums are issued; nothing here is a deployed production price.</DemoDisclaimer>
     </>
@@ -102,7 +120,7 @@ function Portfolio({ pf }: { pf: any }) {
   );
 }
 
-function Choose({ disabled, pf }: { disabled: boolean; pf: any }) {
+function Choose({ disabled, pf, onApproved }: { disabled: boolean; pf: any; onApproved: () => void }) {
   const [pending, setPending] = useState<any>(null);
   const [runs, setRuns] = useState<any[]>([]);
   const pollRef = useRef<any>(null);
@@ -151,15 +169,24 @@ function Choose({ disabled, pf }: { disabled: boolean; pf: any }) {
       )}
       {runs.length === 0 && !pending && <div className="text-sm text-mut">Run a plan to compare it with the baseline.</div>}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {runs.map((r) => <Ch2Result key={r.app_run_id} r={r} baselineBySeg={baselineBySeg} />)}
+        {runs.map((r) => <Ch2Result key={r.app_run_id} r={r} baselineBySeg={baselineBySeg} onApproved={onApproved} />)}
       </div>
     </Section>
   );
 }
 
-function Ch2Result({ r, baselineBySeg }: { r: any; baselineBySeg: Record<string, any> }) {
+function Ch2Result({ r, baselineBySeg, onApproved }: { r: any; baselineBySeg: Record<string, any>; onApproved: () => void }) {
   const run = r.run || {};
   const infeasible = run.status === 'infeasible';
+  const [appr, setAppr] = useState<{ busy?: boolean; msg?: string; ok?: boolean }>({});
+  const approve = async () => {
+    setAppr({ busy: true });
+    try {
+      const res = await api.optDemoCh2Approve({ app_run_id: r.app_run_id });
+      setAppr({ ok: true, msg: `approved by ${res.approved_by}` });
+      onApproved();
+    } catch (e) { setAppr({ msg: String(e).replace('Error: ', '') }); }
+  };
   const dMargin = run.total_margin != null ? run.total_margin - run.baseline_margin : null;
   const dSales = run.total_sales != null ? run.total_sales - run.baseline_sales : null;
   return (
@@ -193,6 +220,14 @@ function Ch2Result({ r, baselineBySeg }: { r: any; baselineBySeg: Record<string,
           </table>
         </div>
       </>}
+      {!infeasible && (
+        <div className="mt-2 flex items-center gap-2">
+          <Btn tone="primary" disabled={appr.busy || appr.ok} onClick={approve}>
+            {appr.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} {appr.ok ? 'Approved & released' : 'Approve & release (approver)'}
+          </Btn>
+          {appr.msg && <span className={`text-[12px] ${appr.ok ? 'text-emerald-700' : 'text-amber-700'}`}>{appr.msg}</span>}
+        </div>
+      )}
       <div className="mt-2 flex items-center gap-3 text-[11px] text-mut">
         <span>run <span className="font-mono">{String(r.app_run_id).slice(0, 8)}</span></span>
         <span>model {run.model_version}</span>

@@ -11,6 +11,11 @@ resources:
       name: "pricing-workbench-gen2"
       description: "Pricing Workbench gen2 — commercial pricing: ingestion HITL, feature store, model factory, quote review, governance, agents"
       source_code_path: ../src/app
+      # Per-user authorization (OBO): lets the app run the Chapter 2 approval CALL as the
+      # logged-in user so Unity Catalog enforces the approver-only EXECUTE grant per person.
+      # Enabling this prompts every viewer to consent once.
+      user_api_scopes:
+        - sql
 
       resources:
         - name: sql-warehouse

@@ -17,13 +17,15 @@ import re
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from server.config import (get_catalog, get_schema, get_workspace_client,
-                           resolve_job_by_name, fqn)
+                           resolve_job_by_name, fqn, get_current_user,
+                           get_workspace_host, get_warehouse_id)
 from server.sql import execute_query
 from server.optimisation_demo.core import load_example, optimise, validate_requirement
+from server.optimisation_demo.governance import recompute_and_validate, plan_hash
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/optimisation-demo", tags=["optimisation-demo"])
@@ -262,3 +264,93 @@ async def ch2_run_status(app_run_id: str, job_run_id: int = Query(...)):
         status = "running"
     return {"app_run_id": app_run_id, "job_run_id": job_run_id, "life_cycle_state": life,
             "result_state": res, "run_page_url": page, "status": status, "result": result}
+
+
+# --------------------------------------------------------------------------- #
+# Chapter 2 governance — approve/release via OBO (real per-user gate)
+# --------------------------------------------------------------------------- #
+class Ch2ApproveRequest(BaseModel):
+    app_run_id: str
+    note: Optional[str] = None
+
+
+@router.post("/ch2/approve")
+async def ch2_approve(req: Ch2ApproveRequest, request: Request):
+    """Approve + release a Chapter 2 plan. The plan is independently recomputed from
+    the stored scores (never a stored flag), then the governed UC procedure is CALLed
+    **as the logged-in user** (OBO) — Unity Catalog enforces the approver-only EXECUTE
+    grant, so a non-approver is denied by the platform, not by the app."""
+    user_token = request.headers.get("x-forwarded-access-token")
+    if not user_token:
+        raise HTTPException(403, "Per-user authorization (OBO) is required to approve. "
+                                 "Enable app user-authorization and sign in as an approver.")
+    if not _APP_RUN_ID.match(req.app_run_id):
+        raise HTTPException(400, "invalid application run id")
+
+    run = await _safe_q(f"SELECT status, min_portfolio_sales_ratio, baseline_sales "
+                        f"FROM {fqn('optimisation_demo_ch2_runs')} WHERE run_id = :rid", {"rid": req.app_run_id})
+    if not run:
+        raise HTTPException(404, "run not found")
+    run = run[0]
+    if run["status"] != "complete":
+        raise HTTPException(400, f"run not approvable (status {run['status']})")
+
+    scores = await _safe_q(f"SELECT segment, factor, expected_sales, expected_margin, selected "
+                           f"FROM {fqn('optimisation_demo_ch2_candidate_scores')} WHERE run_id = :rid",
+                           {"rid": req.app_run_id}) or []
+    segments = sorted({s["segment"] for s in scores})
+    coeffs = {(s["segment"], round(float(s["factor"]), 4)):
+              {"expected_sales": float(s["expected_sales"]), "expected_margin": float(s["expected_margin"])}
+              for s in scores}
+    selection = {s["segment"]: round(float(s["factor"]), 4) for s in scores if s["selected"]}
+    ratio = run.get("min_portfolio_sales_ratio")
+    floor = None if ratio is None else float(ratio) * float(run["baseline_sales"])
+
+    # Deterministic recompute before we ask UC to record anything.
+    check = recompute_and_validate(segments, selection, coeffs, floor)
+    if not check["ok"]:
+        raise HTTPException(400, "plan failed recompute: " + "; ".join(check["failures"]))
+    ph = plan_hash(selection)
+    approver = get_current_user() or "unknown"
+
+    # CALL the governed procedure AS THE USER (OBO). UC enforces approver-only EXECUTE.
+    try:
+        from databricks.sdk import WorkspaceClient
+        from databricks.sdk.service.sql import StatementParameterListItem, StatementState
+        import time as _t
+        wc = WorkspaceClient(host=get_workspace_host(), token=user_token)
+        resp = wc.statement_execution.execute_statement(
+            warehouse_id=get_warehouse_id(), wait_timeout="30s",
+            statement=f"CALL {fqn('optimisation_demo_ch2_approve')}(:rid, :hash, :appr, :note)",
+            parameters=[StatementParameterListItem(name="rid", value=req.app_run_id),
+                        StatementParameterListItem(name="hash", value=ph),
+                        StatementParameterListItem(name="appr", value=approver),
+                        StatementParameterListItem(name="note", value=(req.note or "approved in app"))])
+        deadline = _t.monotonic() + 40
+        while resp.status and resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
+            if _t.monotonic() > deadline:
+                raise HTTPException(504, "approval timed out")
+            _t.sleep(1)
+            resp = wc.statement_execution.get_statement(resp.statement_id)
+        state = resp.status.state if resp.status else None
+        if state != StatementState.SUCCEEDED:
+            msg = (resp.status.error.message if resp.status and resp.status.error else str(state)) or ""
+            up = msg.upper()
+            if "PERMISSION" in up or "DENIED" in up or "EXECUTE" in up:
+                raise HTTPException(403, f"Approval denied by Unity Catalog — you are not an approver. {msg[:160]}")
+            raise HTTPException(400, f"approval blocked: {msg[:200]}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"approval call error: {str(e)[:200]}")
+
+    return {"ok": True, "approved_by": approver, "plan_hash": ph, "recompute": check["totals"]}
+
+
+@router.get("/ch2/release")
+async def ch2_release():
+    """The active demo release (most recent) + the release chain head."""
+    rel = await _safe_q(f"SELECT release_id, run_id, plan_hash, approver, previous_release_id, "
+                        f"cast(released_at as string) released_at FROM {fqn('optimisation_demo_ch2_releases')} "
+                        f"ORDER BY released_at DESC LIMIT 1")
+    return {"active_release": (rel[0] if rel else None)}
