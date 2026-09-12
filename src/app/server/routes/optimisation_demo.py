@@ -316,34 +316,40 @@ async def ch2_approve(req: Ch2ApproveRequest, request: Request):
     ph = plan_hash(selection)
     approver = get_current_user() or "unknown"
 
-    # CALL the governed procedure AS THE USER (OBO). UC enforces approver-only EXECUTE.
+    # CALL the governed procedure AS THE USER (OBO) via the raw REST API with the user's
+    # token — bypasses an SDK response-parsing quirk on a bare-token client. UC enforces
+    # the approver-only EXECUTE grant, so a non-approver's token is denied by the platform.
     try:
-        from databricks.sdk import WorkspaceClient
-        from databricks.sdk.service.sql import StatementParameterListItem, StatementState
         import time as _t
-        # auth_type="pat" so the SDK uses ONLY the user's OBO token and ignores the
-        # app's ambient OAuth env (else: "more than one authorization method configured").
-        wc = WorkspaceClient(host=get_workspace_host(), token=user_token, auth_type="pat")
-        # Inline the CALL (named :param markers aren't bound for stored-procedure CALLs).
-        # run_id/hash are validated hex; approver/note are single-quote-escaped.
+        import requests
         def _esc(v: str) -> str:
             return str(v).replace("'", "''")
+        # run_id/hash are validated hex; approver/note single-quote-escaped.
         stmt = (f"CALL {fqn('optimisation_demo_ch2_approve')}("
                 f"'{req.app_run_id}', '{ph}', '{_esc(approver)}', '{_esc(req.note or 'approved in app')}')")
-        resp = wc.statement_execution.execute_statement(
-            warehouse_id=get_warehouse_id(), wait_timeout="30s", statement=stmt)
+        host = get_workspace_host().rstrip("/")
+        headers = {"Authorization": f"Bearer {user_token}", "Content-Type": "application/json"}
+        r = requests.post(f"{host}/api/2.0/sql/statements", headers=headers, timeout=45,
+                          json={"warehouse_id": get_warehouse_id(), "statement": stmt, "wait_timeout": "30s"})
+        try:
+            body = r.json()
+        except Exception:
+            logger.warning("ch2 approve: non-JSON response (%s): %s", r.status_code, r.text[:200])
+            raise HTTPException(502, f"approval call returned a non-JSON response ({r.status_code}) — check OBO consent")
+        state = (body.get("status") or {}).get("state")
+        sid = body.get("statement_id")
         deadline = _t.monotonic() + 40
-        while resp.status and resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
+        while state in ("PENDING", "RUNNING") and sid:
             if _t.monotonic() > deadline:
                 raise HTTPException(504, "approval timed out")
             _t.sleep(1)
-            resp = wc.statement_execution.get_statement(resp.statement_id)
-        state = resp.status.state if resp.status else None
-        if state != StatementState.SUCCEEDED:
-            msg = (resp.status.error.message if resp.status and resp.status.error else str(state)) or ""
+            body = requests.get(f"{host}/api/2.0/sql/statements/{sid}", headers=headers, timeout=20).json()
+            state = (body.get("status") or {}).get("state")
+        if state != "SUCCEEDED":
+            msg = ((body.get("status") or {}).get("error") or {}).get("message") or str(state)
             logger.warning("ch2 approve CALL failed (state=%s): %s", state, msg[:300])
             up = msg.upper()
-            if "PERMISSION" in up or "DENIED" in up or "EXECUTE" in up:
+            if "PERMISSION" in up or "DENIED" in up or "EXECUTE" in up or r.status_code in (401, 403):
                 raise HTTPException(403, f"Approval denied by Unity Catalog — you are not an approver. {msg[:160]}")
             raise HTTPException(400, f"approval blocked: {msg[:200]}")
     except HTTPException:
