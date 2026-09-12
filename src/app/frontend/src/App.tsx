@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Database, FlaskConical, Shield, Code, Rocket, Home as HomeIcon, Table2, Package, Sparkles, Calculator, Zap, Archive, BookOpen, Target, GraduationCap, RotateCcw, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Database, FlaskConical, Shield, Code, Rocket, Home as HomeIcon, Table2, Package, Sparkles, Zap, Archive, BookOpen, Target, GraduationCap, RotateCcw, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { api } from './lib/api';
 import Home from './pages/Home';
 import Learn from './pages/Learn';
@@ -31,8 +31,9 @@ const NAV_ITEMS = [
   { to: '/pricing-table', label: 'Modelling Mart',    icon: Table2,       match: (p: string) => p.startsWith('/pricing-table') },
   { to: '/development',   label: 'Model Development', icon: Code,         match: (p: string) => p.startsWith('/development') },
   { to: '/deployment',    label: 'Model Deployment',  icon: Rocket,       match: (p: string) => p.startsWith('/deployment') },
-  { to: '/optimisation-demo', label: 'Optimisation demo', icon: Calculator, match: (p: string) => p.startsWith('/optimisation-demo') },
-  { to: '/optimisation',  label: 'Price Optimisation',icon: Target,       match: (p: string) => p.startsWith('/optimisation') && !p.startsWith('/optimisation-demo') },
+  { to: '/optimisation-demo', label: 'Price Optimisation', icon: Target, match: (p: string) => p.startsWith('/optimisation-demo') },
+  // The original seven-tab optimiser (/optimisation) is hidden from the nav — it is
+  // reached from inside the new Price Optimisation page (see OptimisationDemo.tsx). Route kept.
   { to: '/governance',    label: 'Model Governance',  icon: Shield,       match: (p: string) => p.startsWith('/governance') },
   { to: '/pricing-ai',    label: 'Pricing AI',        icon: Sparkles,     match: (p: string) => p.startsWith('/pricing-ai') || p.startsWith('/supervisor') || p.startsWith('/regulatory-ai') },
   { to: '/models',        label: 'Model Factory',     icon: FlaskConical, match: (p: string) => p.startsWith('/models') },

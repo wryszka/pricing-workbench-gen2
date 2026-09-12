@@ -131,6 +131,23 @@ uplift + plan×world uplift table + grandma factor per plan).
 - **Verified live:** 6 worlds; robust worst-uplift £16,370 ≥ nominal £16,357; robust grandma
   +1% vs nominal +2%; feasible in every world. Honest, modest robustness benefit.
 
+## Recording scripts (record chapter by chapter)
+
+One presenter script per chapter, each with a silent test-run checklist + a timed click/say
+talk-track + a proves/doesn't box + Q&A. Record in order; warm each chapter once before the take.
+
+| Chapter | Script | Runtime | Warm-up before the take |
+|---|---|---|---|
+| 1 — one segment | `docs/optimisation_demo_presenter.md` | ~8 min | open Explain, do one throwaway Run |
+| 2 — a portfolio | `docs/optimisation_demo_presenter_ch2.md` | ~9 min | confirm "validation passed"; one throwaway Margin-first run |
+| 3 — uncertain futures | `docs/optimisation_demo_presenter_ch3.md` | ~5 min | one throwaway Run robust decision |
+
+Verified live figures the scripts quote (frozen snapshot, reproduce): Ch1 Run A £1,100/700/£210,000,
+Run B £950/830/£124,500; Ch2 baseline ≈3,735/£865,865, margin-first 2,990/£998,194,
+protect-sales-98% 3,660/£891,158; Ch3 robust ≈£16,370 ≥ nominal ≈£16,357 across 6 worlds.
+Ch2 approve records via the attributed app-SP path unless the browser session has re-consented to
+the `sql` scope (then it runs as you over OBO) — the button states which.
+
 ## Tests
 `uv run --system-certs --with pytest --with scipy --with numpy --with pandas --with scikit-learn pytest tests/optimisation_demo/ -q` → **43 passing** (core 9, portfolio 10, demand 5, pipeline 4, governance 6, monitoring 3, robustness 6).
 

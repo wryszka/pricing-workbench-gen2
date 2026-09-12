@@ -1,6 +1,6 @@
 # Optimisation demo — presenter script (Chapter 1)
 
-~8 minutes, single presenter. App → **Optimisation demo** tab
+~8 minutes, single presenter. App → **Price Optimisation** tab (the seven-tab optimiser is now reached from a link inside this page)
 (https://pricing-workbench-gen2-7474655676955816.aws.databricksapps.com). Two views: **Explain**
 (worked example) and **Run on Databricks** (the same example as a real job). Read every number off
 the screen and name its unit. Everything is a **synthetic teaching example**.

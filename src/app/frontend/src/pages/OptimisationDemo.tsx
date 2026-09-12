@@ -19,10 +19,16 @@ export default function OptimisationDemo() {
   const [chapter, setChapter] = useState<'1' | '2' | '3'>('1');
   return (
     <Page>
-      <div className="flex flex-wrap gap-1.5 mb-4">
-        <Btn tone={chapter === '1' ? 'primary' : 'ghost'} onClick={() => setChapter('1')}>Chapter 1 · One segment</Btn>
-        <Btn tone={chapter === '2' ? 'primary' : 'ghost'} onClick={() => setChapter('2')}>Chapter 2 · A portfolio</Btn>
-        <Btn tone={chapter === '3' ? 'primary' : 'ghost'} onClick={() => setChapter('3')}>Chapter 3 · Uncertain futures</Btn>
+      <div className="flex flex-wrap items-center justify-between gap-1.5 mb-4">
+        <div className="flex flex-wrap gap-1.5">
+          <Btn tone={chapter === '1' ? 'primary' : 'ghost'} onClick={() => setChapter('1')}>Chapter 1 · One segment</Btn>
+          <Btn tone={chapter === '2' ? 'primary' : 'ghost'} onClick={() => setChapter('2')}>Chapter 2 · A portfolio</Btn>
+          <Btn tone={chapter === '3' ? 'primary' : 'ghost'} onClick={() => setChapter('3')}>Chapter 3 · Uncertain futures</Btn>
+        </div>
+        {/* The original seven-tab optimiser, kept reachable but off the main nav. */}
+        <a href="/optimisation" className="text-[12px] text-mut hover:text-brand inline-flex items-center gap-1 whitespace-nowrap">
+          Advanced optimiser (7-tab) <ArrowRight className="w-3.5 h-3.5" />
+        </a>
       </div>
       {chapter === '1' ? <Chapter1 /> : chapter === '2' ? <Chapter2 /> : <Chapter3 />}
     </Page>
