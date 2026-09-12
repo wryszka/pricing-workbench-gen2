@@ -242,8 +242,14 @@ function Ch2Result({ r, baselineBySeg, onApproved }: { r: any; baselineBySeg: Re
   const approve = async () => {
     setAppr({ busy: true });
     try {
-      const res = await api.optDemoCh2Approve({ app_run_id: r.app_run_id });
-      setAppr({ ok: true, msg: `approved by ${res.approved_by}` });
+      // Direct fetch so we can surface the server's actual `detail` (not a generic error).
+      const res = await fetch('/api/optimisation-demo/ch2/approve', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_run_id: r.app_run_id }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { setAppr({ msg: body.detail || `error ${res.status}` }); return; }
+      setAppr({ ok: true, msg: `approved by ${body.approved_by}` });
       onApproved();
     } catch (e) { setAppr({ msg: String(e).replace('Error: ', '') }); }
   };
