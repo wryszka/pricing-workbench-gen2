@@ -303,7 +303,9 @@ async def ch2_approve(req: Ch2ApproveRequest, request: Request):
     coeffs = {(s["segment"], round(float(s["factor"]), 4)):
               {"expected_sales": float(s["expected_sales"]), "expected_margin": float(s["expected_margin"])}
               for s in scores}
-    selection = {s["segment"]: round(float(s["factor"]), 4) for s in scores if s["selected"]}
+    # NB: the SQL statement API returns booleans as the strings "true"/"false".
+    selection = {s["segment"]: round(float(s["factor"]), 4)
+                 for s in scores if str(s["selected"]).lower() == "true"}
     ratio = run.get("min_portfolio_sales_ratio")
     floor = None if ratio is None else float(ratio) * float(run["baseline_sales"])
 
