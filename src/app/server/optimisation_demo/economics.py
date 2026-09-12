@@ -67,6 +67,37 @@ def segment_candidate_coefficients(fixture: dict[str, Any]) -> dict[tuple[str, f
     return coeffs
 
 
+def coefficients_from_future(future: Any, factors: list[float], predict_fn) -> dict[tuple[str, float], dict[str, float]]:
+    """Score the future opportunity snapshot at each candidate factor and aggregate
+    per (segment, factor). `predict_fn(factor)` returns a purchase-probability array
+    aligned to the snapshot rows. Individual costs use the three components; we sum
+    *individual* probability-weighted contributions (no median-customer curve).
+    """
+    import numpy as np  # local import keeps the pure teaching path dependency-free
+    import pandas as pd
+
+    seg = future["segment"].to_numpy()
+    base = future["baseline_price"].to_numpy()
+    claims = future["expected_claims"].to_numpy()
+    exp = future["per_sale_expenses"].to_numpy()
+    comm = future["commission_rate"].to_numpy()
+    coeffs: dict[tuple[str, float], dict[str, float]] = {}
+    for fct in factors:
+        offered = base * fct
+        cost = claims + exp + comm * offered
+        q = np.asarray(predict_fn(fct), dtype=float)
+        df = pd.DataFrame({"segment": seg,
+                           "m": q * (offered - cost), "v": q,
+                           "prem": q * offered, "cl": q * claims})
+        agg = df.groupby("segment").agg(m=("m", "sum"), v=("v", "sum"), prem=("prem", "sum"), cl=("cl", "sum"))
+        for s, row in agg.iterrows():
+            coeffs[(s, round(float(fct), 4))] = {
+                "expected_margin": float(row["m"]), "expected_sales": float(row["v"]),
+                "expected_premium": float(row["prem"]), "expected_claims": float(row["cl"]),
+            }
+    return coeffs
+
+
 def baseline_plan(fixture: dict[str, Any], baseline_price: float,
                   coeffs: Optional[dict] = None) -> dict[str, float]:
     """Totals at the baseline price across all segments (the comparison reference)."""
