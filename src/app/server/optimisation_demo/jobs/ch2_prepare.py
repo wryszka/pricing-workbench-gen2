@@ -20,7 +20,7 @@ src_base = dbutils.widgets.get("app_src_base").strip()
 if src_base and src_base not in sys.path:
     sys.path.insert(0, src_base)
 from server.optimisation_demo.data import make_historic, time_split, make_future, GENERATOR_VERSION  # noqa: E402
-from server.optimisation_demo.demand import train_logistic, validate  # noqa: E402
+from server.optimisation_demo.demand import train_logistic, validate, predict_at  # noqa: E402
 import joblib  # noqa: E402
 
 # COMMAND ----------
@@ -64,6 +64,26 @@ spark.sql(f"DELETE FROM {fqn}.optimisation_demo_ch2_validation WHERE model_versi
 mrows = [Row(model_version=model_version, metric=k, value=float(v))
          for k, v in report["metrics"].items() if isinstance(v, (int, float, bool))]
 spark.createDataFrame(mrows).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_ch2_validation")
+
+# COMMAND ----------
+# 5. Baseline portfolio summary at factor 1.0 (per segment) — so the app reads totals
+#    without loading the model. Uses the frozen model's predictions at current prices.
+q1 = predict_at(model, future, 1.0)
+fut = future.copy()
+fut["_cost"] = fut["expected_claims"] + fut["per_sale_expenses"] + fut["commission_rate"] * fut["baseline_price"]
+fut["_sales"] = q1
+fut["_premium"] = q1 * fut["baseline_price"]
+fut["_margin"] = q1 * (fut["baseline_price"] - fut["_cost"])
+summ = (fut.groupby("segment").agg(
+    opportunities=("opportunity_id", "count"),
+    avg_baseline_price=("baseline_price", "mean"),
+    avg_expected_claims=("expected_claims", "mean"),
+    avg_cost=("_cost", "mean"),
+    baseline_sales=("_sales", "sum"),
+    baseline_premium=("_premium", "sum"),
+    baseline_margin=("_margin", "sum")).reset_index())
+spark.sql(f"DROP TABLE IF EXISTS {fqn}.optimisation_demo_ch2_portfolio_summary")
+spark.createDataFrame(summ).write.mode("overwrite").saveAsTable(f"{fqn}.optimisation_demo_ch2_portfolio_summary")
 
 dbutils.notebook.exit(json.dumps({
     "model_version": model_version, "passes": report["passes"], "failures": report["failures"],

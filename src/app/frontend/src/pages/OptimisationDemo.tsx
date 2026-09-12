@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Calculator, ArrowRight, Play, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
 import { Page, PageHeader, Section, Metric, Pill, Btn, Note, DemoDisclaimer, Loading } from '../components/ui';
 import { api } from '../lib/api';
+import Chapter2 from './OptimisationDemoCh2';
 
 // Chapter 1 — the honest teaching flow. Two connected parts:
 //   • Explain (worked example, arithmetic from the shared core via /example)
@@ -14,18 +15,31 @@ const signed = (n: number) => (n >= 0 ? '+' : '−') + Math.abs(Math.round(n)).t
 const sgbp = (n: number) => (n >= 0 ? '+£' : '−£') + Math.abs(Math.round(n)).toLocaleString('en-GB');
 
 export default function OptimisationDemo() {
+  const [chapter, setChapter] = useState<'1' | '2'>('1');
+  return (
+    <Page>
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        <Btn tone={chapter === '1' ? 'primary' : 'ghost'} onClick={() => setChapter('1')}>Chapter 1 · One segment</Btn>
+        <Btn tone={chapter === '2' ? 'primary' : 'ghost'} onClick={() => setChapter('2')}>Chapter 2 · A portfolio</Btn>
+      </div>
+      {chapter === '1' ? <Chapter1 /> : <Chapter2 />}
+    </Page>
+  );
+}
+
+function Chapter1() {
   const [data, setData] = useState<any>(null);
   const [view, setView] = useState<'explain' | 'run'>('explain');
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => { api.optDemoExample().then(setData).catch((e) => setErr(String(e))); }, []);
 
-  if (err) return <Page><Note>Couldn't load the example: {err}</Note></Page>;
-  if (!data) return <Page><Loading label="Loading the worked example…" /></Page>;
+  if (err) return <Note>Couldn't load the example: {err}</Note>;
+  if (!data) return <Loading label="Loading the worked example…" />;
 
   const ex = data.example;
   return (
-    <Page>
+    <>
       <PageHeader
         eyebrow="Pricing optimisation · Chapter 1"
         title="One segment — which price meets our goal?"
@@ -45,7 +59,7 @@ export default function OptimisationDemo() {
       </DemoDisclaimer>
 
       {view === 'explain' ? <Explain data={data} onRun={() => setView('run')} /> : <RunOnDatabricks data={data} />}
-    </Page>
+    </>
   );
 }
 

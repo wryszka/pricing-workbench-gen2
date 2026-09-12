@@ -358,5 +358,12 @@ export const api = {
     fetchJson<any>('/optimisation-demo/run', { method: 'POST', body: JSON.stringify(body) }),
   optDemoStatus: (appRunId: string, jobRunId: number) =>
     fetchJson<any>(`/optimisation-demo/run/${encodeURIComponent(appRunId)}?job_run_id=${jobRunId}`),
+  // Chapter 2 — a portfolio
+  optDemoCh2PrepareStatus: () => fetchJson<any>('/optimisation-demo/ch2/prepare-status'),
+  optDemoCh2Portfolio: () => fetchJson<any>('/optimisation-demo/ch2/portfolio'),
+  optDemoCh2Run: (body: { min_portfolio_sales_ratio: number | null }) =>
+    fetchJson<any>('/optimisation-demo/ch2/run', { method: 'POST', body: JSON.stringify(body) }),
+  optDemoCh2Status: (appRunId: string, jobRunId: number) =>
+    fetchJson<any>(`/optimisation-demo/ch2/run/${encodeURIComponent(appRunId)}?job_run_id=${jobRunId}`),
   optAdvanceResult: () => fetchJson<any>('/optimisation/advance/result'),
 };
