@@ -70,12 +70,13 @@ export default function Chapter2() {
           </div>
         ) : <div className="text-sm text-mut">No demo release yet. Run a plan, then Approve &amp; release it (approver only).</div>}
         <Note>
-          The app tries to CALL the governed procedure <b>as you</b> (OBO), so Unity Catalog enforces the approver-only
-          EXECUTE grant per-person. Where on-behalf-of SQL isn't available at this workspace's app front-door, it records
-          the <b>authenticated approver's</b> decision through the same governed procedure via the app's service principal —
-          an attributed, access-controlled record, not per-user platform denial. The button says which path ran. The
-          deterministic recompute, the append-only record, and the approver-only grant are real either way; the consumer
-          reads the approved release id, and a new unapproved solve does not change it.
+          Approval is <b>OBO-only and fail-closed</b>: the governed procedure is CALLed <b>as you</b>, and Unity Catalog
+          enforces the approver-only EXECUTE grant per-person — the approver recorded is <code>session_user()</code>, never a
+          value the app supplies. The procedure also re-checks that the run is complete and model-eligible and that the plan
+          hash matches the validated run, so even a direct call can't approve a tampered or unvalidated plan. If on-behalf-of
+          SQL isn't available (e.g. your session hasn't consented to the <code>sql</code> scope), approval is intentionally
+          <b>unavailable</b> — it is never silently recorded by the app's own identity. The consumer reads the approved
+          release id; a new unapproved solve does not change it.
         </Note>
       </Section>
 
@@ -258,8 +259,7 @@ function Ch2Result({ r, baselineBySeg, onApproved }: { r: any; baselineBySeg: Re
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { setAppr({ msg: body.detail || `error ${res.status}` }); return; }
-      const how = body.enforced === 'obo_user' ? 'as you (OBO)' : 'attributed record';
-      setAppr({ ok: true, msg: `approved by ${body.approved_by} · ${how}` });
+      setAppr({ ok: true, msg: `approved by ${body.approved_by} · as you (OBO)` });
       onApproved();
     } catch (e) { setAppr({ msg: String(e).replace('Error: ', '') }); }
   };
