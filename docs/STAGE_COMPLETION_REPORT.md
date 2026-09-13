@@ -10,14 +10,18 @@ tested), **Deploy** (bundle/app deployed + exercised headless on pricingv2), and
 **Recording readiness** (decks/briefs/rehearsal). A row can be Build-complete while
 Deploy or Recording is still open.
 
-> **Honesty note.** This stage delivered the WP1 (truthful calculation/UI) and WP2
-> (approval bound to immutable evidence) cores with tests and headless deployment
-> evidence, plus the WP1#2 boundary cost fix. WP3–WP6 are **not** completed in this
-> stage and are reported as such below with concrete next steps — no scaffolding is
-> presented as finished, and no run/approval is fabricated. The one intrinsic external
-> blocker (a second, non-approver identity for the live denial check, and first-time
-> OBO `sql`-scope consent in a browser) is called out as a named deployment acceptance
-> step, not silently marked verified.
+> **Honesty note.** Delivered + tested + deployed this stage: **WP1 complete** (all six
+> findings, headless-verified); **WP2 core** (OBO-only fail-closed approval + trusted-hash
+> integrity gate, headless-proven); **WP4** deterministic fact layer + evidence pack +
+> read-only endpoints + append-only review events + committee brief + Ch3 UI panel;
+> **WP3#2/#6** (validation-battery eligibility + honest trade-off); **WP5** cache/agreement
+> core + bounded partitioned benchmark job; **WP6** recording briefs incl. the Decision
+> Review sequence. **Genuinely remaining** (documented, not faked): WP3#1/#4 (parent-release/
+> population inheritance + inherited 4th plan), WP4 LLM narration + MCP tool surface + full
+> injection/unauthorized eval battery, WP5 FULL-preset app surface, WP6 slide decks/PDFs. The
+> intrinsic blockers — a second non-approver identity (owner: simulate for filming) and
+> first-time browser OBO `sql`-scope consent — are named acceptance steps, never marked
+> verified. No run, approval, or benchmark number is fabricated.
 
 ---
 
@@ -144,8 +148,27 @@ built so these sit on top without changing the computation or approval path.
 per-world cache reuse across a full 9-model×9-stress FULL preset, and the app surface for the
 presets are the remaining items; conditional Monte-Carlo remains optional per the brief.
 
-### Scale benchmark receipts (pricingv2)
-_(filled from the live run)_
+### Scale benchmark receipts (pricingv2, 2026-09-13)
+Run `bd41a00ab2df477cb6b04273daddd5a1`, **Live** preset, TERMINATED SUCCESS:
+
+| Metric | Value |
+|---|---|
+| Opportunities / factors / partitions | 5,000 / 21 / 8 |
+| **Coefficients agree (serial vs distributed)** | **true**, max abs diff **5.8e-11** |
+| Serial scoring | 0.255 s |
+| Distributed scoring (cold) | 19.75 s |
+| Distributed scoring (warm, coefficient cache) | 0.69 s |
+| Measured cold speedup vs serial | **0.013× (i.e. ~77× SLOWER)** |
+
+**Honest interpretation (not spun):** at Live scale the distributed path is *slower* —
+Spark partition/serialisation/per-executor model-load overhead dwarfs ~5k rows of pandas
+scoring. The benchmark still proves what matters: the distributed path produces **identical
+coefficients** (verified before timing), and the **hash-keyed coefficient cache** cuts a
+compatible re-solve from 19.75 s to 0.69 s. Distribution only pays off when scoring/scenario
+volume is large (the FULL preset), which is why the note records that scale lives in
+scoring/scenario evaluation, not the compact per-segment MILP. **No speedup or cost saving is
+claimed at Live scale because none was measured.** A FULL-preset run (bounded ≤250k) is the
+next receipt to capture.
 
 ## WP6 — Recording-ready delivery · **PARTIAL (scripts) / decks NOT DELIVERED**
 Chapter recording scripts exist (`optimisation_demo_presenter{,_ch2,_ch3}.md`) and the
@@ -161,8 +184,9 @@ checklist to be added to the appendix; competitors marked "not evaluated".
 
 ## Tests
 `uv run --with pytest --with scipy --with numpy --with pandas --with scikit-learn pytest
-tests/optimisation_demo/ -q` → **63 passing** (adds coerce 10, governance strict-builder
-7, solver status/gap + two-solve 4). Frontend `npm run build` clean.
+tests/optimisation_demo/ -q` → **84 passing** (adds coerce 10, governance strict-builder 7,
+solver status/gap + two-solve 4, decision-review 16, scale 6, plus the existing 41). Frontend
+`npm run build` clean throughout.
 
 ## Remaining external blockers (named acceptance steps, not "verified")
 1. **Live non-approver denial** — needs a second workspace identity without the EXECUTE

@@ -94,10 +94,34 @@ def _run_distributed():
             {"expected_margin": float(r["sum(margin)"]), "expected_sales": float(r["sum(sales)"])}
             for r in agg}
 
+# Cold = full distributed scoring; then persist the scored coefficients to a hash-keyed
+# cache. Warm = a COMPATIBLE re-solve (e.g. a different objective/threshold, which does not
+# change the coefficients) reads the cache and skips scoring entirely. (`.cache()` is a
+# PERSIST that serverless rejects, so the reuse is demonstrated via the coefficient cache,
+# which is also what the brief asks for.)
+grid_h = scale.hash_grid(factors)
+world_h = scale.hash_world(1.0, 1.0)
+input_h = hashlib.sha256(f"{man['future_delta_version']}|{n_opps}".encode()).hexdigest()
+cache_key = scale.coeff_cache_key(input_hash=input_h, model_hash=man["artifact_hash"],
+                                  feature_hash=scale._h(list(FEATURES)), grid_hash=grid_h, world_hash=world_h)
+spark.sql(f"""CREATE TABLE IF NOT EXISTS {fqn}.optimisation_demo_scale_coeff_cache (
+  cache_key STRING, segment STRING, factor DOUBLE, expected_margin DOUBLE, expected_sales DOUBLE)""")
+spark.sql(f"DELETE FROM {fqn}.optimisation_demo_scale_coeff_cache WHERE cache_key = '{cache_key}'")
+
 t0 = time.monotonic(); dist_cold = _run_distributed(); dist_cold_s = time.monotonic() - t0
-# Warm: cache the population partitions so re-scoring skips the shuffle/read.
-sdf.cache().count()
-t0 = time.monotonic(); dist_warm = _run_distributed(); dist_warm_s = time.monotonic() - t0
+from pyspark.sql import Row as _Row
+spark.createDataFrame([_Row(cache_key=cache_key, segment=s, factor=float(f),
+                            expected_margin=v["expected_margin"], expected_sales=v["expected_sales"])
+                       for (s, f), v in dist_cold.items()]) \
+     .write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_scale_coeff_cache")
+
+t0 = time.monotonic()
+cached = spark.sql(f"SELECT segment, factor, expected_margin, expected_sales FROM "
+                   f"{fqn}.optimisation_demo_scale_coeff_cache WHERE cache_key = '{cache_key}'").collect()
+dist_warm = {(r["segment"], round(float(r["factor"]), 6)):
+             {"expected_margin": float(r["expected_margin"]), "expected_sales": float(r["expected_sales"])}
+             for r in cached}
+dist_warm_s = time.monotonic() - t0
 
 # COMMAND ----------
 # 3. Verify agreement BEFORE reporting timings. Normalise serial keys to rounded factors.
