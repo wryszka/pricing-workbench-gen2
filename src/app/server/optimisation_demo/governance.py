@@ -3,12 +3,20 @@
 Before a plan is approved it is independently recomputed from the stored candidate
 scores — never trusting a UI value or a stored boolean. This module has no DB/UI
 imports; the job and route call it and enforce the result.
+
+Canonical serialization (:func:`content_hash`) is the trust boundary for the plan
+hash: the run job computes it over the solver's selection and stores it on the run
+row; the approval procedure compares a caller-supplied hash to that stored value and
+rejects a mismatch, so a direct caller cannot approve a plan the validated job never
+produced.
 """
 from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
+
+from server.optimisation_demo import coerce
 
 
 def content_hash(obj: Any) -> str:
@@ -59,3 +67,67 @@ def recompute_and_validate(
 
     return {"ok": len(failures) == 0, "failures": failures,
             "totals": {"total_sales": round(total_sales, 6), "total_margin": round(total_margin, 2)}}
+
+
+def build_and_validate_from_rows(
+    score_rows: Iterable[dict[str, Any]],
+    expected_segments: list[str],
+    min_portfolio_sales: Optional[float] = None,
+) -> dict[str, Any]:
+    """Strict boundary: build the coefficient table + selection from RAW stored score
+    rows and validate against the segments the run was *supposed* to cover.
+
+    Rejects, before any dictionary is constructed (which would silently overwrite a
+    collision):
+
+    * duplicate candidate keys — the same (segment, factor) scored twice;
+    * duplicate selections — more than one selected candidate for a segment;
+    * a `selected` value that isn't a real boolean (no string-truthiness);
+    * a selection whose segment set doesn't equal ``expected_segments`` (established
+      from the input/model manifest, NOT inferred from the rows being checked).
+
+    On any structural failure it returns ``ok=False`` with reasons and no totals — an
+    empty ``expected_segments`` is itself a failure (nothing to approve).
+    """
+    failures: list[str] = []
+    expected = set(expected_segments)
+    if not expected:
+        return {"ok": False, "failures": ["no expected segments from manifest"], "totals": None,
+                "selection": {}, "plan_hash": None}
+
+    coeffs: dict[tuple[str, float], dict[str, float]] = {}
+    selection: dict[str, float] = {}
+    seen_keys: set[tuple[str, float]] = set()
+    selected_count: dict[str, int] = {}
+
+    for i, row in enumerate(score_rows):
+        try:
+            seg = coerce.as_str(coerce.require(row, "segment"), field=f"row{i}.segment")
+            factor = round(coerce.as_float(coerce.require(row, "factor"), field=f"row{i}.factor"), 4)
+            key = (seg, factor)
+            if key in seen_keys:
+                failures.append(f"duplicate candidate key {key}")
+                continue
+            seen_keys.add(key)
+            coeffs[key] = {
+                "expected_sales": coerce.as_float(coerce.require(row, "expected_sales"), field=f"row{i}.expected_sales"),
+                "expected_margin": coerce.as_float(coerce.require(row, "expected_margin"), field=f"row{i}.expected_margin"),
+            }
+            if coerce.as_bool(coerce.require(row, "selected"), field=f"row{i}.selected"):
+                selected_count[seg] = selected_count.get(seg, 0) + 1
+                selection[seg] = factor
+        except coerce.CoercionError as e:
+            failures.append(str(e))
+
+    dupes = sorted(s for s, n in selected_count.items() if n > 1)
+    if dupes:
+        failures.append(f"duplicate selections for segment(s) {dupes}")
+
+    if failures:
+        return {"ok": False, "failures": failures, "totals": None,
+                "selection": {}, "plan_hash": None}
+
+    check = recompute_and_validate(list(expected), selection, coeffs, min_portfolio_sales)
+    check["selection"] = selection
+    check["plan_hash"] = plan_hash(selection) if check["ok"] else None
+    return check

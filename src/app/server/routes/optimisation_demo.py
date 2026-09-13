@@ -24,8 +24,9 @@ from server.config import (get_catalog, get_schema, get_workspace_client,
                            resolve_job_by_name, fqn, get_current_user,
                            get_workspace_host, get_warehouse_id)
 from server.sql import execute_query
+from server.optimisation_demo import coerce
+from server.optimisation_demo import governance as govern
 from server.optimisation_demo.core import load_example, optimise, validate_requirement
-from server.optimisation_demo.governance import recompute_and_validate, plan_hash
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/optimisation-demo", tags=["optimisation-demo"])
@@ -277,109 +278,115 @@ class Ch2ApproveRequest(BaseModel):
 
 @router.post("/ch2/approve")
 async def ch2_approve(req: Ch2ApproveRequest, request: Request):
-    """Approve + release a Chapter 2 plan. The plan is independently recomputed from
-    the stored scores (never a stored flag), then the governed UC procedure is CALLed
-    **as the logged-in user** (OBO) — Unity Catalog enforces the approver-only EXECUTE
-    grant, so a non-approver is denied by the platform, not by the app."""
+    """Approve + release a Chapter 2 plan — **OBO-only, fail-closed** (WP2).
+
+    The governed UC procedure is CALLed **as the logged-in user** over on-behalf-of
+    auth; Unity Catalog enforces the approver-only EXECUTE grant and the procedure
+    records `session_user()` as the approver. There is NO service-principal fallback:
+    a missing/invalid OBO token, a missing scope, a non-JSON edge rejection, a
+    permission denial or any unexpected response leaves the plan UN-approved and
+    surfaces an actionable message — none of these ever becomes an approval.
+
+    Before the CALL the plan is independently rebuilt + revalidated from the RAW stored
+    scores against the segments the run was meant to cover (from the frozen portfolio
+    manifest, not the candidate rows), and the app-recomputed hash must equal the
+    trusted hash the validated job wrote. The procedure re-checks the hash server-side,
+    so the app-side check is defence-in-depth, not the gate."""
     user_token = request.headers.get("x-forwarded-access-token")
     if not user_token:
-        raise HTTPException(403, "Per-user authorization (OBO) is required to approve. "
-                                 "Enable app user-authorization and sign in as an approver.")
+        raise HTTPException(403, "Per-user authorization (OBO) is required to approve, and no "
+                                 "on-behalf-of token was present. Open the app in a fresh session "
+                                 "and accept the authorization prompt (the `sql` scope), then sign "
+                                 "in as an approver. Approval is intentionally unavailable without it.")
     if not _APP_RUN_ID.match(req.app_run_id):
         raise HTTPException(400, "invalid application run id")
 
-    run = await _safe_q(f"SELECT status, min_portfolio_sales_ratio, baseline_sales "
-                        f"FROM {fqn('optimisation_demo_ch2_runs')} WHERE run_id = :rid", {"rid": req.app_run_id})
-    if not run:
+    run_rows = await _safe_q(
+        f"SELECT status, model_eligible, plan_hash, min_portfolio_sales_ratio, baseline_sales "
+        f"FROM {fqn('optimisation_demo_ch2_runs')} WHERE run_id = :rid", {"rid": req.app_run_id})
+    if not run_rows:
         raise HTTPException(404, "run not found")
-    run = run[0]
-    if run["status"] != "complete":
-        raise HTTPException(400, f"run not approvable (status {run['status']})")
+    run = run_rows[0]
+    if coerce.as_str(run.get("status"), field="status") != "complete":
+        raise HTTPException(400, f"run not approvable (status {run.get('status')})")
+    if not coerce.opt_bool(run.get("model_eligible"), field="model_eligible"):
+        raise HTTPException(400, "run model is not eligible (failed validation, or legacy/unverified) — cannot approve")
+    stored_hash = run.get("plan_hash")
+    if not stored_hash:
+        raise HTTPException(400, "run has no trusted plan hash (legacy/unverified) — re-run under the governed job")
 
-    scores = await _safe_q(f"SELECT segment, factor, expected_sales, expected_margin, selected "
-                           f"FROM {fqn('optimisation_demo_ch2_candidate_scores')} WHERE run_id = :rid",
-                           {"rid": req.app_run_id}) or []
-    segments = sorted({s["segment"] for s in scores})
-    coeffs = {(s["segment"], round(float(s["factor"]), 4)):
-              {"expected_sales": float(s["expected_sales"]), "expected_margin": float(s["expected_margin"])}
-              for s in scores}
-    # NB: the SQL statement API returns booleans as the strings "true"/"false".
-    selection = {s["segment"]: round(float(s["factor"]), 4)
-                 for s in scores if str(s["selected"]).lower() == "true"}
-    ratio = run.get("min_portfolio_sales_ratio")
-    floor = None if ratio is None else float(ratio) * float(run["baseline_sales"])
+    # Expected segments come from the frozen portfolio manifest, NOT the rows we check.
+    manifest_segs = await _safe_q(
+        f"SELECT segment FROM {fqn('optimisation_demo_ch2_portfolio_summary')} ORDER BY segment")
+    expected_segments = [coerce.as_str(r["segment"], field="segment") for r in (manifest_segs or [])]
+    if not expected_segments:
+        raise HTTPException(409, "portfolio manifest not available — cannot establish expected segments")
 
-    # Deterministic recompute before we ask UC to record anything.
-    check = recompute_and_validate(segments, selection, coeffs, floor)
+    scores = await _safe_q(
+        f"SELECT segment, factor, expected_sales, expected_margin, selected "
+        f"FROM {fqn('optimisation_demo_ch2_candidate_scores')} WHERE run_id = :rid",
+        {"rid": req.app_run_id}) or []
+    ratio = coerce.opt_float(run.get("min_portfolio_sales_ratio"), field="min_portfolio_sales_ratio")
+    baseline_sales = coerce.as_float(run.get("baseline_sales"), field="baseline_sales")
+    floor = None if ratio is None else ratio * baseline_sales
+
+    # Strict rebuild: rejects duplicate keys / duplicate selections / bad booleans /
+    # segment-coverage mismatch BEFORE hashing.
+    check = govern.build_and_validate_from_rows(scores, expected_segments, floor)
     if not check["ok"]:
         raise HTTPException(400, "plan failed recompute: " + "; ".join(check["failures"]))
-    ph = plan_hash(selection)
-    approver = get_current_user() or "unknown"
+    if check["plan_hash"] != stored_hash:
+        logger.warning("ch2 approve: recomputed hash != stored trusted hash (run %s)", req.app_run_id)
+        raise HTTPException(409, "recomputed plan hash does not match the validated run — refusing to approve")
 
     def _esc(v: str) -> str:
         return str(v).replace("'", "''")
 
-    enforced = None
-    obo_note = "no OBO token on request"
-    # 1. Preferred: CALL the governed procedure AS THE USER (OBO). UC enforces the
-    #    approver-only EXECUTE grant. A genuine UC EXECUTE denial (JSON) blocks here and
-    #    does NOT fall through. An edge auth rejection (non-JSON) means OBO-for-SQL isn't
-    #    usable in this app setup → fall back to the attributed app-SP record.
-    if user_token:
-        try:
-            import time as _t
-            import requests
-            stmt = (f"CALL {fqn('optimisation_demo_ch2_approve')}("
-                    f"'{req.app_run_id}', '{ph}', '{_esc(approver)}', '{_esc(req.note or 'approved via OBO')}')")
-            host = get_workspace_host().rstrip("/")
-            headers = {"Authorization": f"Bearer {user_token}", "Content-Type": "application/json"}
-            r = requests.post(f"{host}/api/2.0/sql/statements", headers=headers, timeout=45,
-                              json={"warehouse_id": get_warehouse_id(), "statement": stmt, "wait_timeout": "30s"})
-            try:
-                body = r.json()
-            except Exception:
-                obo_note = f"OBO token rejected at edge (HTTP {r.status_code})"
-                logger.warning("ch2 approve OBO unavailable: non-JSON %s: %s", r.status_code, r.text[:150])
-                body = None
-            if body is not None:
-                state = (body.get("status") or {}).get("state")
-                sid = body.get("statement_id")
-                deadline = _t.monotonic() + 40
-                while state in ("PENDING", "RUNNING") and sid:
-                    if _t.monotonic() > deadline:
-                        raise HTTPException(504, "approval timed out")
-                    _t.sleep(1)
-                    body = requests.get(f"{host}/api/2.0/sql/statements/{sid}", headers=headers, timeout=20).json()
-                    state = (body.get("status") or {}).get("state")
-                if state == "SUCCEEDED":
-                    enforced = "obo_user"
-                else:
-                    msg = ((body.get("status") or {}).get("error") or {}).get("message") or str(state)
-                    up = msg.upper()
-                    if "PERMISSION" in up or "DENIED" in up or "EXECUTE" in up:
-                        raise HTTPException(403, f"Approval denied by Unity Catalog — you are not an approver. {msg[:160]}")
-                    obo_note = f"OBO call failed: {msg[:120]}"
-                    logger.warning("ch2 approve OBO call failed: %s", msg[:200])
-        except HTTPException:
-            raise
-        except Exception as e:
-            obo_note = f"OBO error: {str(e)[:120]}"
-            logger.warning("ch2 approve OBO error: %s", str(e)[:200])
+    # OBO CALL — approver identity is session_user() inside the procedure; we pass only
+    # the run id, the (server-re-verified) hash and an optional note. Any failure is
+    # fail-closed.
+    import time as _t
+    import requests
+    stmt = (f"CALL {fqn('optimisation_demo_ch2_approve')}("
+            f"'{req.app_run_id}', '{stored_hash}', '{_esc(req.note or 'approved via OBO')}')")
+    host = get_workspace_host().rstrip("/")
+    headers = {"Authorization": f"Bearer {user_token}", "Content-Type": "application/json"}
+    try:
+        r = requests.post(f"{host}/api/2.0/sql/statements", headers=headers, timeout=45,
+                          json={"warehouse_id": get_warehouse_id(), "statement": stmt, "wait_timeout": "30s"})
+    except Exception as e:
+        logger.warning("ch2 approve OBO transport error: %s", str(e)[:200])
+        raise HTTPException(502, f"Approval could not reach Unity Catalog over OBO: {str(e)[:160]}")
 
-    # 2. Fallback: OBO-for-SQL unavailable here — record the attributed approval via the
-    #    app service principal (which holds EXECUTE). The authenticated approver is stored;
-    #    this is an access-controlled, attributed record, not per-user platform enforcement.
-    if enforced is None:
-        try:
-            note = _esc(f"{req.note or 'approved in app'} · app-SP record ({obo_note})")
-            await execute_query(f"CALL {fqn('optimisation_demo_ch2_approve')}("
-                                f"'{req.app_run_id}', '{ph}', '{_esc(approver)}', '{note}')")
-            enforced = "app_sp_recorded"
-        except Exception as e:
-            logger.warning("ch2 approve app-SP fallback failed: %s", str(e)[:200])
-            raise HTTPException(502, f"approval failed (OBO + fallback): {str(e)[:180]}")
+    try:
+        body = r.json()
+    except Exception:
+        logger.warning("ch2 approve OBO non-JSON %s: %s", r.status_code, r.text[:150])
+        raise HTTPException(403, f"On-behalf-of SQL was rejected (HTTP {r.status_code}: likely a missing "
+                                 f"`sql` scope on your token). Re-authorize the app in a fresh session and "
+                                 f"retry. Approval was NOT recorded.")
 
-    return {"ok": True, "approved_by": approver, "enforced": enforced, "recompute": check["totals"]}
+    state = (body.get("status") or {}).get("state")
+    sid = body.get("statement_id")
+    deadline = _t.monotonic() + 40
+    while state in ("PENDING", "RUNNING") and sid:
+        if _t.monotonic() > deadline:
+            raise HTTPException(504, "approval timed out — not recorded")
+        _t.sleep(1)
+        body = requests.get(f"{host}/api/2.0/sql/statements/{sid}", headers=headers, timeout=20).json()
+        state = (body.get("status") or {}).get("state")
+
+    if state != "SUCCEEDED":
+        msg = ((body.get("status") or {}).get("error") or {}).get("message") or str(state)
+        up = msg.upper()
+        if r.status_code in (401, 403) or "PERMISSION" in up or "DENIED" in up or "EXECUTE" in up:
+            raise HTTPException(403, f"Approval denied by Unity Catalog — you are not an approver. {msg[:160]}")
+        logger.warning("ch2 approve CALL failed (state=%s): %s", state, msg[:200])
+        raise HTTPException(400, f"approval blocked: {msg[:200]}")
+
+    # session_user() inside the procedure is the true approver; report it for the UI.
+    approver = get_current_user() or "the signed-in user"
+    return {"ok": True, "approved_by": approver, "enforced": "obo_user", "recompute": check["totals"]}
 
 
 @router.get("/ch2/release")

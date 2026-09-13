@@ -42,32 +42,58 @@ for t in ("optimisation_demo_ch2_approvals", "optimisation_demo_ch2_releases"):
 # needs only EXECUTE (the gate); the append-only writes run with the owner's rights.
 # The active release is resolved as the most recent row — rollback is a new release
 # event pointing at an earlier run, never an in-place update.
+# Security-definer procedure hardened per WP2:
+#  * NO caller-supplied approver — the approver is `session_user()`, which Databricks
+#    returns as the CALLing (session) user even inside a DEFINER routine (verified;
+#    docs recommend session_user() over current_user() for caller identity). Under OBO
+#    that is the logged-in approver; the EXECUTE grant gates who may call at all.
+#  * The caller's plan hash is NOT trusted as content: it must equal the hash the
+#    validated run job wrote to the governed runs row (`plan_hash`). A direct caller
+#    passing a bogus plan/hash is rejected — integrity is enforced at this privileged
+#    boundary, not only in the app.
+#  * The run must be genuinely complete AND model-eligible per the governed row
+#    (neither flag is caller-supplied). Missing trusted hash => legacy/unverified =>
+#    not approvable.
+#  * Approval + release are appended together; nothing is updated in place.
 spark.sql(f"""
 CREATE OR REPLACE PROCEDURE {fqn}.optimisation_demo_ch2_approve(
-    p_run_id STRING, p_plan_hash STRING, p_approver STRING, p_note STRING)
+    p_run_id STRING, p_plan_hash STRING, p_note STRING)
 LANGUAGE SQL
 SQL SECURITY DEFINER
-COMMENT 'Approve + release a Chapter 2 plan. Approval gate = EXECUTE grant on this procedure (approver-only), called via OBO as the user. Appends approval + release events.'
+COMMENT 'Approve + release a Chapter 2 plan. Gate = approver-only EXECUTE grant (called via OBO). Approver = session_user(); the caller plan hash must equal the run job trusted plan_hash; run must be complete + model_eligible. Appends approval + release events.'
 AS BEGIN
   DECLARE v_status STRING;
+  DECLARE v_eligible BOOLEAN;
+  DECLARE v_stored_hash STRING;
   DECLARE v_prev STRING;
   DECLARE v_rel STRING;
   DECLARE v_who STRING;
   DECLARE v_raise STRING;
-  SET v_who = COALESCE(NULLIF(p_approver, ''), current_user());
+  SET v_who = session_user();
   SET v_status = (SELECT status FROM {fqn}.optimisation_demo_ch2_runs WHERE run_id = p_run_id);
+  SET v_eligible = (SELECT model_eligible FROM {fqn}.optimisation_demo_ch2_runs WHERE run_id = p_run_id);
+  SET v_stored_hash = (SELECT plan_hash FROM {fqn}.optimisation_demo_ch2_runs WHERE run_id = p_run_id);
   IF v_status IS NULL THEN
     SET v_raise = RAISE_ERROR('approve blocked: run not found ' || p_run_id);
   END IF;
   IF v_status <> 'complete' THEN
     SET v_raise = RAISE_ERROR('approve blocked: run status is ' || v_status || ', not complete');
   END IF;
+  IF v_eligible IS NULL OR v_eligible = false THEN
+    SET v_raise = RAISE_ERROR('approve blocked: run model is not eligible (failed validation or legacy/unverified)');
+  END IF;
+  IF v_stored_hash IS NULL THEN
+    SET v_raise = RAISE_ERROR('approve blocked: run has no trusted plan hash (legacy/unverified — re-run under the governed job)');
+  END IF;
+  IF p_plan_hash IS NULL OR p_plan_hash <> v_stored_hash THEN
+    SET v_raise = RAISE_ERROR('approve blocked: plan hash does not match the validated run plan');
+  END IF;
   SET v_prev = (SELECT release_id FROM {fqn}.optimisation_demo_ch2_releases ORDER BY released_at DESC LIMIT 1);
   SET v_rel = uuid();
   INSERT INTO {fqn}.optimisation_demo_ch2_releases
-    SELECT v_rel, p_run_id, p_plan_hash, v_who, v_prev, current_timestamp();
+    SELECT v_rel, p_run_id, v_stored_hash, v_who, v_prev, current_timestamp();
   INSERT INTO {fqn}.optimisation_demo_ch2_approvals
-    SELECT uuid(), p_run_id, p_plan_hash, v_who, p_note, current_timestamp();
+    SELECT uuid(), p_run_id, v_stored_hash, v_who, p_note, current_timestamp();
 END
 """)
 print("procedure optimisation_demo_ch2_approve created")

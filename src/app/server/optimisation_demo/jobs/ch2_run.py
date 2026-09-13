@@ -31,6 +31,7 @@ from server.optimisation_demo.demand import predict_at  # noqa: E402
 from server.optimisation_demo.economics import coefficients_from_future  # noqa: E402
 from server.optimisation_demo.portfolio import solve_portfolio  # noqa: E402
 from server.optimisation_demo.schemas import DEFAULT_FACTORS, normalise_policy  # noqa: E402
+from server.optimisation_demo.governance import plan_hash, recompute_and_validate  # noqa: E402
 import joblib  # noqa: E402
 
 # COMMAND ----------
@@ -65,6 +66,24 @@ res = solve_portfolio(segs, cands, coeffs, baseline_key, min_portfolio_sales=flo
 
 status = "complete" if res["feasible"] else "infeasible"
 
+# WP1#4 — independently recompute full-precision feasibility from the extracted
+# selection (never trust the solver's own feasibility flag alone). A plan the
+# recompute cannot confirm feasible is NOT marked complete/approvable.
+selection = res.get("selection", {})
+frozen_plan_hash = None
+model_eligible = bool(man["passes"])
+if res["feasible"]:
+    verify = recompute_and_validate(segs, {s: float(f) for s, f in selection.items()},
+                                    coeffs, floor)
+    if not verify["ok"]:
+        status = "recompute_failed"
+        print("WP1#4 independent recompute rejected the solver plan:", verify["failures"])
+    else:
+        # Canonical trusted hash of the validated selection — the approval procedure
+        # compares the caller-supplied hash to THIS value, so a direct caller cannot
+        # approve a plan the validated job never produced.
+        frozen_plan_hash = plan_hash({s: float(f) for s, f in selection.items()})
+
 # COMMAND ----------
 # Persist candidate scores + selected plan + run record, keyed by app_run_id (idempotent).
 from pyspark.sql import Row
@@ -72,11 +91,17 @@ for t, cols in [
     ("optimisation_demo_ch2_candidate_scores",
      "run_id STRING, segment STRING, factor DOUBLE, expected_sales DOUBLE, expected_premium DOUBLE, expected_claims DOUBLE, expected_margin DOUBLE, selected BOOLEAN"),
     ("optimisation_demo_ch2_runs",
-     "run_id STRING, model_version STRING, objective STRING, min_portfolio_sales_ratio DOUBLE, status STRING, baseline_sales DOUBLE, baseline_margin DOUBLE, total_sales DOUBLE, total_margin DOUBLE, future_delta_version LONG, job_run_id STRING, created_at TIMESTAMP")]:
+     "run_id STRING, model_version STRING, objective STRING, min_portfolio_sales_ratio DOUBLE, status STRING, baseline_sales DOUBLE, baseline_margin DOUBLE, total_sales DOUBLE, total_margin DOUBLE, future_delta_version LONG, job_run_id STRING, plan_hash STRING, model_eligible BOOLEAN, n_segments INT, created_at TIMESTAMP")]:
     spark.sql(f"CREATE TABLE IF NOT EXISTS {fqn}.{t} ({cols})")
     spark.sql(f"DELETE FROM {fqn}.{t} WHERE run_id = '{app_run_id}'")
 
-selection = res.get("selection", {})
+# Migration for a runs table created before the trusted-provenance columns existed.
+for col_def in ("plan_hash STRING", "model_eligible BOOLEAN", "n_segments INT"):
+    try:
+        spark.sql(f"ALTER TABLE {fqn}.optimisation_demo_ch2_runs ADD COLUMNS ({col_def})")
+    except Exception:
+        pass  # already present
+
 score_rows = []
 for (s, f), c in coeffs.items():
     score_rows.append(Row(run_id=app_run_id, segment=s, factor=float(f),
@@ -94,14 +119,21 @@ except Exception:
 tot_sales = float(res["total_expected_sales"]) if res["feasible"] else None
 tot_margin = float(res["total_expected_margin"]) if res["feasible"] else None
 runs_schema = spark.table(f"{fqn}.optimisation_demo_ch2_runs").schema
-run_tuple = (app_run_id, model_version, policy["objective"],
-             (None if ratio is None else float(ratio)), status,
-             float(baseline_sales), float(baseline_margin), tot_sales, tot_margin,
-             int(man["future_delta_version"]), job_run_id, datetime.now(timezone.utc))
+# Column order is resolved by name against the live schema (robust to ALTER order).
+row_by_name = {
+    "run_id": app_run_id, "model_version": model_version, "objective": policy["objective"],
+    "min_portfolio_sales_ratio": (None if ratio is None else float(ratio)), "status": status,
+    "baseline_sales": float(baseline_sales), "baseline_margin": float(baseline_margin),
+    "total_sales": tot_sales, "total_margin": tot_margin,
+    "future_delta_version": int(man["future_delta_version"]), "job_run_id": job_run_id,
+    "plan_hash": frozen_plan_hash, "model_eligible": model_eligible,
+    "n_segments": int(len(segs)), "created_at": datetime.now(timezone.utc)}
+run_tuple = tuple(row_by_name[f.name] for f in runs_schema.fields)
 spark.createDataFrame([run_tuple], schema=runs_schema).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_ch2_runs")
 
 dbutils.notebook.exit(json.dumps({
     "app_run_id": app_run_id, "status": status, "selection": selection,
+    "plan_hash": frozen_plan_hash, "model_eligible": model_eligible, "n_segments": len(segs),
     "baseline_sales": round(baseline_sales, 1), "baseline_margin": round(baseline_margin, 0),
     "total_sales": (round(res["total_expected_sales"], 1) if res["feasible"] else None),
     "total_margin": (round(res["total_expected_margin"], 0) if res["feasible"] else None)}))

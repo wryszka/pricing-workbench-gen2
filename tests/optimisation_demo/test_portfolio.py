@@ -89,3 +89,54 @@ def test_tie_breaks_toward_baseline(coeffs):
     r = solve_portfolio(SEGS, CANDS, coeffs, BASELINE, min_portfolio_sales=None)
     assert r["selection"]["Price-sensitive"] == 1000.0   # nearer baseline than 1050
     assert r["selection"]["Middle"] == 1050.0            # nearer baseline than 1100
+
+
+# --- WP1#4/#5: honest solver evidence + two-solve movement (no objective distortion) --- #
+
+def _coeffs(spec):
+    """spec: {(seg, price): (margin, sales)} -> coeffs dict."""
+    return {k: {"expected_margin": m, "expected_sales": s} for k, (m, s) in spec.items()}
+
+
+def test_status_and_gap_are_real_not_faked(coeffs):
+    r = solve_portfolio(SEGS, CANDS, coeffs, BASELINE)
+    assert r["feasible"] and r["status"] == "optimal"
+    # gap is the ACTUAL solver gap (a number), and ~0 for a proven optimum — but it is
+    # read from HiGHS, never hard-set. (Field present + finite + tiny.)
+    assert r["gap"] is not None and abs(r["gap"]) < 1e-3
+
+
+def test_primary_optimum_retained_where_old_penalty_would_distort():
+    # Two segments; baseline 1000. For segment A the higher-margin plan (1100) is only
+    # £0.05 better than the baseline-price plan — SMALLER than the old 1e-3*deviation
+    # penalty (1e-3*100 = £0.10), so the old penalty would have wrongly picked 1000.
+    segs = ["A", "B"]
+    cands = {"A": [1000.0, 1100.0], "B": [1000.0]}
+    baseline = {"A": 1000.0, "B": 1000.0}
+    coeffs = _coeffs({
+        ("A", 1000.0): (100.00, 700.0),
+        ("A", 1100.0): (100.05, 650.0),   # true margin optimum, far from baseline
+        ("B", 1000.0): (50.0, 700.0),
+    })
+    r = solve_portfolio(segs, cands, coeffs, baseline)   # movement_tolerance defaults to 0
+    assert r["selection"]["A"] == 1100.0, "must keep the true margin optimum, not the penalty-biased plan"
+    assert r["margin_sacrificed_for_movement"] == 0.0
+    assert r["status"] == "optimal"
+
+
+def test_movement_solve_breaks_genuine_ties_toward_baseline():
+    # Exact margin tie between 1000 (at baseline) and 1100 (far): movement solve prefers 1000.
+    segs = ["A"]
+    cands = {"A": [1000.0, 1100.0]}
+    baseline = {"A": 1000.0}
+    coeffs = _coeffs({("A", 1000.0): (100.0, 700.0), ("A", 1100.0): (100.0, 650.0)})
+    r = solve_portfolio(segs, cands, coeffs, baseline)
+    assert r["selection"]["A"] == 1000.0
+    assert r["movement_solve_used"] is True
+    assert r["margin_sacrificed_for_movement"] == 0.0
+
+
+def test_infeasible_floor_returns_infeasible_status(coeffs):
+    r = solve_portfolio(SEGS, CANDS, coeffs, BASELINE, min_portfolio_sales=10_000)
+    assert r["feasible"] is False and r["status"] == "infeasible"
+    assert "gap" not in r or r.get("gap") is None
