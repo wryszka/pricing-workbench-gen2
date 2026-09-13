@@ -66,12 +66,27 @@ the validated job never produced.
 
 ---
 
-## WP3 — Chapter 3 real continuation · **NOT DELIVERED this stage**
-Design agreed (parent-release inheritance, offline challenger validation, immutable
-world manifest, four-plan comparison, worst-world vs nominal-sacrifice computed from
-one matrix). Not yet implemented. Next: extend the release schema with a parent
-release pointer and world manifest; add `ch3_prepare` (offline challenger validation)
-distinct from the live solve.
+## WP3 — Chapter 3 real continuation · **PARTIAL**
+
+**Built + deployed + verified:**
+- **WP3#2 — model eligibility** now requires the **full frozen validation battery on the
+  out-of-time final-test split** (calibration error, mean-prediction error, minimum
+  observations AND monotonicity) — no longer monotonicity alone. Per-model evidence is
+  persisted to `optimisation_demo_ch3_model_validation`; the world set uses only eligible
+  models and records both the **candidate** and **eligible** counts (never padded).
+- **WP3#6 (already honest, tested)** — worst-world benefit and nominal-world sacrifice are
+  computed as two distinct quantities from one matrix (`decision_review.robust_vs_nominal_tradeoff`);
+  the Ch3 UI never labels the gap between two worst-world numbers the "cost of insurance".
+
+**Remaining (NOT delivered — confirmed against the code):**
+- **WP3#1** — the live Ch3 job still calls `make_historic()`/`train_*`/`make_future()`
+  inline; it must instead **require an approved Chapter 2 parent release** and inherit its
+  exact population + primary model + feature contract + policy (challengers prepared in a
+  separate offline `ch3_prepare` job). This is a semantically-significant rework (Ch2 and
+  Ch3 currently generate different populations) and was not shipped rather than ship it wrong.
+- **WP3#4** — add the exact Chapter-2 released plan as a fourth plan evaluated across worlds
+  (shown honestly, even where it breaches a stressed floor). Blocked on WP3#1 (shared population).
+- **WP3#3/#7** — immutable world manifest + Ch3 approval/release extension.
 
 ## WP4 — Decision Review assistant · **PARTIAL — deterministic core + evidence + endpoint delivered**
 

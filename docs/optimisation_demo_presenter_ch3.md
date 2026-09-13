@@ -51,6 +51,44 @@ If all green, record.
 
 ---
 
+## Decision Review sequence (new — ~60–90s, film after the plan comparison)
+
+The distinctive beat: a challenge from **outside** the optimiser. All figures are read live;
+the assistant is read-only (it cannot choose prices, change policy, run a scenario or approve).
+
+**A · Silent test-run (before recording)**
+1. After a six-world result renders, open **Decision Review → Challenge this plan**.
+2. Confirm ≤3 cards appear; the top card is the **claims-stress coverage gap** (a finance
+   planning assumption of **+8%** sits outside the tested claims stresses, max **+5%**).
+3. Confirm the card shows the drafted stress `{"cost_scale": 1.08}`, an inference label, and
+   an "Evidence & limits" disclosure with the evidence IDs and what it cannot establish.
+4. Click **Investigate** on that card; confirm it records (attributed to you).
+5. Click **Prepare committee brief**; confirm the brief shows the trade-off, "no human
+   decision recorded / not approved", the unresolved count, and the disclaimer.
+
+**B · Talk track (click + say)**
+- **CLICK:** Decision Review → Challenge this plan.
+  **SAY:** "This assistant doesn't price anything — it helps me challenge the decision with
+  evidence, including evidence from outside the model. It's read-only."
+- **CLICK:** the top card (the +8% coverage gap); point at the evidence IDs.
+  **SAY:** "It's found something the optimiser couldn't: Finance plans claims inflation at
+  eight percent this year, but the scenarios we stress-tested only went to five. So this plan
+  has never been evaluated under Finance's own assumption. It even drafts that scenario for me
+  — but it's careful to say a planning assumption is not proof claims will actually inflate."
+- **CLICK:** Investigate (records the disposition); then, if filming the loop, add the +8%
+  world and re-run via the normal control, showing the actual outcome (may be no change or
+  infeasible — never tuned to 'win').
+  **SAY:** "I decide what to do. I'll investigate it — that's recorded against this decision."
+- **CLICK:** Prepare committee brief.
+  **SAY:** "And here's the brief for the committee — the trade-off, which challenges are still
+  open, who owns it, and the honest approval state. Every number is computed, not narrated, and
+  it never calls a feasible plan 'approved' or 'safe'."
+
+> **Honest labelling for the recording:** the panel shows "AI narration unavailable — deterministic
+> evidence review". The findings, ranking and cards are computed deterministically (no language
+> model in this build); say "evidence review", not "the AI said". The per-person approval *denial*
+> for a non-approver is shown as a **labelled simulation** (single demo account).
+
 ## What this demo proves / doesn't
 - **Proves:** you can evaluate a plan across multiple declared worlds and choose one that maximises the worst-case expected uplift while holding a sales floor in every world; the robust-vs-nominal trade-off is shown explicitly, including when it's small.
 - **Does not prove:** that the worlds are likely, that they're probability-weighted, or that "worst case" covers anything outside the included worlds. Synthetic throughout; expected outcomes, not realised.

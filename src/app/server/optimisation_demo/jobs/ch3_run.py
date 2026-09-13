@@ -25,20 +25,26 @@ src_base = dbutils.widgets.get("app_src_base").strip()
 if src_base and src_base not in sys.path:
     sys.path.insert(0, src_base)
 from server.optimisation_demo.data import make_historic, time_split, make_future  # noqa: E402
-from server.optimisation_demo.demand import train_logistic, train_monotone_gbt, predict_at, monotone_along_price  # noqa: E402
+from server.optimisation_demo.demand import train_logistic, train_monotone_gbt, predict_at, validate  # noqa: E402
 from server.optimisation_demo.economics import coefficients_from_future  # noqa: E402
 from server.optimisation_demo.robustness import solve_robust  # noqa: E402
 from server.optimisation_demo.schemas import DEFAULT_FACTORS  # noqa: E402
 from pyspark.sql import Row  # noqa: E402
 
 # COMMAND ----------
-# Validated demand model set — only models whose price path is monotone are eligible.
-train, _, _ = time_split(make_historic())
+# WP3#2 — a challenger model is eligible only if it passes the FULL frozen validation
+# battery on the OUT-OF-TIME final-test split (calibration error, mean-prediction error,
+# minimum observations AND monotonicity) — never monotonicity alone. Trained on the train
+# split; the validation split is reserved for selection (no tuning here); eligibility is
+# judged on the held-out final test. The per-model evidence is persisted, and the world
+# set uses only genuinely eligible models with an honest count (never padded).
+train, valid, final_test = time_split(make_historic())
 future = make_future()
 candidate_models = {"logistic": train_logistic(train), "gbt_monotone": train_monotone_gbt(train)}
-models = {name: m for name, m in candidate_models.items() if monotone_along_price(m, future)}
+model_validation = {name: validate(m, final_test, future) for name, m in candidate_models.items()}
+models = {name: m for name, m in candidate_models.items() if model_validation[name]["passes"]}
 if not models:
-    raise ValueError("no demand model passed the monotone price-path check")
+    raise ValueError("no demand model passed the frozen validation battery on the out-of-time final test")
 
 # Declared market/cost stress scenarios (Live preset): unchanged, benchmark -3%, claims +5%.
 scenarios = [(1.00, 1.00, "unchanged"), (0.97, 1.00, "market -3%"), (1.00, 1.05, "claims +5%")]
@@ -78,9 +84,24 @@ for t, cols in [
     ("optimisation_demo_ch3_worlds", "run_id STRING, world_id STRING, model STRING, market_scale DOUBLE, cost_scale DOUBLE, label STRING"),
     ("optimisation_demo_ch3_comparison", "run_id STRING, plan STRING, world_id STRING, uplift DOUBLE, margin DOUBLE, sales DOUBLE, meets_floor BOOLEAN"),
     ("optimisation_demo_ch3_selection", "run_id STRING, plan STRING, segment STRING, factor DOUBLE"),
-    ("optimisation_demo_ch3_runs", "run_id STRING, sales_ratio DOUBLE, n_models INT, n_worlds INT, robust_worst_uplift DOUBLE, nominal_worst_uplift DOUBLE, job_run_id STRING, created_at TIMESTAMP")]:
+    ("optimisation_demo_ch3_model_validation", "run_id STRING, model STRING, passes BOOLEAN, weighted_calibration_error DOUBLE, mean_pred_minus_conv DOUBLE, monotone_along_price BOOLEAN, final_test_obs INT, failures STRING"),
+    ("optimisation_demo_ch3_runs", "run_id STRING, sales_ratio DOUBLE, n_candidate_models INT, n_models INT, n_worlds INT, robust_worst_uplift DOUBLE, nominal_worst_uplift DOUBLE, job_run_id STRING, created_at TIMESTAMP")]:
     spark.sql(f"CREATE TABLE IF NOT EXISTS {fqn}.{t} ({cols})")
     spark.sql(f"DELETE FROM {fqn}.{t} WHERE run_id = '{app_run_id}'")
+try:
+    spark.sql(f"ALTER TABLE {fqn}.optimisation_demo_ch3_runs ADD COLUMNS (n_candidate_models INT)")
+except Exception:
+    pass
+
+# Per-model validation evidence — every candidate, eligible or not (honest count).
+mv_rows = [Row(run_id=app_run_id, model=name, passes=bool(v["passes"]),
+               weighted_calibration_error=float(v["metrics"]["weighted_calibration_error"]),
+               mean_pred_minus_conv=float(v["metrics"]["mean_pred_minus_conv"]),
+               monotone_along_price=bool(v["metrics"]["monotone_along_price"]),
+               final_test_obs=int(v["metrics"]["final_test_obs"]),
+               failures=json.dumps(v["failures"]))
+          for name, v in model_validation.items()]
+spark.createDataFrame(mv_rows).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_ch3_model_validation")
 
 spark.createDataFrame([Row(run_id=app_run_id, world_id=w, model=m, market_scale=mkt, cost_scale=cost, label=lab)
                        for (w, m, mkt, cost, lab) in world_meta]).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_ch3_worlds")
@@ -105,13 +126,23 @@ try:
     job_run_id = str(dbutils.notebook.entry_point.getDbutils().notebook().getContext().jobId().get())
 except Exception:
     job_run_id = ""
-spark.createDataFrame([Row(run_id=app_run_id, sales_ratio=float(sales_ratio), n_models=len(models), n_worlds=len(worlds),
-                           robust_worst_uplift=(float(robust["worst_uplift"]) if robust["feasible"] else None),
-                           nominal_worst_uplift=(float(plan_worst(plans["nominal"])) if "nominal" in plans else None),
-                           job_run_id=job_run_id, created_at=datetime.now(timezone.utc))]
-                      ).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_ch3_runs")
+runs_schema = spark.table(f"{fqn}.optimisation_demo_ch3_runs").schema
+run_by_name = {
+    "run_id": app_run_id, "sales_ratio": float(sales_ratio),
+    "n_candidate_models": int(len(candidate_models)), "n_models": int(len(models)),
+    "n_worlds": int(len(worlds)),
+    "robust_worst_uplift": (float(robust["worst_uplift"]) if robust["feasible"] else None),
+    "nominal_worst_uplift": (float(plan_worst(plans["nominal"])) if "nominal" in plans else None),
+    "job_run_id": job_run_id, "created_at": datetime.now(timezone.utc)}
+run_tuple = tuple(run_by_name[f.name] for f in runs_schema.fields)
+spark.createDataFrame([run_tuple], schema=runs_schema).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_ch3_runs")
 
 dbutils.notebook.exit(json.dumps({
-    "app_run_id": app_run_id, "n_models": len(models), "n_worlds": len(worlds),
+    "app_run_id": app_run_id, "n_candidate_models": len(candidate_models), "n_models": len(models),
+    "eligible_models": sorted(models.keys()), "n_worlds": len(worlds),
+    "model_validation": {k: {"passes": v["passes"],
+                             "calibration_error": round(v["metrics"]["weighted_calibration_error"], 4),
+                             "monotone": v["metrics"]["monotone_along_price"]}
+                         for k, v in model_validation.items()},
     "robust_worst_uplift": robust.get("worst_uplift"),
     "nominal_worst_uplift": (plan_worst(plans["nominal"]) if "nominal" in plans else None)}))
