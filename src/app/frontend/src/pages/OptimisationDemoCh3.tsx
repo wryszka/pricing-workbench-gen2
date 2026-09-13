@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Boxes, Play, Loader2, ExternalLink } from 'lucide-react';
+import { Boxes, Play, Loader2, ExternalLink, MessageSquareWarning, ChevronDown, FileText } from 'lucide-react';
 import { PageHeader, Section, Metric, Pill, Btn, Note, DemoDisclaimer } from '../components/ui';
 import { api } from '../lib/api';
 
@@ -64,7 +64,112 @@ export default function Chapter3() {
       </Section>
 
       {result && <Compare result={result} />}
+      {result && <DecisionReview runId={result.app_run_id} />}
     </>
+  );
+}
+
+// --- WP4: Decision Review panel (read-only assistant) --- #
+const gbp0 = (n: number | null | undefined) => (n == null ? '—' : '£' + Math.round(n).toLocaleString('en-GB'));
+
+function DecisionReview({ runId }: { runId: string }) {
+  const [open, setOpen] = useState(false);
+  const [review, setReview] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [events, setEvents] = useState<any[]>([]);
+  const [brief, setBrief] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const loadEvents = () => api.optDemoReviewEvents(runId).then((r) => setEvents(r.events || [])).catch(() => {});
+  const challenge = async () => {
+    setBusy(true); setErr(null);
+    try { setReview(await api.optDemoReviewCh3(runId)); await loadEvents(); }
+    catch (e) { setErr(String(e)); }
+    finally { setBusy(false); }
+  };
+  const record = async (fact_id: string, disposition: string) => {
+    let reason = '';
+    if (disposition !== 'investigate') {
+      reason = window.prompt(disposition === 'accept_with_reason'
+        ? 'Reason for accepting this assumption:' : 'Reason it is not relevant:') || '';
+      if (!reason.trim()) return;
+    }
+    try {
+      await api.optDemoReviewRecord({ decision_kind: 'ch3', app_run_id: runId, challenge_fact_id: fact_id, disposition, reason });
+      await loadEvents();
+    } catch (e) { setErr(String(e)); }
+  };
+  const prepBrief = async () => { try { setBrief(await api.optDemoReviewBriefCh3(runId)); } catch (e) { setErr(String(e)); } };
+  const dispOf = (fid: string) => events.filter((e) => e.challenge_fact_id === fid).slice(-1)[0];
+
+  return (
+    <Section title="Decision Review" subtitle="A read-only assistant that helps you challenge this decision using evidence — including evidence from outside the pricing model. It cannot choose prices, change policy, run a scenario or approve anything.">
+      <button onClick={() => { setOpen(!open); if (!open && !review) challenge(); }}
+        className="flex items-center gap-2 text-sm font-medium text-brand">
+        <MessageSquareWarning className="w-4 h-4" /> {open ? 'Hide' : 'Challenge this plan'}
+        <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          {busy && <div className="text-sm text-mut inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Reviewing the evidence…</div>}
+          {err && <Note>{err}</Note>}
+          {review && (
+            <>
+              <div className="flex items-center gap-2 text-[12px] text-mut">
+                <Pill tone="amber">AI narration unavailable</Pill>
+                <span>Deterministic evidence review · pack {review.evidence_pack_version} · {(review.challenges || []).length} material challenge(s)</span>
+              </div>
+              {(review.challenges || []).map((c: any) => {
+                const d = dispOf(c.fact_id);
+                return (
+                  <div key={c.fact_id} className="rounded-xl border border-line p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold text-ink text-sm">{c.finding}</div>
+                      <Pill tone={c.inference === 'observed_data' ? 'blue' : c.inference === 'model_output' ? 'green' : 'amber'}>{c.inference}</Pill>
+                    </div>
+                    <div className="text-[13px] text-ink/80 mt-1">{c.why_it_matters}</div>
+                    <div className="text-[12px] text-mut mt-1"><b>Question:</b> {c.question_for_human}</div>
+                    {c.proposed_investigation?.spec && (
+                      <div className="text-[12px] text-mut mt-1">
+                        <b>Proposed:</b> add a stress <span className="font-mono">{JSON.stringify(c.proposed_investigation.spec)}</span> — review it, then run it with the normal control (the assistant cannot run it).
+                      </div>
+                    )}
+                    <details className="mt-1"><summary className="text-[11px] text-mut cursor-pointer">Evidence & limits</summary>
+                      <div className="text-[11px] text-mut mt-1">Evidence: {(c.evidence_refs || []).join(', ') || '—'}</div>
+                      <div className="text-[11px] text-mut">Cannot establish: {c.cannot_establish}</div>
+                    </details>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Btn tone="ghost" onClick={() => record(c.fact_id, 'investigate')}>Investigate</Btn>
+                      <Btn tone="ghost" onClick={() => record(c.fact_id, 'accept_with_reason')}>Accept (reason)</Btn>
+                      <Btn tone="ghost" onClick={() => record(c.fact_id, 'not_relevant_with_reason')}>Not relevant (reason)</Btn>
+                      {d && <span className="text-[11px] text-emerald-700">recorded: {d.disposition}{d.reason ? ` — ${d.reason}` : ''} ({d.reviewer})</span>}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="flex items-center gap-2">
+                <Btn tone="primary" onClick={prepBrief}><FileText className="w-4 h-4" /> Prepare committee brief</Btn>
+              </div>
+              {brief && (
+                <div className="rounded-xl border border-line p-3 bg-slate-50 text-[13px]">
+                  <div className="font-semibold text-ink mb-1">Committee brief</div>
+                  {brief.trade_off && <div>Worst-world benefit {gbp0(brief.trade_off.worst_world_benefit)} · nominal-world sacrifice {gbp0(brief.trade_off.nominal_world_sacrifice)}</div>}
+                  <div className="mt-1">Approval: <b>{brief.approval?.state === 'released' ? `released by ${brief.approval.approver}` : 'no human decision recorded / not approved'}</b></div>
+                  <div className="mt-1">Unresolved challenges: {brief.unresolved_count}</div>
+                  <ul className="list-disc ml-5 mt-1">
+                    {(brief.material_challenges || []).map((m: any) => (
+                      <li key={m.fact_id}>{m.finding} — <i>{m.status}</i>{m.reason ? ` (${m.reason})` : ''}</li>
+                    ))}
+                  </ul>
+                  <div className="text-[11px] text-mut mt-2">{brief.disclaimer}</div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+      <Note>The assistant reads the decision, model validation, constraints, scenario results and a synthetic business-evidence pack. It ranks at most three material challenges, poses a question, and can draft a scenario — but only you can run it, and nothing here approves or changes a price.</Note>
+    </Section>
   );
 }
 

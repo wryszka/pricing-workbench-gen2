@@ -306,3 +306,74 @@ def challenge_card(f: dict[str, Any]) -> dict[str, Any]:
 def challenge_cards(candidate_facts: list[dict[str, Any]], limit: int = 3) -> list[dict[str, Any]]:
     """Rank then render — at most `limit` reviewer cards, most material first."""
     return [challenge_card(f) for f in rank_challenges(candidate_facts, limit=limit)]
+
+
+# --------------------------------------------------------------------------- #
+# Committee briefing — deterministic assembly; every number from the facts
+# --------------------------------------------------------------------------- #
+DISPOSITIONS = ("investigate", "accept_with_reason", "not_relevant_with_reason")
+
+
+def committee_brief(
+    run_id: str,
+    challenges: list[dict[str, Any]],
+    dispositions: list[dict[str, Any]],
+    approval_state: Optional[dict[str, Any]] = None,
+    tradeoff_fact: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Assemble an exportable committee brief. Deterministic: every numeric claim comes
+    from the passed facts. It never writes 'approved'/'safe'/'compliant' from feasibility —
+    the approval line reflects only a real recorded release, and unresolved disagreement is
+    preserved rather than smoothed away.
+
+    `dispositions` are append-only review events: {challenge_fact_id, disposition, reason,
+    reviewer}. They are NOT approval."""
+    by_fact: dict[str, dict[str, Any]] = {}
+    for d in dispositions:
+        # last write per (challenge) wins for display; history is kept in the table.
+        by_fact[d.get("challenge_fact_id")] = d
+
+    items = []
+    unresolved = 0
+    for c in challenges:
+        d = by_fact.get(c["fact_id"])
+        if not d or d.get("disposition") == "investigate":
+            unresolved += 1
+        items.append({
+            "fact_id": c["fact_id"],
+            "finding": c["finding"],
+            "why_it_matters": c.get("why_it_matters"),
+            "evidence_refs": c.get("evidence_refs", []),
+            "disposition": (d.get("disposition") if d else None),
+            "reason": (d.get("reason") if d else None),
+            "reviewer": (d.get("reviewer") if d else None),
+            "status": ("No human decision recorded" if not d
+                       else ("Open — investigating" if d.get("disposition") == "investigate"
+                             else "Addressed")),
+        })
+
+    trade = None
+    if tradeoff_fact and tradeoff_fact.get("value"):
+        v = tradeoff_fact["value"]
+        trade = {"worst_world_benefit": v.get("worst_world_benefit"),
+                 "nominal_world_sacrifice": v.get("nominal_world_sacrifice")}
+
+    # Approval line — ONLY a real release counts; feasibility never implies approval.
+    if approval_state and approval_state.get("release_id"):
+        approval = {"state": "released", "approver": approval_state.get("approver"),
+                    "release_id": approval_state.get("release_id"),
+                    "released_at": approval_state.get("released_at")}
+    else:
+        approval = {"state": "not_approved", "approver": None,
+                    "note": "No human decision recorded / no active release for this decision."}
+
+    return {
+        "run_id": run_id,
+        "trade_off": trade,
+        "material_challenges": items,
+        "unresolved_count": unresolved,
+        "approval": approval,
+        "disclaimer": ("Feasible does not mean approved, safe or compliant. Numbers are from "
+                       "deterministic computed facts on synthetic data; unresolved challenges are "
+                       "shown as such."),
+    }

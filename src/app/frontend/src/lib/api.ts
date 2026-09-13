@@ -375,5 +375,15 @@ export const api = {
     fetchJson<any>('/optimisation-demo/ch3/run', { method: 'POST', body: JSON.stringify(body) }),
   optDemoCh3Status: (appRunId: string, jobRunId: number) =>
     fetchJson<any>(`/optimisation-demo/ch3/run/${encodeURIComponent(appRunId)}?job_run_id=${jobRunId}`),
+  // Decision Review (read-only assistant)
+  optDemoReviewCh3: (appRunId: string) =>
+    fetchJson<any>(`/optimisation-demo/review/ch3/${encodeURIComponent(appRunId)}`),
+  optDemoReviewEvidence: () => fetchJson<any>('/optimisation-demo/review/evidence'),
+  optDemoReviewEvents: (appRunId: string) =>
+    fetchJson<any>(`/optimisation-demo/review/events/${encodeURIComponent(appRunId)}`),
+  optDemoReviewRecord: (body: { decision_kind: string; app_run_id: string; challenge_fact_id: string; disposition: string; reason?: string }) =>
+    fetchJson<any>('/optimisation-demo/review/events', { method: 'POST', body: JSON.stringify(body) }),
+  optDemoReviewBriefCh3: (appRunId: string) =>
+    fetchJson<any>(`/optimisation-demo/review/brief/ch3/${encodeURIComponent(appRunId)}`),
   optAdvanceResult: () => fetchJson<any>('/optimisation/advance/result'),
 };

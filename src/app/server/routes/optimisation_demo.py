@@ -602,3 +602,77 @@ async def review_evidence():
     pack = bevidence.evidence_pack()
     return {"pack_version": pack["pack_version"], "pack_hash": bevidence.pack_hash(pack),
             "items": pack["items"]}
+
+
+# --- Review events (append-only human dispositions — NOT approval) --- #
+_REVIEW_EVENTS = "optimisation_demo_review_events"
+
+
+async def _ensure_review_events_table():
+    await execute_query(
+        f"CREATE TABLE IF NOT EXISTS {fqn(_REVIEW_EVENTS)} ("
+        f"event_id STRING, decision_kind STRING, run_id STRING, evidence_pack_hash STRING, "
+        f"challenge_fact_id STRING, disposition STRING, reason STRING, reviewer STRING, "
+        f"created_at TIMESTAMP) TBLPROPERTIES ('delta.appendOnly' = 'true')")
+
+
+class ReviewEventRequest(BaseModel):
+    decision_kind: str            # "ch3" | "ch2"
+    app_run_id: str
+    challenge_fact_id: str
+    disposition: str              # investigate | accept_with_reason | not_relevant_with_reason
+    reason: Optional[str] = None
+
+
+@router.post("/review/events")
+async def review_record_event(req: ReviewEventRequest):
+    """Record a human disposition against a challenge — append-only, attributed. This is a
+    review event, NOT an approval; it never changes prices, policy or a release."""
+    if not _APP_RUN_ID.match(req.app_run_id):
+        raise HTTPException(400, "invalid application run id")
+    if req.disposition not in dreview.DISPOSITIONS:
+        raise HTTPException(400, f"disposition must be one of {dreview.DISPOSITIONS}")
+    if req.disposition != "investigate" and not (req.reason and req.reason.strip()):
+        raise HTTPException(400, "a reason is required to accept or dismiss a challenge")
+    reviewer = get_current_user() or "unknown"
+    await _ensure_review_events_table()
+    await execute_query(
+        f"INSERT INTO {fqn(_REVIEW_EVENTS)} SELECT :eid, :kind, :rid, :ph, :cf, :disp, :reason, :who, current_timestamp()",
+        {"eid": uuid.uuid4().hex, "kind": req.decision_kind, "rid": req.app_run_id,
+         "ph": bevidence.pack_hash(), "cf": req.challenge_fact_id, "disp": req.disposition,
+         "reason": (req.reason or ""), "who": reviewer})
+    return {"ok": True, "reviewer": reviewer, "disposition": req.disposition}
+
+
+async def _review_events(app_run_id: str) -> list[dict]:
+    rows = await _safe_q(
+        f"SELECT challenge_fact_id, disposition, reason, reviewer, cast(created_at as string) created_at "
+        f"FROM {fqn(_REVIEW_EVENTS)} WHERE run_id = :r ORDER BY created_at", {"r": app_run_id})
+    return [{"challenge_fact_id": r["challenge_fact_id"], "disposition": r["disposition"],
+             "reason": r.get("reason"), "reviewer": r.get("reviewer"),
+             "created_at": r.get("created_at")} for r in (rows or [])]
+
+
+@router.get("/review/events/{app_run_id}")
+async def review_list_events(app_run_id: str):
+    if not _APP_RUN_ID.match(app_run_id):
+        raise HTTPException(400, "invalid application run id")
+    return {"run_id": app_run_id, "events": await _review_events(app_run_id)}
+
+
+@router.get("/review/brief/ch3/{app_run_id}")
+async def review_committee_brief(app_run_id: str):
+    """Committee briefing for a Chapter 3 decision — deterministic. Every number comes from
+    the fact layer; it reflects only a REAL recorded release for the approval line and
+    preserves unresolved disagreement. Exportable by the client."""
+    if not _APP_RUN_ID.match(app_run_id):
+        raise HTTPException(400, "invalid application run id")
+    challenge = await review_ch3_challenge(app_run_id)          # reuse the deterministic facts
+    events = await _review_events(app_run_id)
+    # There is no per-Ch3 release in this build; approval_state is None → "No human decision
+    # recorded". (Ch3 approval/release is WP3-remaining; the brief never fakes an approval.)
+    tradeoff = next((f for f in challenge["facts"] if f["fact_id"] == "tradeoff.robust_nominal"), None)
+    brief = dreview.committee_brief(app_run_id, challenge["challenges"], events,
+                                    approval_state=None, tradeoff_fact=tradeoff)
+    brief["evidence_pack_hash"] = challenge["evidence_pack_hash"]
+    return brief

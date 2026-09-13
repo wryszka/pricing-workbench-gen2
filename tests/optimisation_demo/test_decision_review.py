@@ -154,3 +154,29 @@ def test_challenge_cards_have_required_fields_and_cap():
     assert top["proposed_investigation"]["spec"] == {"cost_scale": 1.08}
     assert "not observed" in top["cannot_establish"] or "not observed experience" in top["cannot_establish"] \
         or "planning assumption is not" in top["cannot_establish"]
+
+
+def test_committee_brief_deterministic_and_honest():
+    fin = be.get_item("FIN-PLAN-CLAIMSINFL-2026")
+    facts = [dr.scenario_coverage_gap([1.00, 1.05], fin),
+             dr.robust_vs_nominal_tradeoff({"a": 100.0, "b": 80.0}, {"a": 120.0, "b": 60.0})]
+    cards = dr.challenge_cards(facts, 3)
+    tradeoff = next(f for f in facts if f["fact_id"] == "tradeoff.robust_nominal")
+    # No dispositions, no release → unresolved + "not approved" (never "approved" from feasibility).
+    b = dr.committee_brief("run1", cards, [], approval_state=None, tradeoff_fact=tradeoff)
+    assert b["approval"]["state"] == "not_approved"
+    assert b["unresolved_count"] == len(cards)
+    assert b["material_challenges"][0]["status"] == "No human decision recorded"
+    assert b["trade_off"]["worst_world_benefit"] == 20.0
+    assert "not mean approved" in b["disclaimer"] or "not approved" in b["disclaimer"].lower()
+
+    # A recorded disposition marks it addressed; a real release drives the approval line.
+    disp = [{"challenge_fact_id": "coverage.claims_stress",
+             "disposition": "accept_with_reason", "reason": "finance plan is prudential",
+             "reviewer": "a@b.com"}]
+    b2 = dr.committee_brief("run1", cards, disp,
+                            approval_state={"release_id": "rel1", "approver": "a@b.com",
+                                            "released_at": "2026-09-13"}, tradeoff_fact=tradeoff)
+    assert b2["approval"]["state"] == "released"
+    cov = next(i for i in b2["material_challenges"] if i["fact_id"] == "coverage.claims_stress")
+    assert cov["status"] == "Addressed" and cov["reviewer"] == "a@b.com"
