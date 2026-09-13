@@ -186,3 +186,37 @@ resources:
           spec:
             client: "5"
             dependencies: [scikit-learn, scipy, pandas, numpy, joblib]
+
+    optimisation_demo_scale_benchmark:
+      name: "Optimisation demo — scale benchmark (gen2)"
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: schema_name
+          default: ${var.schema_name}
+        - name: app_run_id
+          default: ""
+        - name: preset
+          default: "live"
+        - name: n_partitions
+          default: "8"
+      permissions:
+        - service_principal_name: ${var.app_service_principal_id}
+          level: CAN_MANAGE_RUN
+      tasks:
+        - task_key: benchmark
+          notebook_task:
+            notebook_path: ../src/app/server/optimisation_demo/jobs/scale_benchmark.py
+            base_parameters:
+              catalog_name:  "{{job.parameters.catalog_name}}"
+              schema_name:   "{{job.parameters.schema_name}}"
+              app_run_id:    "{{job.parameters.app_run_id}}"
+              preset:        "{{job.parameters.preset}}"
+              n_partitions:  "{{job.parameters.n_partitions}}"
+              app_src_base:  "${workspace.file_path}/src/app"
+          environment_key: env
+      environments:
+        - environment_key: env
+          spec:
+            client: "5"
+            dependencies: [scikit-learn, scipy, pandas, numpy, joblib]

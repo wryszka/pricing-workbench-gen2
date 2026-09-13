@@ -121,10 +121,31 @@ Not-relevant tied to a decision hash); the Decision Review UI panel; the full in
 source-note / unauthorized-run / prompt-injection eval battery. The deterministic layer is
 built so these sit on top without changing the computation or approval path.
 
-## WP5 — Scale benchmark (Live/Full presets) · **NOT DELIVERED this stage**
-Design agreed (Spark-distributed scoring, compact driver MILP, hash-keyed coefficient
-cache, serial-vs-distributed + cold-vs-warm with verified coefficient agreement,
-honest usage attribution, bounded demo compute). Not yet implemented.
+## WP5 — Scale benchmark (Live/Full presets) · **PARTIAL — core + bounded job built**
+
+**Built + tested:**
+- `scale.py` (pure, 6 tests): hash-keyed coefficient cache (`coeff_cache_key` — keyed on
+  input/model/feature/grid/world; a compatible objective/threshold change reuses it, an
+  input change invalidates it), `coefficients_agree` (element-wise agreement + max abs/rel
+  diff — a benchmark must verify agreement BEFORE comparing timings, never claim a speedup on
+  mismatched maths), and `duration_breakdown` (phases reported separately, never one opaque
+  total).
+- `jobs/scale_benchmark.py` + bundle job "Optimisation demo — scale benchmark (gen2)":
+  scores the frozen population serially (reference) and via Spark `mapInPandas` partitions
+  (same pure functions, model loaded per executor), verifies coefficient agreement within a
+  declared tolerance, measures **cold vs warm** (cached partitions), persists receipts to
+  `optimisation_demo_scale_runs` (counts, partitions, per-path durations, agreement, measured
+  speedup). FULL preset replicates the demo population up to a **bounded cap** (never
+  unbounded compute); the note states scale is primarily in scoring/scenario evaluation, not
+  the compact segment-level MILP.
+
+**Status of the live run + remaining:** the benchmark job was deployed and run on pricingv2
+(receipts below when the run lands). The compact-driver-MILP-only distribution boundary,
+per-world cache reuse across a full 9-model×9-stress FULL preset, and the app surface for the
+presets are the remaining items; conditional Monte-Carlo remains optional per the brief.
+
+### Scale benchmark receipts (pricingv2)
+_(filled from the live run)_
 
 ## WP6 — Recording-ready delivery · **PARTIAL (scripts) / decks NOT DELIVERED**
 Chapter recording scripts exist (`optimisation_demo_presenter{,_ch2,_ch3}.md`) and the
