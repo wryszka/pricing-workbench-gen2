@@ -530,3 +530,75 @@ async def ch3_run_status(app_run_id: str, job_run_id: int = Query(...)):
         status = "running"
     return {"app_run_id": app_run_id, "job_run_id": job_run_id, "life_cycle_state": life,
             "result_state": res, "run_page_url": page, "status": status, "result": result}
+
+
+# --------------------------------------------------------------------------- #
+# WP4 — Decision Review (read-only assistant). Deterministic fact layer over a
+# Chapter 3 run + the governed business-evidence pack. No prices are chosen, no
+# policy altered, no scenario executed, no release approved. The LLM narration is
+# an OPTIONAL layer on top; when it isn't wired/available the deterministic facts
+# and templated cards ARE the response ("AI review unavailable"), which is honest.
+# --------------------------------------------------------------------------- #
+from server.optimisation_demo import decision_review as dreview  # noqa: E402
+from server.optimisation_demo import business_evidence as bevidence  # noqa: E402
+
+
+@router.get("/review/ch3/{app_run_id}")
+async def review_ch3_challenge(app_run_id: str):
+    """Pricing-Challenger facts + ranked cards for a Chapter 3 run — the challenge from
+    OUTSIDE the optimiser. Read-only; consumes only governed tables by explicit run id and
+    the versioned evidence pack. Returns the deterministic facts and, when uncovered, a
+    drafted stress the human may choose to run via the normal control (never auto-run)."""
+    if not _APP_RUN_ID.match(app_run_id):
+        raise HTTPException(400, "invalid application run id")
+    worlds = await _safe_q(f"SELECT world_id, model, market_scale, cost_scale, label "
+                           f"FROM {fqn('optimisation_demo_ch3_worlds')} WHERE run_id = :r ORDER BY world_id",
+                           {"r": app_run_id})
+    comp = await _safe_q(f"SELECT plan, world_id, uplift FROM {fqn('optimisation_demo_ch3_comparison')} "
+                         f"WHERE run_id = :r", {"r": app_run_id})
+    if not worlds or not comp:
+        raise HTTPException(404, "Chapter 3 run not found (or has no worlds/comparison yet)")
+
+    included_cost = sorted({coerce.as_float(w["cost_scale"], field="cost_scale") for w in worlds})
+    uplift: dict = {}
+    for c in comp:
+        plan = coerce.as_str(c["plan"], field="plan")
+        uplift.setdefault(plan, {})[coerce.as_str(c["world_id"], field="world_id")] = \
+            coerce.as_float(c["uplift"], field="uplift")
+
+    facts = []
+    fin = bevidence.get_item("FIN-PLAN-CLAIMSINFL-2026")
+    if fin:
+        facts.append(dreview.scenario_coverage_gap(included_cost, fin))
+    if "robust" in uplift and "nominal" in uplift:
+        facts.append(dreview.robust_vs_nominal_tradeoff(uplift["robust"], uplift["nominal"]))
+    unchanged = [w for w in worlds if coerce.as_float(w["cost_scale"], field="cs") == 1.0
+                 and coerce.as_float(w["market_scale"], field="ms") == 1.0]
+    if len(unchanged) >= 2 and "robust" in uplift:
+        by_model = {coerce.as_str(w["model"], field="model"):
+                    uplift["robust"].get(coerce.as_str(w["world_id"], field="wid")) for w in unchanged}
+        by_model = {m: v for m, v in by_model.items() if v is not None}
+        if len(by_model) >= 2:
+            facts.append(dreview.model_disagreement(by_model))
+    claims = bevidence.get_item("CLAIMS-MOTOR-2026H1")
+    if claims and fin:
+        facts.append(dreview.source_compatibility(claims, fin))
+
+    cards = dreview.challenge_cards(facts, limit=3)
+    return {
+        "run_id": app_run_id, "role": "pricing_challenger",
+        "evidence_pack_version": bevidence.PACK_VERSION,
+        "evidence_pack_hash": bevidence.pack_hash(),
+        "included_cost_stresses": included_cost,
+        "facts": facts, "challenges": cards,
+        "ai_review": "unavailable",
+        "ai_review_note": "Deterministic evidence review (no language-model narration in this build).",
+    }
+
+
+@router.get("/review/evidence")
+async def review_evidence():
+    """The versioned synthetic business-evidence pack (read-only) — provenance for each item."""
+    pack = bevidence.evidence_pack()
+    return {"pack_version": pack["pack_version"], "pack_hash": bevidence.pack_hash(pack),
+            "items": pack["items"]}

@@ -134,3 +134,23 @@ def test_rank_challenges_drops_non_issues():
 def test_fact_rejects_bad_inference_label():
     with pytest.raises(ValueError):
         dr.fact("x", 1, "guess", "bad label")
+
+
+def test_challenge_cards_have_required_fields_and_cap():
+    fin = be.get_item("FIN-PLAN-CLAIMSINFL-2026")
+    facts = [
+        dr.scenario_coverage_gap([1.00, 1.05], fin),
+        dr.robust_vs_nominal_tradeoff({"a": 100.0, "b": 80.0}, {"a": 120.0, "b": 60.0}),
+        dr.model_disagreement({"logit": 90.0, "gbt": 96.0}),
+    ]
+    cards = dr.challenge_cards(facts, limit=3)
+    assert 1 <= len(cards) <= 3
+    top = cards[0]
+    for key in ("finding", "why_it_matters", "question_for_human",
+                "proposed_investigation", "cannot_establish", "evidence_refs", "inference"):
+        assert key in top, key
+    # Headline card drafts the +8% stress for the human to run (never auto-run).
+    assert top["fact_id"] == "coverage.claims_stress"
+    assert top["proposed_investigation"]["spec"] == {"cost_scale": 1.08}
+    assert "not observed" in top["cannot_establish"] or "not observed experience" in top["cannot_establish"] \
+        or "planning assumption is not" in top["cannot_establish"]

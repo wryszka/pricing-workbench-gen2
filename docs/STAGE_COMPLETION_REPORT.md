@@ -73,11 +73,38 @@ one matrix). Not yet implemented. Next: extend the release schema with a parent
 release pointer and world manifest; add `ch3_prepare` (offline challenger validation)
 distinct from the live solve.
 
-## WP4 — Decision Review assistant (Challenger + Committee Briefing) · **NOT DELIVERED this stage**
-Design agreed (one review service, two roles, allowlisted read-only typed tools,
-deterministic fact layer, +8% finance-vs-+5% claims evidence case, append-only review
-events). Not yet implemented. Reuse `agent_client.py` + telemetry; do NOT point at
-legacy/latest views.
+## WP4 — Decision Review assistant · **PARTIAL — deterministic core + evidence + endpoint delivered**
+
+**Built + tested + deployed (deterministic, no LLM):**
+- `business_evidence.py` — versioned, hashed synthetic evidence pack; each item carries
+  owner, observation/effective dates, population mapping, denominator/sample size,
+  definition, synthetic label, known limitation and `related_to`. Filming case included:
+  claims experience **+5%** vs a correlated finance planning assumption **+8%**.
+- `decision_review.py` — structured facts with inference labels (observed_data /
+  model_output / inference): `scenario_coverage_gap` (detects the +8% lies outside the
+  included +5%, drafts the stress, labels it an assumption not experience),
+  `source_compatibility` (population mismatch + correlated-source guard so correlated
+  estimates aren't double-counted), `constraint_slack` (binding only with computed slack),
+  `model_disagreement`, `robust_vs_nominal_tradeoff` (worst-world benefit AND nominal
+  sacrifice as two distinct quantities from one matrix), `rank_challenges` (deterministic
+  priority, ≤3, drops non-issues), `challenge_cards` (finding / why-with-metric / evidence
+  IDs / question / proposed investigation / what-it-cannot-establish).
+- Read-only API: `GET /review/ch3/{run_id}` and `GET /review/evidence` — consume only
+  governed tables by explicit id + the versioned pack; no prices chosen, no policy/scenario
+  executed, no approval. Labelled `ai_review: unavailable` (deterministic facts + templated
+  cards ARE the response — honest, no template prose passed off as a live model).
+- Tests: `test_decision_review.py` (14 cases) covering the +8% detection, incompatible
+  populations, correlated sources, outdated evidence, disagreement, the trade-off, ranking
+  ≤3, card structure. **Real-data evidence** over Ch3 run `9046613476fe4c11879d126a6725e70e`:
+  included stresses `[1.0, 1.05]` → +8% flagged uncovered → drafts `cost_scale 1.08`; top
+  challenge is the coverage question; 3 ranked challenges.
+
+**Remaining (NOT delivered this stage):** the LLM narration layer on `agent_client` with
+returned-reference/numeric validation; the allowlisted MCP tool surface + server-side scope
+enforcement; the Committee-Briefing role + append-only review events (Investigate / Accept /
+Not-relevant tied to a decision hash); the Decision Review UI panel; the full injected-
+source-note / unauthorized-run / prompt-injection eval battery. The deterministic layer is
+built so these sit on top without changing the computation or approval path.
 
 ## WP5 — Scale benchmark (Live/Full presets) · **NOT DELIVERED this stage**
 Design agreed (Spark-distributed scoring, compact driver MILP, hash-keyed coefficient

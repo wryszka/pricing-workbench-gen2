@@ -249,3 +249,60 @@ def rank_challenges(candidate_facts: list[dict[str, Any]], limit: int = 3) -> li
         scored.append((_TIER.get(fid, 0), _magnitude(f), f))
     scored.sort(key=lambda t: (t[0], t[1]), reverse=True)
     return [f for _, _, f in scored[:limit]]
+
+
+# --------------------------------------------------------------------------- #
+# Challenge cards — deterministic, templated (NOT LLM) rendering of a ranked fact
+# --------------------------------------------------------------------------- #
+def challenge_card(f: dict[str, Any]) -> dict[str, Any]:
+    """Render one ranked fact as a reviewer card with the required fields. The text is
+    deterministic and templated from the fact's own numbers — it is not a model response,
+    and it never infers vulnerability, discrimination, causality or illegality."""
+    fid, v = f["fact_id"], f.get("value")
+    card = {"fact_id": fid, "inference": f["inference"], "evidence_refs": f.get("evidence_refs", []),
+            "finding": f["summary"]}
+    if fid == "coverage.claims_stress":
+        card.update({
+            "why_it_matters": (f"A comparable planning assumption of {(v['external_multiplier']-1)*100:.0f}% "
+                               f"sits outside the tested claims stresses (max {(v['max_included_multiplier']-1)*100:.0f}%); "
+                               f"the decision has not been evaluated under it."),
+            "question_for_human": "Why was the finance planning assumption excluded from the tested stresses?",
+            "proposed_investigation": {"type": "add_world_stress", "spec": f.get("drafted_stress")},
+            "cannot_establish": ("This does not show claims will inflate by that amount — a planning "
+                                 "assumption is not observed experience; it only flags an untested scenario."),
+        })
+    elif fid == "tradeoff.robust_nominal":
+        card.update({
+            "why_it_matters": (f"Robust improves the worst world by {v['worst_world_benefit']:.0f}, but gives up "
+                               f"{v['nominal_world_sacrifice']:.0f} in the nominal plan's best world."),
+            "question_for_human": "Is the worst-world protection worth the nominal-world give-up here?",
+            "proposed_investigation": {"type": "inspect_plan_comparison", "spec": None},
+            "cannot_establish": "Robustness covers only the included worlds — not every possible future, and not a probability.",
+        })
+    elif fid == "disagreement.models":
+        card.update({
+            "why_it_matters": f"The demand models diverge by {v:.3g} here, so the uplift depends on which is right.",
+            "question_for_human": "Which demand model is better supported for this segment/price range?",
+            "proposed_investigation": {"type": "inspect_model_validation", "spec": None},
+            "cannot_establish": "Disagreement flags uncertainty, not which model is correct.",
+        })
+    elif fid == "compatibility.sources":
+        card.update({
+            "why_it_matters": "These two sources are correlated, so they are not independent corroboration.",
+            "question_for_human": "Should these be treated as one line of evidence, not two?",
+            "proposed_investigation": {"type": "review_evidence_relationship", "spec": None},
+            "cannot_establish": "Correlation of sources says nothing about whether either is correct.",
+        })
+    elif fid == "slack.sales_floor":
+        card.update({
+            "why_it_matters": "The sales floor is binding, so it is actively shaping the plan.",
+            "question_for_human": "Is the sales floor set where you intend, given it is binding?",
+            "proposed_investigation": {"type": "vary_sales_floor", "spec": None},
+            "cannot_establish": "A binding floor is a policy choice, not evidence the plan is right.",
+        })
+    return card
+
+
+def challenge_cards(candidate_facts: list[dict[str, Any]], limit: int = 3) -> list[dict[str, Any]]:
+    """Rank then render — at most `limit` reviewer cards, most material first."""
+    return [challenge_card(f) for f in rank_challenges(candidate_facts, limit=limit)]
