@@ -67,20 +67,22 @@ async def list_scenarios(family: str | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 def _find_job_id(w) -> int | None:
-    """Exact-match first, then suffix-match — the bundle adds a
-    `[dev <user>]` prefix to every job name, so exact lookup misses."""
+    """Find the compare job by name, robust to BOTH the bundle's `[dev <user>]`
+    prefix AND the gen2 `(gen2)` suffix. A bare-name job may co-exist on the same
+    workspace as the gen2 one, so we prefer the `(gen2)` match, then an exact name,
+    then any containing match — never the stale bare-name job by accident."""
     try:
-        for j in w.jobs.list(name=COMPARE_JOB_NAME, limit=25):
+        matches = [j for j in w.jobs.list(limit=200) if COMPARE_JOB_NAME in (j.settings.name or "")]
+    except Exception as e:
+        logger.warning("jobs.list for %r failed: %s", COMPARE_JOB_NAME, e)
+        return None
+    for j in matches:                                  # prefer the gen2 job on this workspace
+        if (j.settings.name or "").endswith("(gen2)"):
             return j.job_id
-    except Exception as e:
-        logger.warning("jobs.list(name=%r) failed: %s", COMPARE_JOB_NAME, e)
-    try:
-        for j in w.jobs.list(limit=100):
-            if (j.settings.name or "").endswith(COMPARE_JOB_NAME):
-                return j.job_id
-    except Exception as e:
-        logger.warning("jobs.list suffix-match fallback failed: %s", e)
-    return None
+    for j in matches:                                  # else an exact name
+        if (j.settings.name or "") == COMPARE_JOB_NAME:
+            return j.job_id
+    return matches[0].job_id if matches else None
 
 
 # ---------------------------------------------------------------------------

@@ -121,21 +121,22 @@ class ApproveRequest(BaseModel):
 
 
 def _find_job_id(w, name: str) -> int | None:
-    """Find a bundle-deployed job by name. The bundle prefixes jobs with
-    `[dev <username>] ` so exact-match `list(name=...)` fails. We scan and
-    match by suffix instead."""
+    """Find a bundle-deployed job by name, robust to BOTH the dev bundle's
+    `[dev <username>] ` prefix AND the gen2 `(gen2)` suffix. A bare-name job may
+    co-exist with the gen2 one on the same workspace, so prefer the `(gen2)` match,
+    then an exact name, then any containing match — never the stale bare-name job."""
     try:
-        for j in w.jobs.list(name=name, limit=25):
+        matches = [j for j in w.jobs.list(limit=200) if name in (j.settings.name or "")]
+    except Exception as e:
+        logger.warning("jobs.list for %r failed: %s", name, e)
+        return None
+    for j in matches:
+        if (j.settings.name or "").endswith("(gen2)"):
             return j.job_id
-    except Exception as e:
-        logger.warning("jobs.list(name=%r) failed: %s", name, e)
-    try:
-        for j in w.jobs.list(limit=100):
-            if (j.settings.name or "").endswith(name):
-                return j.job_id
-    except Exception as e:
-        logger.warning("jobs.list fallback failed: %s", e)
-    return None
+    for j in matches:
+        if (j.settings.name or "") == name:
+            return j.job_id
+    return matches[0].job_id if matches else None
 
 
 @router.post("/approve")
