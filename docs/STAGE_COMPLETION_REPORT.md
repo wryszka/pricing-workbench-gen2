@@ -160,15 +160,29 @@ Run `bd41a00ab2df477cb6b04273daddd5a1`, **Live** preset, TERMINATED SUCCESS:
 | Distributed scoring (warm, coefficient cache) | 0.69 s |
 | Measured cold speedup vs serial | **0.013× (i.e. ~77× SLOWER)** |
 
-**Honest interpretation (not spun):** at Live scale the distributed path is *slower* —
-Spark partition/serialisation/per-executor model-load overhead dwarfs ~5k rows of pandas
-scoring. The benchmark still proves what matters: the distributed path produces **identical
-coefficients** (verified before timing), and the **hash-keyed coefficient cache** cuts a
-compatible re-solve from 19.75 s to 0.69 s. Distribution only pays off when scoring/scenario
-volume is large (the FULL preset), which is why the note records that scale lives in
-scoring/scenario evaluation, not the compact per-segment MILP. **No speedup or cost saving is
-claimed at Live scale because none was measured.** A FULL-preset run (bounded ≤250k) is the
-next receipt to capture.
+Run `24468fd0939745df813e0018786c5db2`, **FULL** preset (bounded), TERMINATED SUCCESS:
+
+| Metric | Value |
+|---|---|
+| Opportunities / factors / partitions | 250,000 / 21 / 16 |
+| **Coefficients agree** | **true**, max abs diff **3.7e-9** |
+| Serial scoring | 1.61 s |
+| Distributed scoring (cold) | 23.01 s |
+| Distributed scoring (warm, coefficient cache) | 0.70 s |
+| Measured cold speedup vs serial | **0.07× (~14× SLOWER)** |
+
+**Honest interpretation (not spun):** at BOTH Live (5k) and FULL (250k) scale the distributed
+path is *slower* than serial pandas scoring, because the demo's per-row scoring is cheap and
+the distributed path pays fixed overhead (Spark scheduling/serialisation + a `joblib` model
+load per partition). Serial 250k scoring is only 1.6 s. So the honest conclusion for THIS
+workload is: **distribution is not the win — the coefficient cache is** (a compatible re-solve
+drops from ~23 s to ~0.7 s at 250k). What the benchmark rigorously establishes: (1) the
+distributed path produces **identical coefficients** (agreement verified to ~1e-9 BEFORE any
+timing), and (2) phases are measured and reported separately. **No speedup or cost saving is
+claimed, because none was measured** — the brief's exact requirement. Distribution would only
+pay off with heavier per-row models or far larger scenario volume (the segment-level MILP is
+unchanged either way). Reducing the distributed path's per-partition model-load overhead
+(broadcast once vs load-per-partition) is the documented next optimisation.
 
 ## WP6 — Recording-ready delivery · **PARTIAL (scripts) / decks NOT DELIVERED**
 Chapter recording scripts exist (`optimisation_demo_presenter{,_ch2,_ch3}.md`) and the
