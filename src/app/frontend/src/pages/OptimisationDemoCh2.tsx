@@ -147,7 +147,9 @@ function Check({ hasRelease }: { hasRelease: boolean }) {
 function Portfolio({ pf }: { pf: any }) {
   const t = pf.totals;
   const rep = pf.representative_opportunity;
-  const repCost = rep ? rep.expected_claims + rep.per_sale_expenses + rep.commission_rate * rep.baseline_price : null;
+  // Cost is computed server-side (typed) and returned as modelled_cost — the API
+  // returns SQL values as strings, so adding them here concatenated ("700"+"60"+…).
+  const repCost = rep ? rep.modelled_cost : null;
   return (
     <Section title="The book today" subtitle="Baseline expected sales, premium and margin at current prices — learned estimates, per segment.">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">

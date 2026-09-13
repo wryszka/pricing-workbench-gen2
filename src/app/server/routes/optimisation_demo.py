@@ -27,6 +27,7 @@ from server.sql import execute_query
 from server.optimisation_demo import coerce
 from server.optimisation_demo import governance as govern
 from server.optimisation_demo.core import load_example, optimise, validate_requirement
+from server.optimisation_demo.economics import cost_of
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/optimisation-demo", tags=["optimisation-demo"])
@@ -201,9 +202,30 @@ async def ch2_portfolio():
                         f"round(per_sale_expenses,2) per_sale_expenses, commission_rate "
                         f"FROM {fqn('optimisation_demo_ch2_future')} WHERE segment = :seg LIMIT 1",
                         {"seg": GRANDMA_SEGMENT})
+    representative = None
+    if rep:
+        r0 = rep[0]
+        # WP1#2 — type the boundary and compute the cost SERVER-SIDE with the same
+        # cost_of() the scorer uses. Doing this on the client added SQL strings
+        # ("700" + "60" + …) → string concatenation. £700 + £60 + 10%·£1,000 = £860.
+        claims = coerce.as_float(r0.get("expected_claims"), field="expected_claims")
+        expenses = coerce.as_float(r0.get("per_sale_expenses"), field="per_sale_expenses")
+        commission_rate = coerce.as_float(r0.get("commission_rate"), field="commission_rate")
+        baseline = coerce.as_float(r0.get("baseline_price"), field="baseline_price")
+        representative = {
+            "opportunity_id": coerce.as_str(r0.get("opportunity_id"), field="opportunity_id"),
+            "driver_age": coerce.opt_int(r0.get("driver_age"), field="driver_age"),
+            "vehicle_group": r0.get("vehicle_group"),
+            "baseline_price": baseline,
+            "market_premium": coerce.as_float(r0.get("market_premium"), field="market_premium"),
+            "expected_claims": claims,
+            "per_sale_expenses": expenses,
+            "commission_rate": commission_rate,
+            "modelled_cost": round(cost_of(baseline, claims, expenses, commission_rate), 2),
+        }
     return {"ready": True, "segments": rows, "totals": totals,
             "grandma_segment": GRANDMA_SEGMENT,
-            "representative_opportunity": (rep[0] if rep else None)}
+            "representative_opportunity": representative}
 
 
 class Ch2RunRequest(BaseModel):
