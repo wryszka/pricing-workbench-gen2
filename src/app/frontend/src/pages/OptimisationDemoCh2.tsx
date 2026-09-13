@@ -200,7 +200,8 @@ function Choose({ disabled, pf, onApproved }: { disabled: boolean; pf: any; onAp
   (pf?.segments || []).forEach((s: any) => { baselineBySeg[s.segment] = s; });
 
   const start = async (ratio: number | null, label: string) => {
-    if (pending) return;
+    if (pending && pending.status !== 'failed') return;   // failed runs may be retried
+    if (pollRef.current) clearTimeout(pollRef.current);
     const r = await api.optDemoCh2Run({ min_portfolio_sales_ratio: ratio });
     const p = { app_run_id: r.app_run_id, job_run_id: r.job_run_id, label, ratio, status: 'running', run_page_url: null };
     setPending(p); poll(p, 0);
@@ -222,10 +223,10 @@ function Choose({ disabled, pf, onApproved }: { disabled: boolean; pf: any; onAp
   return (
     <Section title="Choose the plan" subtitle="Same objective (maximise expected margin), same model and grid. Change the sales requirement; the answer changes.">
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <Btn tone="primary" disabled={disabled || !!pending} onClick={() => start(null, 'Margin first')}>
+        <Btn tone="primary" disabled={disabled || (!!pending && pending.status !== 'failed')} onClick={() => start(null, 'Margin first')}>
           {pending?.label === 'Margin first' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Margin first
         </Btn>
-        <Btn tone="warn" disabled={disabled || !!pending} onClick={() => start(0.98, 'Protect sales ≥ 98%')}>
+        <Btn tone="warn" disabled={disabled || (!!pending && pending.status !== 'failed')} onClick={() => start(0.98, 'Protect sales ≥ 98%')}>
           {pending?.label?.startsWith('Protect') ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Protect sales ≥ 98%
         </Btn>
         {disabled && <span className="text-[12px] text-amber-700">Model not eligible — prepare + validation must pass first.</span>}

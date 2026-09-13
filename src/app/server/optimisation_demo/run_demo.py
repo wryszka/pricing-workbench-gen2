@@ -125,19 +125,24 @@ try:
 except Exception:
     job_run_id = ""
 
-run_row = [Row(
-    run_id=app_run_id, example_id=example_id, example_version=str(example["example_version"]),
-    input_delta_version=int(input_delta_version),
-    requirement_json=json.dumps({"min_expected_customers": min_expected}),
-    objective=result["objective"], code_revision="",
-    status=status,
-    winner_price=(float(w["price"]) if w else None),
-    winner_expected_customers=(float(w["expected_customers"]) if w else None),
-    winner_expected_total_margin=(float(w["expected_total_margin"]) if w else None),
-    winner_expected_premium=(float(w["expected_premium"]) if w else None),
-    job_run_id=job_run_id, created_at=datetime.now(timezone.utc),
-)]
-spark.createDataFrame(run_row).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_runs")
+# WP1#3 — use the table's EXPLICIT nullable schema so the infeasible case (e.g. a
+# target of 901 expected customers) persists with NULL winner_* fields instead of
+# failing single-row schema inference on all-None columns. The impossible target
+# completes with status "no_feasible", a saved row, and no winner.
+runs_schema = spark.table(f"{fqn}.optimisation_demo_runs").schema
+run_by_name = {
+    "run_id": app_run_id, "example_id": example_id, "example_version": str(example["example_version"]),
+    "input_delta_version": int(input_delta_version),
+    "requirement_json": json.dumps({"min_expected_customers": min_expected}),
+    "objective": result["objective"], "code_revision": "", "status": status,
+    "winner_price": (float(w["price"]) if w else None),
+    "winner_expected_customers": (float(w["expected_customers"]) if w else None),
+    "winner_expected_total_margin": (float(w["expected_total_margin"]) if w else None),
+    "winner_expected_premium": (float(w["expected_premium"]) if w else None),
+    "job_run_id": job_run_id, "created_at": datetime.now(timezone.utc),
+}
+run_tuple = tuple(run_by_name[f.name] for f in runs_schema.fields)
+spark.createDataFrame([run_tuple], schema=runs_schema).write.mode("append").saveAsTable(f"{fqn}.optimisation_demo_runs")
 
 dbutils.notebook.exit(json.dumps({
     "app_run_id": app_run_id, "status": status,

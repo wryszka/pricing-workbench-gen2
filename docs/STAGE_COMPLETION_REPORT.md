@@ -27,10 +27,10 @@ Deploy or Recording is still open.
 |---|---|---|---|
 | 1 | Typed conversion at the API boundary; no string-truthiness | **Build ✓ / Deploy ✓** | `server/optimisation_demo/coerce.py`; `test_coerce.py` (10 cases incl. `"false"` not truthy, NaN/inf/None rejected). Applied in `/ch2/approve` and `/ch2/portfolio`. |
 | 2 | Representative cost = £700 + £60 + 10%·£1,000 = £860 | **Build ✓ / Deploy ✓** | Cost now computed server-side via `cost_of()` in `/ch2/portfolio` as `modelled_cost`; frontend consumes it (was JS string-concat of SQL strings). |
-| 3 | Ch1 impossible target (901) → "No feasible price", saved, no winner; standard outcomes unchanged | **Partial — see below** | Existing `core`/`run_demo` behaviour retained; explicit-nullable persistence check pending re-verification. |
+| 3 | Ch1 impossible target (901) → "No feasible price", saved, no winner; standard outcomes unchanged | **Build ✓ / Deploy ✓** | `run_demo` now persists the runs row via the table's explicit nullable schema (single all-None winner row was failing inference). Headless: run `515e0e61…` with target 901 → `status=no_feasible`, `winner_price=NULL`, saved. Standard £1,100/700/£210,000 & £950/830/£124,500 unchanged (core tests). |
 | 4 | Preserve actual solver status/message/bound/gap; independent full-precision feasibility recompute; no fake "optimal" | **Build ✓ / Deploy ✓** | `portfolio.solve_portfolio` reports real HiGHS status + gap; `ch2_run` re-checks feasibility before marking `complete`; `test_portfolio` status/gap tests. |
 | 5 | Remove objective movement-penalty distortion; second solve minimises movement within a declared tolerance; never fake gap=0 | **Build ✓ / Deploy ✓** | Two-solve in `solve_portfolio` (`movement_tolerance`, `margin_sacrificed_for_movement`); `test_portfolio` proves the true optimum is retained where the old penalty would have distorted it. |
-| 6 | Failure/retry/cancel UI, duplicate-submit, monitoring period numeric comparison | **Partial** | Monitoring reads `max(period)` numerically server-side; frontend period-compare + duplicate-submit hardening pending. |
+| 6 | Failure/retry/cancel UI, duplicate-submit, monitoring period numeric comparison | **Build ✓ / Deploy ✓** | Monitoring period + rows now typed server-side (period returned as int → client compares 10 > 9 numerically, not `"10" < "9"`). Ch1/Ch2/Ch3 run controls: duplicate-submit still guarded, and a **failed** run is now retryable (was stuck disabled); poll timer cleared on retry. |
 
 ## Finding closure — WP2 (bind approval to immutable evidence)
 

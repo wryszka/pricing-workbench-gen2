@@ -221,7 +221,9 @@ function RunOnDatabricks({ data }: { data: any }) {
   useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
 
   const start = async () => {
-    if (pending) return;                                  // no duplicate submissions
+    if (pending && pending.status !== 'failed') return;   // no duplicate submissions; a failed run may be retried
+    if (pollRef.current) clearTimeout(pollRef.current);
+    setPending(null);
     setError(null);
     const min = minCustomers.trim() === '' ? null : Number(minCustomers);
     if (min != null && (!isFinite(min) || min < 0)) { setError('Minimum expected customers must be a non-negative number.'); return; }
@@ -268,8 +270,10 @@ function RunOnDatabricks({ data }: { data: any }) {
               className="border border-line rounded-md px-3 py-1.5 text-sm w-40" />
           </div>
           <Btn tone="ghost" onClick={() => setMinCustomers('830')}>Require 830 customers</Btn>
-          <Btn tone="primary" onClick={start} disabled={!!pending}>
-            {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> Running…</> : <><Play className="w-4 h-4" /> Run on Databricks</>}
+          <Btn tone="primary" onClick={start} disabled={!!pending && pending.status !== 'failed'}>
+            {pending && pending.status !== 'failed' ? <><Loader2 className="w-4 h-4 animate-spin" /> Running…</>
+              : pending?.status === 'failed' ? <><Play className="w-4 h-4" /> Retry run</>
+              : <><Play className="w-4 h-4" /> Run on Databricks</>}
           </Btn>
         </div>
         <div className="mt-2 text-[11px] text-mut">Input table: <span className="font-mono">optimisation_demo_inputs</span> (Unity Catalog) · candidate prices are the six shown; the search considers those six, not every possible price.</div>

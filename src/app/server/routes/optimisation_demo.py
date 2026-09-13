@@ -447,13 +447,24 @@ async def ch2_monitoring():
         return {"release_id": None, "period": None, "rows": []}
     rid = rel[0]["release_id"]
     mx = await _safe_q(f"SELECT max(period) p FROM {fqn('optimisation_demo_ch2_monitoring')} WHERE release_id = :r", {"r": rid})
-    period = mx[0]["p"] if (mx and mx[0].get("p") is not None) else None
+    # WP1#6 — period is returned as a SQL string; type it so the client compares
+    # numerically (period 10 must follow 9, not sort lexically as "10" < "9").
+    period = coerce.opt_int(mx[0].get("p"), field="period") if mx else None
     rows = []
     if period is not None:
-        rows = await _safe_q(f"SELECT segment, round(expected_sales,1) expected_sales, observed_sales, "
-                             f"round(expected_margin,0) expected_margin, round(observed_margin,0) observed_margin, n "
-                             f"FROM {fqn('optimisation_demo_ch2_monitoring')} WHERE release_id = :r AND period = :p ORDER BY segment",
-                             {"r": rid, "p": int(period)}) or []
+        raw = await _safe_q(f"SELECT segment, round(expected_sales,1) expected_sales, observed_sales, "
+                            f"round(expected_margin,0) expected_margin, round(observed_margin,0) observed_margin, n "
+                            f"FROM {fqn('optimisation_demo_ch2_monitoring')} WHERE release_id = :r AND period = :p ORDER BY segment",
+                            {"r": rid, "p": int(period)}) or []
+        for r in raw:
+            rows.append({
+                "segment": coerce.as_str(r.get("segment"), field="segment"),
+                "expected_sales": coerce.opt_float(r.get("expected_sales"), field="expected_sales"),
+                "observed_sales": coerce.opt_float(r.get("observed_sales"), field="observed_sales"),
+                "expected_margin": coerce.opt_float(r.get("expected_margin"), field="expected_margin"),
+                "observed_margin": coerce.opt_float(r.get("observed_margin"), field="observed_margin"),
+                "n": coerce.opt_int(r.get("n"), field="n"),
+            })
     return {"release_id": rid, "period": period, "rows": rows}
 
 

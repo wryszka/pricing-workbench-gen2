@@ -20,7 +20,8 @@ export default function Chapter3() {
   useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
 
   const run = async () => {
-    if (pending) return;
+    if (pending && pending.status !== 'failed') return;   // failed runs may be retried
+    if (pollRef.current) clearTimeout(pollRef.current);
     setErr(null); setResult(null);
     try {
       const r = await api.optDemoCh3Run({ sales_ratio: 0.98 });
@@ -51,8 +52,10 @@ export default function Chapter3() {
 
       <Section title="Run the robust decision" subtitle="Maximise the worst world's expected-margin uplift, holding the inherited 98% sales floor in every world.">
         <div className="flex items-center gap-3">
-          <Btn tone="primary" disabled={!!pending} onClick={run}>
-            {pending ? <><Loader2 className="w-4 h-4 animate-spin" /> Solving worlds…</> : <><Play className="w-4 h-4" /> Run robust decision</>}
+          <Btn tone="primary" disabled={!!pending && pending.status !== 'failed'} onClick={run}>
+            {pending && pending.status !== 'failed' ? <><Loader2 className="w-4 h-4 animate-spin" /> Solving worlds…</>
+              : pending?.status === 'failed' ? <><Play className="w-4 h-4" /> Retry</>
+              : <><Play className="w-4 h-4" /> Run robust decision</>}
           </Btn>
           {pending?.run_page_url && <a href={pending.run_page_url} target="_blank" rel="noopener noreferrer" className="text-brand inline-flex items-center gap-1 text-sm font-medium">Open run <ExternalLink className="w-3.5 h-3.5" /></a>}
           {pending?.status === 'failed' && <span className="text-[12px] text-amber-700">Run failed — see the Databricks run.</span>}
