@@ -132,7 +132,11 @@ tests/optimisation_demo/ -q` → **63 passing** (adds coerce 10, governance stri
 1. **Live non-approver denial** — needs a second workspace identity without the EXECUTE
    grant to CALL the procedure and observe the UC denial. Harness: call
    `optimisation_demo_ch2_approve(<run>, <hash>, 'x')` as that identity; expect a
-   permission error. Not exercisable here.
+   permission error. **Owner decision (2026-09-13):** only one account is available, so this
+   live cross-identity check will not be run; for the recording the denial may be shown as a
+   **clearly-labelled simulation**. The real gate is unchanged and is NOT weakened or faked
+   into an approval — the EXECUTE grant + the headless tamper/legacy rejections above are the
+   integrity evidence; only the *second-identity* denial is simulated for filming.
 2. **OBO `sql`-scope consent** — first-time browser re-authorization so the forwarded
    token carries `sql`; until then approval is intentionally unavailable (fail-closed).
 3. **Effective-grant audit** — the app SP holds schema-level EXECUTE (inherited).
