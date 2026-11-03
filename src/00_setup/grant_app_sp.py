@@ -38,6 +38,10 @@ for stmt in [
     f"GRANT EXECUTE ON SCHEMA {catalog}.{schema} TO `{app_sp}`",
     # READ VOLUME so the app can stream governance-pack PDFs + saved payloads.
     f"GRANT READ VOLUME ON SCHEMA {catalog}.{schema} TO `{app_sp}`",
+    # WRITE VOLUME on just governance_packs: the AI response cache + AI-mode
+    # flag persist there (server/ai_cache.py). Without it every cache write
+    # fails and Pricing AI always goes live.
+    f"GRANT WRITE VOLUME ON VOLUME {catalog}.{schema}.governance_packs TO `{app_sp}`",
     # MODIFY on just the two writeback tables: the Price-Optimisation approve→deploy
     # gate stamps optimisation_deployment + the immutable audit_log (governed
     # writeback). Least-privilege — INSERT rights on these tables only, not the schema.

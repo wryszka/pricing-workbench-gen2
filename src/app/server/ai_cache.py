@@ -8,8 +8,9 @@ Two modes, toggled via `/api/admin/ai-mode`:
 
 Cache is keyed by a stable hash of `(endpoint, question, custom_inputs)`
 and persisted to a UC Volume so it survives app restarts and is shared
-across replicas. Writes go through the Databricks SDK Files API because
-the UC Volume FUSE mount rejects direct file creation via open().
+across replicas. Reads AND writes go through the Databricks SDK Files API
+(the app container has no /Volumes FUSE mount), so the app SP needs
+WRITE VOLUME on `governance_packs` — granted by 00_setup/grant_app_sp.py.
 
 The mode flag is held both in-process (for hot reads) and in a tiny
 sidecar file on the volume (so a freshly-started replica picks it up).
@@ -23,7 +24,6 @@ import json
 import logging
 import os
 import threading
-from pathlib import Path
 from typing import Any
 
 from server.config import get_catalog, get_schema, get_workspace_client
@@ -47,19 +47,15 @@ if _DEFAULT_MODE not in _VALID_MODES:
 _lock = threading.RLock()
 _mode_cache: str | None = None
 _response_cache: dict[str, Any] | None = None
+# Last persist failure (None = last write succeeded or nothing written yet).
+# Surfaced by /api/admin/ai-mode so a missing WRITE VOLUME grant is visible
+# instead of silently degrading the cache to per-process memory.
+_last_write_error: str | None = None
 
 
 def _vol_path() -> str:
     return VOL_DIR.format(catalog=get_catalog(), schema=get_schema())
 
-
-def _ensure_vol() -> str:
-    p = _vol_path()
-    try:
-        Path(p).mkdir(parents=True, exist_ok=True)
-    except Exception:
-        pass
-    return p
 
 
 def _vol_write(path: str, data: bytes) -> None:
@@ -72,16 +68,26 @@ def _vol_write(path: str, data: bytes) -> None:
     w.files.upload(file_path=path, contents=io.BytesIO(data), overwrite=True)
 
 
+def _vol_read(path: str) -> bytes | None:
+    """Read a UC Volume file via the SDK Files API (the app container has no
+    /Volumes FUSE mount, so open() never sees persisted files). Returns None
+    when the file doesn't exist yet."""
+    from databricks.sdk.errors import NotFound
+    try:
+        resp = get_workspace_client().files.download(file_path=path)
+    except NotFound:
+        return None
+    return resp.contents.read()
+
+
 def _load_responses() -> dict[str, Any]:
     global _response_cache
     if _response_cache is not None:
         return _response_cache
     path = f"{_vol_path()}/{CACHE_FILE}"
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            _response_cache = json.load(f)
-    except FileNotFoundError:
-        _response_cache = {}
+        raw = _vol_read(path)
+        _response_cache = json.loads(raw) if raw else {}
     except Exception as e:
         logger.warning("ai_cache: could not load %s — starting empty: %s", path, e)
         _response_cache = {}
@@ -89,15 +95,17 @@ def _load_responses() -> dict[str, Any]:
 
 
 def _save_responses() -> None:
+    global _last_write_error
     if _response_cache is None:
         return
-    _ensure_vol()
     path = f"{_vol_path()}/{CACHE_FILE}"
     try:
         payload = json.dumps(_response_cache, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         _vol_write(path, payload)
+        _last_write_error = None
     except Exception as e:
-        logger.warning("ai_cache: could not persist cache to %s: %s", path, e)
+        _last_write_error = f"{type(e).__name__}: {str(e)[:300]}"
+        logger.error("ai_cache: could not persist cache to %s (app SP needs WRITE VOLUME): %s", path, e)
 
 
 def _load_mode() -> str:
@@ -106,11 +114,9 @@ def _load_mode() -> str:
         return _mode_cache
     path = f"{_vol_path()}/{MODE_FILE}"
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            m = f.read().strip().lower()
+        raw = _vol_read(path)
+        m = raw.decode("utf-8").strip().lower() if raw else ""
         _mode_cache = m if m in _VALID_MODES else _DEFAULT_MODE
-    except FileNotFoundError:
-        _mode_cache = _DEFAULT_MODE
     except Exception as e:
         logger.warning("ai_cache: could not read mode file — defaulting to %s: %s",
                        _DEFAULT_MODE, e)
@@ -119,12 +125,20 @@ def _load_mode() -> str:
 
 
 def _persist_mode(mode: str) -> None:
-    _ensure_vol()
+    global _last_write_error
     path = f"{_vol_path()}/{MODE_FILE}"
     try:
         _vol_write(path, mode.encode("utf-8"))
+        _last_write_error = None
     except Exception as e:
-        logger.warning("ai_cache: could not persist mode to %s: %s", path, e)
+        _last_write_error = f"{type(e).__name__}: {str(e)[:300]}"
+        logger.error("ai_cache: could not persist mode to %s (app SP needs WRITE VOLUME): %s", path, e)
+
+
+def persistence_status() -> dict:
+    """Whether the cache is actually reaching the volume — for /api/admin/ai-mode."""
+    return {"persisted": _last_write_error is None, "last_write_error": _last_write_error,
+            "path": f"{_vol_path()}/{CACHE_FILE}"}
 
 
 def get_mode() -> str:

@@ -23,6 +23,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from server import ai_cache
 from server.agent_client import invoke_agent
 from server.audit import log_audit_event
 from server.config import get_workspace_client, get_workspace_host
@@ -219,6 +220,26 @@ async def ask_supervisor(req: AskRequest) -> dict:
     if not req.question.strip():
         raise HTTPException(400, "question is required")
 
+    # Whole-answer cache, checked BEFORE the classifier: a hit skips the routing
+    # FM call as well as the agent round-trip. Keyed on the request as sent
+    # (sub_agent='auto' included), so a repeat of the same question is instant.
+    mode = await asyncio.to_thread(ai_cache.get_mode)
+    sup_key = ai_cache.cache_key("supervisor", req.question, {
+        "sub_agent": req.sub_agent, "pack_id": req.pack_id or "",
+        "run_id": req.run_id or "", "family": req.family or "",
+    })
+    if mode == "cached":
+        hit = await asyncio.to_thread(ai_cache.get_cached, sup_key)
+        if hit is not None:
+            _audit_in_background(
+                event_type="supervisor_dispatch",
+                entity_type="supervisor",
+                entity_id=hit.get("sub_agent") or "",
+                details={"sub_agent": hit.get("sub_agent"), "cached": True,
+                         "question": req.question[:400], "ok": hit.get("ok")},
+            )
+            return {**hit, "cached": True}
+
     chosen = req.sub_agent
     classifier_used = False
     if chosen == "auto":
@@ -366,7 +387,7 @@ async def ask_supervisor(req: AskRequest) -> dict:
             "error":    agent_result.get("error"),
         }
 
-    await log_audit_event(
+    _audit_in_background(
         event_type="supervisor_dispatch",
         entity_type="supervisor",
         entity_id=chosen,
@@ -384,9 +405,35 @@ async def ask_supervisor(req: AskRequest) -> dict:
         },
     )
 
-    return {
+    response = {
         **result,
         "sub_agent":        chosen,
         "sub_agent_label":  agent["label"],
         "classifier_used":  classifier_used,
     }
+    # Genie answers are just an embed URL whose space id changes per deploy —
+    # don't pin those; everything else is safe to replay.
+    if mode == "cached" and result.get("ok") and result.get("kind") != "genie":
+        try:
+            await asyncio.to_thread(ai_cache.put_cached, sup_key, response,
+                                    "supervisor", req.question, {"sub_agent": req.sub_agent})
+        except Exception as e:
+            logger.warning("supervisor cache write failed: %s", e)
+    return {**response, "cached": False}
+
+
+# Strong refs so background audit tasks aren't garbage-collected mid-flight.
+_bg_tasks: set[asyncio.Task] = set()
+
+
+def _audit_in_background(**kwargs: Any) -> None:
+    """Fire-and-forget audit write. The INSERT goes to the SQL warehouse, which
+    can be cold — the user shouldn't wait on it to see the answer."""
+    async def _run() -> None:
+        try:
+            await log_audit_event(**kwargs)
+        except Exception as e:
+            logger.warning("supervisor audit write failed: %s", e)
+    t = asyncio.create_task(_run())
+    _bg_tasks.add(t)
+    t.add_done_callback(_bg_tasks.discard)

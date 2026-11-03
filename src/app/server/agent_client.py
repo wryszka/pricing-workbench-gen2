@@ -164,10 +164,11 @@ async def invoke_agent(endpoint_name: str,
     a subsequent identical call lands fast and verbatim.
     """
     from server import ai_cache
-    mode = ai_cache.get_mode()
+    # Cache I/O goes over the Files API (network) — keep it off the event loop.
+    mode = await asyncio.to_thread(ai_cache.get_mode)
     key  = ai_cache.cache_key(endpoint_name, question, custom_inputs)
     if mode == "cached":
-        hit = ai_cache.get_cached(key)
+        hit = await asyncio.to_thread(ai_cache.get_cached, key)
         if hit is not None:
             hit = dict(hit)
             hit["cached"] = True
@@ -183,7 +184,7 @@ async def invoke_agent(endpoint_name: str,
     # surfacing an error to the user.
     if not result.get("ok"):
         try:
-            hit = ai_cache.get_cached(key)
+            hit = await asyncio.to_thread(ai_cache.get_cached, key)
         except Exception as e:
             hit = None
             logger.warning("ai_cache fallback lookup failed for %s: %s", endpoint_name, e)
@@ -200,7 +201,8 @@ async def invoke_agent(endpoint_name: str,
         # invocations are reliably reproducible.
         if not history:
             try:
-                ai_cache.put_cached(key, result, endpoint_name, question, custom_inputs)
+                await asyncio.to_thread(ai_cache.put_cached, key, result,
+                                        endpoint_name, question, custom_inputs)
             except Exception as e:
                 logger.warning("ai_cache.put_cached failed for %s: %s", endpoint_name, e)
     result["cached"] = False

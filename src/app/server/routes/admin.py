@@ -134,6 +134,7 @@ async def get_ai_mode() -> dict:
     return {
         "mode":         ai_cache.get_mode(),
         "entries":      len(ai_cache.list_entries()),
+        "persistence":  ai_cache.persistence_status(),
         "modes":        ["live", "cached"],
         "description": {
             "live":   "Always call the real serving endpoint.",
@@ -265,6 +266,25 @@ async def warm_ai_cache(clear_first: bool = False, keep_cached: bool = True) -> 
             except Exception as e:
                 logger.warning("warm failed for %s: %s", p["endpoint"], e)
                 results.append({"endpoint": p["endpoint"], "ok": False, "error": str(e)[:200]})
+
+        # Pricing AI suggestion chips: the page sends each agent's first
+        # `good_for` example with sub_agent='auto'. Warm those through the
+        # supervisor itself so its whole-answer cache (which skips the routing
+        # FM call) holds them. Genie needs no warm; factory needs a run_id.
+        from server.routes.supervisor import SUB_AGENTS, AskRequest, ask_supervisor
+        for a in SUB_AGENTS:
+            if a["endpoint"] == "ai_bi_genie" or a.get("needs_run_id") or not a.get("good_for"):
+                continue
+            q = a["good_for"][0]
+            try:
+                r = await ask_supervisor(AskRequest(question=q, sub_agent="auto"))
+                results.append({"endpoint": "supervisor", "persona": a["id"],
+                                "ok": bool(r.get("ok")), "cached": bool(r.get("cached")),
+                                "error": (r.get("error") or "")[:200]})
+            except Exception as e:
+                logger.warning("supervisor warm failed for %s: %s", a["id"], e)
+                results.append({"endpoint": "supervisor", "persona": a["id"],
+                                "ok": False, "error": str(e)[:200]})
     finally:
         if not keep_cached:
             ai_cache.set_mode(prior_mode)
@@ -284,6 +304,7 @@ async def warm_ai_cache(clear_first: bool = False, keep_cached: bool = True) -> 
         "failed":          fail_count,
         "total":           len(results),
         "entries_in_cache": len(ai_cache.list_entries()),
+        "persistence":     ai_cache.persistence_status(),
         "prior_mode":      prior_mode,
         "final_mode":      final_mode,
         "results":         results,
